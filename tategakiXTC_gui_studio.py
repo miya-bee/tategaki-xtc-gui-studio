@@ -196,8 +196,8 @@ DEVICE_PROFILES = {
         accent='#5DA9FF', tagline='',
     ),
     'x3': DeviceProfile(
-        # X3 の解像度は 792×600 が正（ユーザー指摘）
-        key='x3', name='Xteink X3', width_px=792, height_px=600, ppi=252.0,
+        # X3 の解像度は 横528 × 縦792 に設定
+        key='x3', name='Xteink X3', width_px=528, height_px=792, ppi=252.0,
         body_w_mm=64.0, body_h_mm=98.0, screen_w_mm=48.38, screen_h_mm=80.63,
         accent='#9B80FF', tagline='',
     ),
