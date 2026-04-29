@@ -1,57 +1,70 @@
 # 縦書きXTC GUI Studio
 
-Xteink 向けの縦書き XTC ファイルを、GUI で作成・確認するための Windows 向けツールです。  
-EPUB、画像アーカイブ、プレーンテキスト、Markdown を入力として扱えます。
+Xteink 向けの縦書き **XTC / XTCH** ファイルを、GUI で作成・確認するための Windows 向けツールです。  
+EPUB、画像アーカイブ、プレーンテキスト、Markdown、単体画像を入力として扱えます。
 
-> **注意:** テキストファイル（`.txt`）とマークダウンファイル（`.md` / `.markdown`）の変換は、十分なテストができていない **簡易実装** です。実際の使用では意図しない結果になる場合があります。
+> \*\*注意:\*\* テキストファイル（`.txt`）とマークダウンファイル（`.md` / `.markdown`）の変換は、十分な実地検証ができていない \*\*簡易実装\*\* です。ログタブと `logs` フォルダへ、対応範囲の概要と簡略扱いになった要素の注意を出すようにしています。
 
 ## バージョン
 
-**1.0.2**
+**1.1.0**
+
+この版は、GitHub 上で既に公開済みの **v1.0.2 の次の公開版**として扱います。
+公開時のタグ / Release 名は **v1.1.0** を想定しています。
+
+## v1.0.2 から v1.1.0 への主な更新
+
+* 左ペインの既定順を **Preset → Font → Image → Display** に整理し、公開版として説明しやすい UI に整えました。
+* プリセット周辺の操作を見直し、ボタン名を **「プリセット適用」 / 「組版保存」** に統一しました。
+* 実機ビューまわりを再監査し、X3 / X4 判定、X3 の **528 × 792** 解像度、実機枠の直角表示、表示ラベルの整合を改善しました。
+* `XTCH` 指定時のプレビュー反映、プレビュー中の再入防止、成功 / 空結果 / 失敗時の UI 復帰を整理しました。
+* 単体画像（`.png` / `.jpg` / `.jpeg` / `.webp`）を GUI から選択して変換できるよう改善しました。
+* 同名出力の導線を **右上の歯車メニュー内「その他オプション > 同名出力」** に統一しました。
+* `MainWindow` から preview / results / settings controller、layout helper、widget factory、`tategakiXTC\_gui\_studio\_logic.py` などへの切り出しを進め、今後の分割作業に入りやすい形へ整理しました。
+* 字形キャッシュ、画像ページ処理、XTC / XTCH pack 処理、preview 再利用などを見直し、変換とプレビューの体感速度を改善しました。
+* `coverage`、`mypy`、release zip 監査を整え、GitHub 公開前の検査漏れが起きにくい構成にしました。
 
 ## 公開方針 / 利用条件
 
-本リポジトリでの**ソース公開は、学習および透明性のため**に行っています。  
-ソースコードの閲覧・参照は可能ですが、**再配布・商用利用・改変物の配布は不可**です。
+本リポジトリでのソース公開は、**学習および透明性のため** に行っています。
 
-- ソースの閲覧・学習・参考利用: 可
-- ソースそのものの再配布: 不可
-- 商用利用: 不可
-- 改変したものの配布: 不可
+* ソースの閲覧・学習・参考利用: 可
+* ソースそのものの再配布: 不可
+* 商用利用: 不可
+* 改変したものの配布: 不可
 
-> 必要に応じて個別に許諾する場合があります。
-
-## バグ報告について
-
-バグ報告は大歓迎です。  
-Issue または Pull Request でお知らせください。
+必要に応じて個別に許諾する場合があります。詳細は `LICENSE.txt` を参照してください。
 
 ## 開発環境
 
-Windows 上で開発・動作確認を行っています。  
-macOS / Linux での動作は未確認です。
+* Windows 上で開発・動作確認を行っています。
+* **Windows を公式対応の起点** とし、macOS / Linux での動作は未確認です。
+* Python は **3.10 / 3.11 / 3.12 系**を想定しています。
+* Python 3.10 では `typing\_extensions` があると、型付き辞書の互換動作がより安定します。
 
 ## 主な機能
 
-- EPUB の縦書き XTC / XTCH 変換
-- ZIP / CBZ / CBR / RAR 内画像の一括変換
-- `.txt` の簡易変換
-- `.md` / `.markdown` の簡易変換
-- フォントビュー / 実機ビューによる確認
-- フォント、ルビ、行間、余白、しきい値、ディザリングの調整
-- 白基調 / ダークの外観切替
-- プリセット保存・呼び出し
-- 白黒反転の出力反映
-- 禁則処理の切替（オフ / 簡易 / 標準）
+* EPUB の縦書き XTC / XTCH 変換
+* ZIP / CBZ / CBR / RAR 内画像の一括変換
+* 単体画像（PNG / JPG / JPEG / WEBP）の変換
+* `.txt` の簡易変換
+* `.md` / `.markdown` の簡易変換
+* フォントビュー / 実機ビューによる確認
+* フォント、ルビ、行間、余白、しきい値、ディザリングの調整
+* 白基調 / ダークの外観切替
+* プリセット保存・呼び出し
+* 白黒反転の出力反映
+* 禁則処理の切替（オフ / 簡易 / 標準）
 
 ## 対応入力形式
 
-| 形式 | 備考 |
-|------|------|
-| `.epub` | |
-| `.zip` / `.cbz` / `.cbr` / `.rar` | 内部画像を一括変換 |
-| `.txt` | 簡易対応 |
-| `.md` / `.markdown` | 簡易対応 |
+|形式|備考|
+|-|-|
+|`.epub`|推奨入力|
+|`.zip` / `.cbz` / `.cbr` / `.rar`|内部画像を一括変換|
+|`.png` / `.jpg` / `.jpeg` / `.webp`|単体画像として変換|
+|`.txt`|簡易対応|
+|`.md` / `.markdown`|簡易対応|
 
 ## テキスト / マークダウン変換の簡易対応について
 
@@ -60,80 +73,163 @@ macOS / Linux での動作は未確認です。
 
 ### `.txt`
 
-- UTF-8（BOM 付き含む）を優先し、必要に応じて CP932 でも読み込みます
-- 改行を段落区切りとして扱います
-- 青空文庫形式のルビ記法など、特殊な記法は解釈しません
+* UTF-8（BOM 付き含む）を優先し、必要に応じて CP932 でも読み込みます。
+* 改行を段落区切りとして扱います。
+* 青空文庫形式のルビ記法など、特殊な記法は解釈しません。
 
 ### `.md` / `.markdown`
 
-- UTF-8（BOM 付き含む）を優先し、必要に応じて CP932 でも読み込みます
-- 見出し（`#`）の前後に空きを入れて表示します
-- 箇条書きを簡易整形します
-- `**太字**` / `*斜体*` / `***太字斜体***` に対応します
-- リンクは表示テキストを残し URL を省略します
-- コードブロックは本文として扱います
+* UTF-8（BOM 付き含む）を優先し、必要に応じて CP932 でも読み込みます。
+* 見出し（`#`）の前後に空きを入れて表示します。
+* 箇条書きを簡易整形します。
+* `\*\*太字\*\*` / `\*斜体\*` / `\*\*\*太字斜体\*\*\*` に対応します。
+* リンクは表示テキストを残し URL を省略します。
+* コードブロックは本文として扱います。
 
-## 必要環境
+## source-only 配布物について
 
-- Windows
-- Python 3.11 以上推奨
-- `py` コマンドが利用できる環境
+* この source-only 配布物には、日本語フォントは同梱していません。
+* フォント未同梱環境では、アプリとテストは利用可能な **system font へ自動フォールバック** します。
+* ゴールデン画像系テストのうち、基準フォント前提のものは、条件を満たさない環境では **skip されます**。
+* 現在の公開向け README は、フォント同梱版ではなく **source-only リポジトリ構成** を基準に記載しています。
+* v1.1.0 公開版は、既存の **v1.0.2 の次の版**として公開する Python GUI版です。
 
-## セットアップ
+## 初回セットアップ
 
-```bash
-py -m pip install -r requirements.txt
+### 1\. Python を確認する
+
+Windows のコマンドプロンプトで、Python 3.10〜3.12 系が使えることを確認します。
+
+```bat
+py -3.12 --version
 ```
 
-## 起動方法
+3.12 が無い場合は、次のどちらかを確認してください。
 
-```bash
-py tategakiXTC_gui_studio.py
+```bat
+py -3.11 --version
+
+py -3.10 --version
 ```
 
-または `run_gui.bat` をダブルクリックしてください。
+`py` ランチャーを使わない環境では、`python --version` で 3.10〜3.12 系であることを確認後、以降の `py -3.12` を `python` に読み替えてください。
+
+### 2\. 仮想環境を作る
+
+```bat
+cd /d <このリポジトリを展開したフォルダ>
+
+py -3.12 -m venv .venv
+
+.venv\\Scripts\\activate
+```
+
+3.12 が無い場合は、`py -3.11` または `py -3.10` を使ってください。
+
+### 3\. 依存ライブラリを入れる
+
+GUI 版の依存ライブラリは `requirements.txt` から導入します。仮想環境を使わずに入れる場合は、`py -3.12 -m pip install -r requirements.txt`（3.12 が無い場合は `py -3.11` / `py -3.10`）または `python -m pip install -r requirements.txt`（`python --version` で 3.10〜3.12 系であることを確認後）でも導入できます。
+
+```bat
+.venv\\Scripts\\python.exe ^
+  -m pip install ^
+  --upgrade pip
+
+.venv\\Scripts\\python.exe ^
+  -m pip install ^
+  -r requirements.txt
+```
+
+* `PySide6` が未導入だと GUI は起動しません。
+* `numpy` は未導入でも動作しますが、XTC / XTCH pack や preview 再利用まわりの **高速化** を活かすには導入を推奨します。
+* Python 3.10 では `typing\_extensions` があると、型付き辞書の互換動作がより安定します。
+
+### 4\. 起動する
+
+通常は `run\_gui.bat` から起動します。
+
+```bat
+run\_gui.bat
+```
+
+直接起動する場合は、次のどちらかを使います。
+
+```bat
+py -3.12 tategakiXTC\_gui\_studio.py
+
+python tategakiXTC\_gui\_studio.py
+```
+
+`run\_gui.bat` / `run\_tests.bat` は、どの作業フォルダから実行しても **同梱スクリプトのあるフォルダへ自動移動** してから処理します。
+アプリ配置先に `logs/` を作れない環境では、ログは一時フォルダへ自動退避します。
+
+## Font フォルダーの配置
+
+source-only 配布物では `Font/` フォルダーは必須ではありません。フォント未同梱でも、Windows の `C:/Windows/Fonts/YuGothR.ttc`、`C:/Windows/Fonts/msgothic.ttc` など、利用可能な system font へ自動フォールバックします。
+
+任意のフォントを同梱して使いたい場合は、プロジェクト直下に `Font/` または `fonts/` を作り、`.ttf` / `.ttc` / `.otf` / `.otc` を配置してください。例: `Font/NotoSansJP-Regular.ttf`。TTC の face index は内部的に `|index=0` のような形式で保存されます。
+
+ゴールデン画像系テストで実差分まで確認したい場合は、基準フォントとして `Font/NotoSansJP-Regular.ttf` を配置してください。基準フォントが無い場合、該当テストは skip されます。
+
+フォントを release zip に同梱する場合は、フォントのライセンスを確認し、`LICENSE\_OFL.txt` をプロジェクト直下、または `Font/` / `fonts/` 直下へ置いてください。`build\_release\_zip.py` は、`Font/` / `fonts/` 配下にフォントがあるのに `LICENSE\_OFL.txt` が見つからない場合、release zip 作成を停止します。フォントを同梱しない source-only release を作る場合は、`build\_release\_zip.py` 実行前に `Font/` / `fonts/` を置かないか、一時的に退避してください。
 
 ## 使い方
 
-1. 上部の **ファイル** または **フォルダ** で入力元を選びます
-2. 左ペインでフォントや版組を調整します
-3. 右ペインのフォントビューで文字の見え方を確認します
-4. 必要に応じてプリセットを選ぶか保存します
-5. **変換実行** を押して `.xtc` / `.xtch` を保存します
-6. 実機ビューで変換結果を確認します
+1. `run\_gui.bat` から起動します。
+2. 変換したい EPUB / アーカイブ / TXT / Markdown / 画像を選択します。
+3. フォント、本文サイズ、ルビサイズ、行間、余白、出力形式（XTC / XTCH）などを調整します。
+4. 必要に応じてプレビューで確認し、変換を実行します。
 
-補足:
-- 白黒反転はプレビューだけでなく、出力ファイルにも反映されます
-- 設定は `tategakiXTC_gui_studio.ini` に保存されます
-- 右上の歯車メニューから外観切替にアクセスできます
+### 補足
 
-## ファイル構成
+* 同名ファイルがある場合の動作は、**右上の歯車メニュー内「その他オプション > 同名出力」** で選べます。
+* 画像処理系の設定では、白黒反転（出力）とディザリングを切り替えられます。
+* 実機ビューとフォントビューの切り替え状態は保存されます。
 
-| ファイル / フォルダ | 内容 |
-|---|---|
-| `tategakiXTC_gui_studio.py` | GUI 本体 |
-| `tategakiXTC_gui_core.py` | 変換コア |
-| `tategakiXTC_gui_studio.ini` | 初期設定ファイル |
-| `Font/` | 同梱フォント |
-| `ui_assets/` | UI 用アイコン |
-| `requirements.txt` | 依存ライブラリ一覧 |
-| `run_gui.bat` | Windows 用起動バッチ |
 
-> `tategakiXTC_gui_studio.ini` は `.gitignore` で除外されていますが、初期設定として同梱しています。  
-> ユーザーが変更した設定は同ファイルに上書き保存されます。
 
-## 同梱フォントについて
+## テストと coverage の運用
 
-`Font/` には以下のフォントを同梱しています。
+* ローカルでは `run\_tests.bat` を使うと、ユニットテスト / ゴールデン画像確認 / coverage / `mypy` / release zip 検査をまとめて実行できます。
+* coverage の fail-under は **60%** です。
+* `coverage-report.txt` / `coverage.xml` / `htmlcov/` を生成し、確認後は GitHub へ含めない運用です。
+* PySide6 実環境向けのスモークテストは任意で、ライブラリが無い環境では自動で skip されます。GUI smoke はヘッドレス CI / WSL でも落ちにくいよう、未指定時は `QT\_QPA\_PLATFORM=offscreen` で実行します。
 
-- **Noto Sans JP** — Regular / Medium / SemiBold / Bold
-- **Noto Serif JP** — Regular / Medium / SemiBold / Bold
+## GitHub に置かないローカル生成物
 
-これらのフォントは **SIL Open Font License 1.1** に基づいて配布されています。
+以下は開発用・ローカル用として扱い、コミットしない想定です。
+
+* `logs/`
+* `dist/`
+* `htmlcov/`
+* `.venv/` / `venv/`
+* `.mypy\_cache/` / `.ruff\_cache/`
+* `node\_modules/`
+* `\_\_pycache\_\_/`
+* `\*.rootcopy`
+* `work\_clean\*\_md.md`
+* `\*.zip` / `\*.7z` / `\*.tar` / `\*.tgz` / `\*.gz` / `\*.bz2` / `\*.xz` / `\*.whl`
+
+## 配布 zip の作成
+
+* 開発用生成物を除外した zip は `py -3.12 build\_release\_zip.py`（3.12 が無い場合は `py -3.11` / `py -3.10`）または `python build\_release\_zip.py`（`python --version` で 3.10〜3.12 系であることを確認後）で作成できます。
+* 既定では `dist/<フォルダ名>-release.zip` を生成します。
+* 生成済み zip の再検査は `py -3.12 build\_release\_zip.py --verify <zipパス>`（3.12 が無い場合は `py -3.11` / `py -3.10`）または `python build\_release\_zip.py --verify <zipパス>`（`python --version` で 3.10〜3.12 系であることを確認後）で行えます。
+* `--verify` は除外対象メンバー名に加えて、zip の読み取り破損、重複メンバー、symlink 等の特殊ファイル属性、Windows 展開時の名前衝突、危険な member 名、ローカル生成物混入、必須ファイル不足、必須ファイルの内容 marker、UTF-8 / ASCII 条件、回帰テスト一覧、golden 画像一覧、必須 release ファイルリストの同期漏れを検査します。
+* v1.1.0 公開版は **Python GUI版のみ** を対象とします。GitHub 公開先は GUI版リポジトリとして扱い、作業用 payload に Web 試作ファイル候補（`requirements-web.txt`、`run\_local\_web.bat`、`tategakiXTC\_localweb.py` など）が混入した場合も release 対象外として検出します。
+* フォントを同梱する場合は `LICENSE\_OFL.txt` をプロジェクト直下、または `Font/` / `fonts/` 直下に置いてください。検査では `Font` / `fonts` と `LICENSE\_OFL.txt` の大文字小文字ゆらぎを許容しますが、ライセンスは root 直下または `Font/` / `fonts/` 直下の直接配置だけを数え、`fonts/subdir/LICENSE\_OFL.txt` のような深い階層や、空・空白のみ・制御文字のみ・UTF-8 / UTF-16 / UTF-32 BOM と空白のみ、または BOM なしで UTF-8 として decode できない、短いものを含む BOM なし UTF-16/UTF-32 風、または BOM が示す文字コードで decode できない `LICENSE\_OFL.txt` は充足扱いにしません。複数候補がある場合は、読み取りに失敗した候補があっても、別候補が読み取り可能かつ非空なら充足扱いにします。フォント本体は `Font/` / `fonts/` 配下の `.ttf` / `.ttc` / `.otf` / `.otc` を同梱フォントとして扱い、深い階層のフォントも対象ですが、`.ttf.bak` などの suffix もどきは対象外です。zip 内の同梱フォント/ライセンス資産判定では POSIX `/` 区切りの正規 archive member 名だけを数え、leading slash や Windows 形式のバックスラッシュ区切りなどの非正規 member はフォント/ライセンス充足扱いにしません。symlink されたフォントやライセンスは、release 作成時に取り込まれないため同梱判定からも除外します。
+* `logs/`、`\_\_pycache\_\_/`、`.pytest\_cache/`、coverage 生成物（`.coverage.\*` を含む）、ローカル ini、分割準備メモ、`.rootcopy`、テストログ（`\*.log` / `\*.out` / `\*.err` や `test\_full\_log\*.txt` など）・分割実行用の一時 `bundle\_\*.txt`、trace / prof / pid / lock などの一時実行ファイル、古い配布 zip / 7z / tar / wheel などのローカルアーカイブは自動で除外されます。
+
+## 変更履歴
+
+* 詳細な履歴は [CHANGELOG.md](CHANGELOG.md) を参照してください。
+* GitHub Release 本文の下書きとしては [RELEASE\_NOTES\_v1\_1\_0.md](RELEASE_NOTES_v1_1_0.md) を用意しています。
+* GitHub では、既存の v1.0.2 に続く正式版として **v1.1.0** タグ / Release で公開する想定です。
 
 ## ライセンス
 
-本ツールは一般的なオープンソースライセンスでは公開していません。  
-利用条件は README 内の「公開方針 / 利用条件」を参照してください。
+* 本ツールは一般的なオープンソースライセンスでは公開していません。
+* ソース公開は学習・透明性のためです。
+* 再配布・商用利用・改変物配布は不可です。
+* 詳細は `LICENSE.txt` を参照してください。
 
-なお、`Font/` に同梱しているフォントは、それぞれのフォントライセンスに従います。

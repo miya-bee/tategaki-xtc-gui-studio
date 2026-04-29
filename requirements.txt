@@ -1,6 +1,22 @@
+# 起動に必須
 PySide6
 Pillow
+
+# 機能ごとの追加ライブラリ
 ebooklib
 beautifulsoup4
 patool
+charset-normalizer
+
+# 任意（未導入でも動作可）
 tqdm
+
+# 推奨（高速化。未導入でも動作可）
+numpy
+
+# テスト / CI
+coverage
+mypy
+
+# Python 3.10 互換の型注釈補助
+typing_extensions

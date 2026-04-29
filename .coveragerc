@@ -1,0 +1,13 @@
+[run]
+branch = True
+source =
+    build_release_zip
+    tategakiXTC_gui_core
+    tategakiXTC_gui_layouts
+    tategakiXTC_gui_preview_controller
+    tategakiXTC_gui_results_controller
+    tategakiXTC_gui_settings_controller
+    tategakiXTC_gui_studio
+    tategakiXTC_gui_studio_logic
+    tategakiXTC_gui_widget_factory
+    tategakiXTC_worker_logic
