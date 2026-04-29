@@ -1,63 +1,152 @@
-# Release Notes - v1.1.0
+# v1.1.0
 
-## 概要
+v1.1.0 は、GitHub で公開済みの **v1.0.2 の次の正式版**です。
 
-v1.1.0 は、GitHub で公開済みの **v1.0.2 の次の正式版**として公開する版です。  
-公開対象は **Python GUI版のみ** です。GitHub 公開先は GUI版リポジトリとして扱い、作業用 payload に Web 試作ファイル候補が混入した場合も release 対象外として検出するよう整理しました。  
-UI の整理、実機ビューの安定化、変換まわりの軽量化、そして今後の分割作業に向けた下地整理をまとめています。
+このリリースは **Python GUI版のみ**を公開対象とします。  
+旧ローカル Web 試作版関連ファイルは、v1.1.0 の release payload には含めません。
 
-## 主な改善点
+## 公開情報
 
-### UI とプリセット
-- 左ペインの既定順を **Preset → Font → Image → Display** に統一
-- ボタン名を **「プリセット適用」 / 「組版保存」** に整理
-- 同名出力の導線を **右上の歯車メニュー内「その他オプション > 同名出力」** に統一
-- フォントコンボの初回表示位置を見直し、開いたとき先頭から見やすい挙動へ改善
+- Release tag: `v1.1.0`
+- Release title: `v1.1.0`
+- Previous tag: `v1.0.2`
+- Release asset: `tategaki-xtc-gui-studio_v1.1.0.zip`
 
-### プレビューと実機ビュー
-- X3 / X4 判定と表示ラベルの整合を改善
-- X3 の解像度を **528 × 792** に統一
-- 実機ビュー枠を直角表示へ修正
-- `XTCH` 指定時のプレビュー反映を修正
-- プレビュー更新中の再入防止、成功 / 失敗 / 空結果時の UI 復帰を整理
+GitHub Release では、`v1.1.0` を正式版として公開します。  
+`rc1` や `sweep` 番号は、公開版名には含めません。
 
-### 変換と入力
-- 単体画像（PNG / JPG / JPEG / WEBP）を GUI から変換可能に修正
-- `load_xtc_from_path()` / `load_xtc_from_bytes()` 失敗時のクリア処理を改善
-- 変換開始時に前回結果を先にクリアし、誤認しにくい挙動へ調整
+## 主な更新内容
 
-### コード整理と公開準備
-- preview / results / settings controller、layout helper、widget factory、`tategakiXTC_gui_studio_logic.py` を分離して責務を整理
-- `coverage`、`mypy`、release zip 検査を含む公開前チェックを更新
-- Python GUI版のみの公開構成に合わせ、作業用 payload 内の Web 試作ファイル候補を release 対象から除外
-- source-only 構成では、同梱フォントが無くても **system font へフォールバック** して起動しやすいよう整理
-- README の初回セットアップ、起動手順、Font フォルダー配置、`LICENSE_OFL.txt` の扱いを整理
-- `.rootcopy`、`__pycache__`、`work_clean*_md.md` などのローカル作業物が release zip へ混ざらないよう監査対象を強化
+### Python GUI版のみを公開対象として整理
 
-### パフォーマンス
-- 字形キャッシュ、縦書き置換字形判定キャッシュ、preview 再利用を見直し、変換とプレビューの体感速度を改善
-- XTC（2値）/ XTCH（4階調）出力では、numpy 利用環境で pack 処理を高速化
+v1.1.0 では、公開対象を Python GUI版のみに整理しました。
 
-## テスト
+作業用 payload に残っていた旧ローカル Web 試作版関連ファイルは、公開用 payload / release 検査の対象から除外しています。
 
-公開準備時点で、以下を基準に確認しています。
+### GUI と説明文の整理
 
-- `python -m unittest discover -s tests -v`
-- `run_tests.bat`
-- release zip の生成と `build_release_zip.py --verify` による検査
+GUI の表示や説明文を整理しました。
 
-## 同梱フォント
+主な整理内容は以下です。
+
+- 左ペインの表記整理
+- フォントビュー / 実機ビューの説明整理
+- 実寸近似やガイド表示まわりの説明整理
+- 右ペインの倍率表示まわりの調整
+- README の初回セットアップ手順整理
+- Font フォルダーとライセンス説明の追加
+
+### 描画・変換処理の安定化
+
+縦書き描画、句読点、括弧、ルビ、下端処理まわりの安定性を改善しました。
+
+主な改善対象は以下です。
+
+- 閉じ括弧の描画位置
+- ぶら下がり句読点の配置
+- 下端 guard と余白処理
+- ルビ描画まわりの回帰防止
+- preview / device view 周辺の安定性
+- EPUB / テキスト変換まわりの回帰確認
+
+### release payload の整理
+
+v1.1.0 では、release zip 作成・検査を Python GUI版前提に整理しました。
+
+以下の旧ローカル Web 試作版関連ファイルは、公開用 payload には含めません。
+
+- `README_localweb_quickstart.txt`
+- `build_localweb_windows_dist.bat`
+- `install_local_web_requirements.bat`
+- `localweb_launcher.py`
+- `pyinstaller_localweb.spec`
+- `requirements-web.txt`
+- `run_local_web.bat`
+- `tategakiXTC_localweb.py`
+- `tategakiXTC_localweb_service.py`
+- `templates/localweb_index.html`
+- `tests/test_localweb_service.py`
+- `tests/test_localweb_smoke.py`
+- `tests/test_localweb_template_regression.py`
+- `tests/test_xtc_parser_offsets_regression.py`
+
+### 同梱フォントについて
 
 v1.1.0 では、縦書き表示とテスト再現性のため、`Font/` フォルダーに Noto Sans JP / Noto Serif JP 系フォントを同梱しています。
 
-同梱フォントは SIL Open Font License 1.1 に基づきます。詳細は `LICENSE_OFL.txt` を参照してください。
+同梱フォントは **SIL Open Font License 1.1** に基づいて配布されています。  
+詳細は `LICENSE_OFL.txt` を参照してください。
 
-## GitHub 公開時の扱い
+アプリ本体の利用条件と、同梱フォントのライセンスは別です。
 
-- Release 名 / tag は **v1.1.0** を想定しています。
-- GitHub 上の既存 **v1.0.2** に続く次版として扱います。
-- 検証用の名前や sweep 番号は公開版名には含めません。
+## インストール / 起動
 
-## 補足
+zip を展開したあと、Windows のコマンドプロンプトで展開先フォルダーに移動してください。
 
-この版は、見た目の微修正だけでなく、巻き戻り防止と将来のファイル分割のしやすさも意識して整理しています。
+初回セットアップ:
+
+    py -3.10 -m venv .venv
+
+    .venv\Scripts\activate
+
+    .venv\Scripts\python.exe ^
+      -m pip install ^
+      --upgrade pip
+
+    .venv\Scripts\python.exe ^
+      -m pip install ^
+      -r requirements.txt
+
+起動:
+
+    run_gui.bat
+
+または:
+
+    .venv\Scripts\python.exe -B ^
+      tategakiXTC_gui_studio.py
+
+## 動作確認の目安
+
+公開前確認では、以下を確認しています。
+
+- Python GUI版として起動できること
+- 主要 Python ファイルが compile できること
+- release docs / release hygiene 系の回帰テストが通ること
+- release bundle hygiene 系の検査が通ること
+- conversion worker 周辺のテストが通ること
+- release zip の verify が通ること
+- 旧ローカル Web 試作版関連ファイルが release payload に混入していないこと
+- `Font/` と `LICENSE_OFL.txt` が同梱フォントの扱いとして整合していること
+
+## 注意事項
+
+- v1.1.0 は Python GUI版のみの公開です
+- 旧ローカル Web 試作版は公開対象外です
+- 同梱フォントは SIL Open Font License 1.1 に従います
+- フォントを差し替えて再配布する場合は、差し替え先フォントのライセンスを確認してください
+- GitHub Release の添付ファイルには `tategaki-xtc-gui-studio_v1.1.0.zip` を使用してください
+
+## 更新対象ファイルの例
+
+v1.1.0 では、主に以下を更新・整理しています。
+
+- `README.md`
+- `CHANGELOG.md`
+- `RELEASE_NOTES_v1_1_0.md`
+- `LICENSE_OFL.txt`
+- `build_release_zip.py`
+- `run_tests.bat`
+- `.github/workflows/python-tests.yml`
+- `tests/test_release_docs_regression.py`
+- `tests/test_release_hygiene_regression.py`
+- `tests/test_release_bundle_hygiene.py`
+- `tests/test_type_annotations_regression.py`
+- `tategakiXTC_worker_logic.py`
+- `tategakiXTC_gui_studio.py`
+
+## まとめ
+
+v1.1.0 は、v1.0.2 の次の正式版として、Python GUI版を公開向けに整理したリリースです。
+
+描画・変換処理の安定化、GUI 表示の整理、release payload の整理、同梱フォントのライセンス明記を行っています。
