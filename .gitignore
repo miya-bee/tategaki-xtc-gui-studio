@@ -1,21 +1,81 @@
-# ユーザー設定（環境依存）
-*.ini
-
-# Python キャッシュ
+# Python caches
 __pycache__/
 *.py[cod]
-*.pyo
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# 変換出力ファイル
-*.xtc
-*.xtch
+# Virtual environments
+.venv/
+venv/
+.tox/
+.nox/
 
-# OS 生成ファイル
+# Coverage
+.coverage
+coverage.xml
+coverage-report.txt
+.coverage.*
+htmlcov/
+
+# Local application/runtime outputs
+logs/
+dist/
+release_build/
+tategakiXTC_gui_studio.ini
+dummy.xtc
+dummy_preview.epub
+
+# Local work notes and temporary files
+*.rootcopy
+work_clean*_md.md
+CONTINUATION_PROGRESS*.md
+handoff*.md
+引継ぎ*.md
+引き継ぎ書*.md
+引き継ぎ追記*.md
+
+# Local archive/build artifacts
+*.zip
+*.7z
+*.tar
+*.tgz
+*.gz
+*.bz2
+*.xz
+*.whl
+
+
+# Test and parallel helper outputs
+*.log
+*.out
+*.err
+*.trace
+*.prof
+*.pid
+*.lock
+test_full_log*.txt
+test_fail_index*.txt
+test_failure_index*.txt
+test_errors*.txt
+test_failures*.txt
+bundle_*.txt
+pt_*.log
+pt_*.exit
+pt*.log
+pt*.exit
+
+# Editor / OS noise
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# エディタ
-.vscode/
-.idea/
-*.swp
+*.tmp
+*.partial
+*.overwritebak
+*.bak
+*.orig
+*.rej
+*~
