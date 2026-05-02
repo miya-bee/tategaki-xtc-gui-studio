@@ -57,7 +57,8 @@ exit /b 1
 if errorlevel 1 (
   echo.
   echo Launch failed. Check the message shown above.
-  echo If dependencies are missing, run:
+  echo If dependencies are missing, run install_requirements.bat.
+  echo Or run:
   echo   "%PY_EXE%" %PY_ARGS% -m pip install -r requirements.txt
   echo Expected Python versions: 3.10 / 3.11 / 3.12.
   popd

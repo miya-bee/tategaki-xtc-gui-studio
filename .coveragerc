@@ -2,12 +2,39 @@
 branch = True
 source =
     build_release_zip
+    tategakiXTC_release_metadata
     tategakiXTC_gui_core
+    tategakiXTC_numpy_helper
+    tategakiXTC_gui_core_sync
+    tategakiXTC_gui_core_deps
+    tategakiXTC_gui_core_fonts
+    tategakiXTC_gui_core_paths
+    tategakiXTC_gui_core_cache
+    tategakiXTC_gui_core_archive
+    tategakiXTC_gui_core_text
+    tategakiXTC_gui_core_pages
+    tategakiXTC_gui_core_renderer
+    tategakiXTC_gui_core_epub
+    tategakiXTC_gui_core_xtc
     tategakiXTC_gui_layouts
     tategakiXTC_gui_preview_controller
     tategakiXTC_gui_results_controller
     tategakiXTC_gui_settings_controller
     tategakiXTC_gui_studio
     tategakiXTC_gui_studio_logic
+    tategakiXTC_gui_studio_logging
+    tategakiXTC_gui_studio_startup
+    tategakiXTC_gui_studio_constants
+    tategakiXTC_gui_studio_xtc_io
+    tategakiXTC_gui_studio_widgets
+    tategakiXTC_gui_studio_worker
+    tategakiXTC_gui_studio_runtime
+    tategakiXTC_gui_studio_desktop
+    tategakiXTC_gui_studio_ui_helpers
+    tategakiXTC_gui_studio_dialog_helpers
+    tategakiXTC_gui_studio_preview_helpers
+    tategakiXTC_gui_studio_path_helpers
+    tategakiXTC_gui_studio_view_helpers
+    tategakiXTC_gui_studio_settings_helpers
     tategakiXTC_gui_widget_factory
     tategakiXTC_worker_logic

@@ -44,6 +44,9 @@ class WorkerConversionSettings(TypedDict, total=False):
     threshold: ConfigScalar
     night_mode: ConfigScalar
     kinsoku_mode: str
+    punctuation_position_mode: str
+    ichi_position_mode: str
+    lower_closing_bracket_position_mode: str
     output_format: str
     output_conflict: str
     output_name: str
@@ -261,6 +264,9 @@ def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
         night_mode=_bool_config_value(cfg, 'night_mode', False),
         threshold=_int_config_value(cfg, 'threshold', 128),
         kinsoku_mode=_str_config_value(cfg, 'kinsoku_mode', 'standard'),
+        punctuation_position_mode=_str_config_value(cfg, 'punctuation_position_mode', 'standard'),
+        ichi_position_mode=_str_config_value(cfg, 'ichi_position_mode', 'standard'),
+        lower_closing_bracket_position_mode=_str_config_value(cfg, 'lower_closing_bracket_position_mode', 'standard'),
         output_format=_str_config_value(cfg, 'output_format', 'xtc'),
     )
 

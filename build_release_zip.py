@@ -10,6 +10,8 @@ import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Callable, Iterable, Iterator
 
+from tategakiXTC_release_metadata import RELEASE_NOTES_FILE, RELEASE_ZIP_FILE_NAME
+
 DEFAULT_EXCLUDED_DIR_NAMES = {
     '__pycache__',
     '.pytest_cache',
@@ -116,15 +118,43 @@ REQUIRED_PUBLIC_DOC_FILES = (
     'README.md',
     'LICENSE.txt',
     'CHANGELOG.md',
-    'RELEASE_NOTES_v1_1_0.md',
+    'RELEASE_CHECKLIST.md',
+    RELEASE_NOTES_FILE,
 )
 REQUIRED_PROJECT_APP_MODULE_FILES = (
+    'tategakiXTC_release_metadata.py',
     'tategakiXTC_gui_core.py',
+    'tategakiXTC_numpy_helper.py',
+    'tategakiXTC_gui_core_sync.py',
+    'tategakiXTC_gui_core_deps.py',
+    'tategakiXTC_gui_core_fonts.py',
+    'tategakiXTC_gui_core_paths.py',
+    'tategakiXTC_gui_core_cache.py',
+    'tategakiXTC_gui_core_archive.py',
+    'tategakiXTC_gui_core_text.py',
+    'tategakiXTC_gui_core_pages.py',
+    'tategakiXTC_gui_core_renderer.py',
+    'tategakiXTC_gui_core_epub.py',
+    'tategakiXTC_gui_core_xtc.py',
     'tategakiXTC_gui_layouts.py',
     'tategakiXTC_gui_preview_controller.py',
     'tategakiXTC_gui_results_controller.py',
     'tategakiXTC_gui_settings_controller.py',
     'tategakiXTC_gui_studio_logic.py',
+    'tategakiXTC_gui_studio_logging.py',
+    'tategakiXTC_gui_studio_startup.py',
+    'tategakiXTC_gui_studio_constants.py',
+    'tategakiXTC_gui_studio_xtc_io.py',
+    'tategakiXTC_gui_studio_widgets.py',
+    'tategakiXTC_gui_studio_worker.py',
+    'tategakiXTC_gui_studio_runtime.py',
+    'tategakiXTC_gui_studio_desktop.py',
+    'tategakiXTC_gui_studio_ui_helpers.py',
+    'tategakiXTC_gui_studio_dialog_helpers.py',
+    'tategakiXTC_gui_studio_preview_helpers.py',
+    'tategakiXTC_gui_studio_path_helpers.py',
+    'tategakiXTC_gui_studio_view_helpers.py',
+    'tategakiXTC_gui_studio_settings_helpers.py',
     'tategakiXTC_gui_widget_factory.py',
     'tategakiXTC_worker_logic.py',
 )
@@ -165,6 +195,7 @@ def _is_prohibited_web_release_path(path_name: str) -> bool:
 REQUIRED_PROJECT_SUPPORT_FILES = (
     'requirements.txt',
     'run_gui.bat',
+    'install_requirements.bat',
     'run_tests.bat',
 )
 REQUIRED_PROJECT_TOOLING_FILES = (
@@ -259,6 +290,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_gui_results_controller_regression.py',
     'tests/test_gui_settings_controller_regression.py',
     'tests/test_gui_studio_logic_regression.py',
+    'tests/test_gui_studio_logging_regression.py',
     'tests/test_gui_studio_smoke_optional.py',
     'tests/test_gui_studio_worker_regression.py',
     'tests/test_gui_widget_factory_regression.py',
@@ -282,6 +314,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_sweep368_layout_contract_regression.py',
     'tests/test_shared_page_entry_pipeline.py',
     'tests/test_spooled_copy_cancel_regression.py',
+    'tests/test_split_module_compatibility_regression.py',
     'tests/test_text_code_font_lazy_regression.py',
     'tests/test_text_input_helper_regression.py',
     'tests/test_text_markdown_scope.py',
@@ -313,6 +346,11 @@ REQUIRED_UTF8_TEXT_FILES = tuple(
     and name not in REQUIRED_PROJECT_PNG_IMAGE_FILES
 )
 REQUIRED_APP_CONTENT_MARKERS = {
+    'tategakiXTC_release_metadata.py': (
+        "APP_VERSION = '1.2.0'",
+        'RELEASE_NOTES_FILE',
+        'RELEASE_ZIP_FILE_NAME',
+    ),
     'tategakiXTC_gui_studio.py': (
         'class MainWindow',
         'QApplication',
@@ -322,6 +360,132 @@ REQUIRED_APP_CONTENT_MARKERS = {
         'class ConversionArgs',
         'SUPPORTED_INPUT_SUFFIXES',
         'def process_text_file',
+    ),
+    'tategakiXTC_numpy_helper.py': (
+        'def get_cached_numpy_module',
+        'import numpy as numpy_module',
+        '__all__',
+    ),
+    'tategakiXTC_gui_studio_logging.py': (
+        'def cleanup_old_session_logs',
+        'DEFAULT_LOG_RETENTION_DAYS',
+        '__all__',
+    ),
+    'tategakiXTC_gui_studio_startup.py': (
+        'def collect_missing_startup_dependencies',
+        'def show_startup_dependency_alert',
+        '__all__',
+    ),
+    'tategakiXTC_gui_studio_constants.py': (
+        'class DeviceProfile',
+        'DEVICE_PROFILES',
+        'DEFAULT_PRESET_DEFINITIONS',
+    ),
+    'tategakiXTC_gui_studio_xtc_io.py': (
+        'class XtcPage',
+        'def parse_xtc_pages',
+        'def xt_page_blob_to_qimage',
+    ),
+    'tategakiXTC_gui_studio_widgets.py': (
+        'class XtcViewerWidget',
+        'class VisibleArrowSpinBox',
+        'class FontPopupTopComboBox',
+    ),
+    'tategakiXTC_gui_studio_worker.py': (
+        'class ConversionWorker',
+        'def build_conversion_args',
+        'def plan_output_path_for_target',
+        'def build_conversion_summary',
+    ),
+    'tategakiXTC_gui_studio_desktop.py': (
+        'def _open_path_in_file_manager',
+        'xdg-open',
+        'os.startfile',
+    ),
+    'tategakiXTC_gui_studio_ui_helpers.py': (
+        'def _bulk_block_signals',
+        'def _connect_signal_best_effort',
+        'def _safe_delete_qobject_later',
+    ),
+    'tategakiXTC_gui_studio_dialog_helpers.py': (
+        'def show_warning_dialog_with_status_fallback',
+        'def ask_question_dialog_with_status_fallback',
+        'def get_open_file_name_with_status_fallback',
+    ),
+    'tategakiXTC_gui_studio_preview_helpers.py': (
+        'def _coerce_preview_data_url',
+        'def _coerce_preview_base64_text',
+    ),
+    'tategakiXTC_gui_studio_path_helpers.py': (
+        'def _supported_targets_for_path',
+        'def _default_output_name_for_target',
+    ),
+    'tategakiXTC_gui_studio_settings_helpers.py': (
+        'def _settings_contains_key',
+        'def _plan_int_tuple_value',
+        'def _combo_find_data_index',
+    ),
+    'tategakiXTC_gui_studio_view_helpers.py': (
+        'def _normalized_main_view_mode',
+        'def _preview_view_help_text',
+        'def _main_view_mode_status_text',
+    ),
+    'tategakiXTC_gui_core_sync.py': (
+        'def install_core_sync_tracker',
+        'def core_sync_version',
+        'class _TrackedCoreModule',
+    ),
+    'tategakiXTC_gui_core_deps.py': (
+        'def build_conversion_error_report',
+        'def list_optional_dependency_status',
+        'def get_missing_dependencies_for_suffixes',
+    ),
+    'tategakiXTC_gui_core_fonts.py': (
+        'def get_font_entries',
+        'def load_truetype_font',
+        'def clear_font_entry_cache',
+    ),
+    'tategakiXTC_gui_core_paths.py': (
+        'def iter_conversion_targets',
+        'def get_output_path_for_target',
+        'def resolve_output_path_with_conflict',
+    ),
+    'tategakiXTC_gui_core_cache.py': (
+        'def _source_document_cache_key',
+        'def _get_cached_input_document',
+        'def _store_cached_input_document',
+    ),
+    'tategakiXTC_gui_core_archive.py': (
+        'def load_archive_input_document',
+        'def _extract_zip_archive_images_to_tempdir',
+        'def _safe_zip_archive_image_infos',
+    ),
+    'tategakiXTC_gui_core_text.py': (
+        'def load_text_input_document',
+        'def process_text_file',
+        'def process_markdown_file',
+        'def _blocks_from_markdown',
+        'def _aozora_inline_to_runs',
+    ),
+    'tategakiXTC_gui_core_pages.py': (
+        'def _make_page_entry',
+        'def _write_page_entries_to_xtc',
+        'def _render_text_blocks_to_xtc',
+    ),
+    'tategakiXTC_gui_core_renderer.py': (
+        'class _VerticalPageRenderer',
+        'def generate_preview_base64',
+        'def _render_text_blocks_to_page_entries',
+    ),
+    'tategakiXTC_gui_core_epub.py': (
+        'class EpubInputDocument',
+        'def load_epub_input_document',
+        'def process_epub',
+    ),
+    'tategakiXTC_gui_core_xtc.py': (
+        'class XTCSpooledPages',
+        'def build_xtc',
+        'def canvas_image_to_xt_bytes',
     ),
     'tategakiXTC_gui_layouts.py': (
         'build_left_settings_section_layout_plan',
@@ -358,6 +522,11 @@ REQUIRED_BATCH_CONTENT_MARKERS = {
     'run_gui.bat': (
         'tategakiXTC_gui_studio.py',
         'requirements.txt',
+        'install_requirements.bat',
+    ),
+    'install_requirements.bat': (
+        'requirements.txt',
+        '-m pip install',
     ),
     'run_tests.bat': (
         'unittest discover',
@@ -375,6 +544,7 @@ REQUIRED_REQUIREMENTS_CONTENT_MARKERS = {
 REQUIRED_DOCUMENT_CONTENT_MARKERS = {
     'README.md': (
         'run_gui.bat',
+        'install_requirements.bat',
         'run_tests.bat',
         'requirements.txt',
         'build_release_zip.py',
@@ -2347,11 +2517,16 @@ def build_release_zip(root: Path, output_path: Path) -> Path:
 
 
 
+def default_release_output_path(root: Path) -> Path:
+    """Return the versioned default release zip path for a project root."""
+    return root / 'dist' / RELEASE_ZIP_FILE_NAME
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='開発用生成物を除外した release zip を作成または検査します。')
     parser.add_argument('--root', default='.', help='対象ルートフォルダ')
-    parser.add_argument('--output', default='', help='出力 zip パス。未指定時は dist/<folder>-release.zip')
-    parser.add_argument('--verify', default='', help='既存 zip を検査する場合の zip パス')
+    parser.add_argument('--output', default='', help=f'出力 zip パス。未指定時は dist/{RELEASE_ZIP_FILE_NAME}')
+    parser.add_argument('--verify', default='', metavar='ZIP_PATH', help='既存 zip を検査する場合の zip パス')
     return parser.parse_args()
 
 
@@ -2369,7 +2544,7 @@ def main() -> int:
         return 0
 
     root = Path(args.root).resolve()
-    default_output = root / 'dist' / f'{root.name}-release.zip'
+    default_output = default_release_output_path(root)
     output_path = Path(args.output).resolve() if args.output else default_output
     created = build_release_zip(root, output_path)
     print(created)

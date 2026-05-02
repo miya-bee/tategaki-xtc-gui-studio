@@ -9,46 +9,31 @@ PySide6 ベースの縦書き XTC 変換ツール。
 
 import base64
 import math
-import zlib
 from collections import OrderedDict
-from contextlib import contextmanager
-import ctypes
 import logging
 import os
 import ntpath
-import struct
 import subprocess
 import sys
 import shutil
 import threading
 import tempfile
 from datetime import datetime
-from io import BytesIO
 from copy import deepcopy
-from dataclasses import asdict, dataclass, replace
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Mapping, Optional, Sequence, TYPE_CHECKING, cast
+from typing import Any, Callable, Mapping, Sequence, cast
 
-np = None  # type: ignore[assignment]
-_NUMPY_IMPORT_ATTEMPTED = False
-_XTCH_SHADE_LUT = None
+from tategakiXTC_gui_studio_logging import (
+    DEFAULT_LOG_RETENTION_DAYS as LOG_RETENTION_DAYS,
+    DEFAULT_LOG_RETENTION_MAX_FILES as LOG_RETENTION_MAX_FILES,
+    cleanup_old_session_logs as _cleanup_old_session_logs,
+)
 
-
-def _get_numpy_module() -> Any:
-    global np, _NUMPY_IMPORT_ATTEMPTED
-    if _NUMPY_IMPORT_ATTEMPTED:
-        return np
-    if np is not None:
-        _NUMPY_IMPORT_ATTEMPTED = True
-        return np
-    _NUMPY_IMPORT_ATTEMPTED = True
-    try:
-        import numpy as numpy_module  # type: ignore
-    except Exception:
-        np = None  # type: ignore[assignment]
-    else:
-        np = numpy_module  # type: ignore[assignment]
-    return np
+from tategakiXTC_gui_studio_startup import (
+    collect_missing_startup_dependencies as _collect_missing_startup_dependencies_impl,
+    show_startup_dependency_alert as _show_startup_dependency_alert_impl,
+)
 
 _STARTUP_DEPENDENCIES = [
     ('PySide6', 'PySide6'),
@@ -57,33 +42,11 @@ _STARTUP_DEPENDENCIES = [
 
 
 def _collect_missing_startup_dependencies() -> list[str]:
-    missing = []
-    for package_name, module_name in _STARTUP_DEPENDENCIES:
-        try:
-            __import__(module_name)
-        except Exception:
-            missing.append(package_name)
-    return missing
+    return _collect_missing_startup_dependencies_impl(_STARTUP_DEPENDENCIES)
 
 
 def _show_startup_dependency_alert(missing_packages: list[str]) -> None:
-    install_line = 'pip install ' + ' '.join(missing_packages)
-    message = (
-        'アプリ起動に必要なライブラリが不足しているか、読み込みに失敗しました。\n\n'
-        + '\n'.join(f'- {name}' for name in missing_packages)
-        + '\n\nインストール例:\n'
-        + install_line
-        + '\nまたは\n'
-        + 'pip install -r requirements.txt'
-    )
-    title = '起動に必要なライブラリ不足'
-    if sys.platform.startswith('win'):
-        try:
-            ctypes.windll.user32.MessageBoxW(None, message, title, 0x10)
-            return
-        except Exception:
-            pass
-    print(f'{title}\n{message}', file=sys.stderr)
+    _show_startup_dependency_alert_impl(missing_packages)
 
 
 _missing_startup_packages = _collect_missing_startup_dependencies()
@@ -99,8 +62,7 @@ SESSION_LOG_PATH: Path | None = None
 _XTC_PAGE_QIMAGE_CACHE_LIMIT = 8
 _DEVICE_PREVIEW_PAGE_QIMAGE_CACHE_LIMIT = 8
 _FONT_PREVIEW_PAGE_PIXMAP_CACHE_LIMIT = 8
-
-
+_SETTINGS_PREVIEW_REFRESH_DELAY_MS = 350
 def _resolve_log_dir() -> Path:
     global ACTIVE_LOG_DIR
     if isinstance(ACTIVE_LOG_DIR, Path):
@@ -128,47 +90,6 @@ def _resolve_session_log_path() -> Path:
     return SESSION_LOG_PATH
 
 
-def _open_path_in_file_manager(path: Path | str) -> bool:
-    target = _coerce_ui_message_text(path).strip()
-    platform_name = _coerce_ui_message_text(sys.platform).strip() or 'unknown'
-    if not target:
-        APP_LOGGER.warning('開く対象パスが空のため、ファイルマネージャを起動しませんでした (%s)。', platform_name)
-        return False
-    try:
-        if sys.platform.startswith('win'):
-            if not Path(target).exists():
-                APP_LOGGER.warning('パスを開けませんでした (%s, %s): 対象が存在しません。', platform_name, target)
-                return False
-            startfile = getattr(os, 'startfile', None)
-            if startfile is None:
-                APP_LOGGER.warning('パスを開けませんでした (%s, %s): os.startfile が利用できません。', platform_name, target)
-                return False
-            startfile(target)
-            return True
-        if sys.platform == 'darwin':
-            opener = 'open'
-            if not shutil.which(opener):
-                APP_LOGGER.warning('パスを開けませんでした (%s, %s): %s が見つかりません。', platform_name, target, opener)
-                return False
-            subprocess.Popen([opener, target])
-            return True
-        if sys.platform.startswith('linux'):
-            opener = 'xdg-open'
-            if not shutil.which(opener):
-                APP_LOGGER.warning('パスを開けませんでした (%s, %s): %s が見つかりません。', platform_name, target, opener)
-                return False
-            subprocess.Popen([opener, target])
-            return True
-        APP_LOGGER.warning('パスを開けませんでした (%s, %s): 未対応のプラットフォームです。', platform_name, target)
-    except Exception as exc:
-        error_name = type(exc).__name__
-        error_text = _coerce_ui_message_text(exc).strip()
-        if error_text:
-            APP_LOGGER.exception('パスを開けませんでした (%s, %s): %s [%s]', platform_name, target, error_text, error_name)
-        else:
-            APP_LOGGER.exception('パスを開けませんでした (%s, %s): %s', platform_name, target, error_name)
-    return False
-
 
 def _configure_app_logging() -> logging.Logger:
     logger = logging.getLogger(APP_LOGGER_NAME)
@@ -177,6 +98,7 @@ def _configure_app_logging() -> logging.Logger:
 
     session_log_path = _resolve_session_log_path()
     active_log_dir = _resolve_log_dir()
+    _cleanup_old_session_logs(active_log_dir, active_log_path=session_log_path)
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
@@ -202,57 +124,6 @@ def _configure_app_logging() -> logging.Logger:
 APP_LOGGER = logging.getLogger(APP_LOGGER_NAME)
 
 
-@contextmanager
-def _bulk_block_signals(*widgets: object):
-    active: list[tuple[object, bool]] = []
-    for widget in widgets:
-        if widget is None:
-            continue
-        blocker = getattr(widget, 'blockSignals', None)
-        if not callable(blocker):
-            continue
-        previous_state = False
-        getter = getattr(widget, 'signalsBlocked', None)
-        if callable(getter):
-            try:
-                previous_state = bool(getter())
-            except Exception:
-                previous_state = False
-        try:
-            returned = blocker(True)
-            if not callable(getter) and isinstance(returned, bool):
-                previous_state = returned
-            active.append((widget, previous_state))
-        except Exception:
-            continue
-    try:
-        yield
-    finally:
-        for widget, previous_state in reversed(active):
-            try:
-                widget.blockSignals(previous_state)
-            except Exception:
-                pass
-
-class _LazyPillowModule:
-    def __init__(self, module_name: str) -> None:
-        self._module_name = module_name
-        self._module: Any | None = None
-
-    def _load(self) -> Any:
-        if self._module is None:
-            self._module = __import__(f'PIL.{self._module_name}', fromlist=[self._module_name])
-        return self._module
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._load(), name)
-
-
-if TYPE_CHECKING:
-    from PIL import Image as Image  # pragma: no cover
-else:
-    Image = _LazyPillowModule('Image')
-
 from PySide6.QtCore import Qt, QObject, QThread, Signal, QSize, QSettings, QRect, QRectF, QTimer, QEvent, QPoint
 from PySide6.QtGui import QActionGroup, QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap, QPolygon
 from PySide6.QtWidgets import (
@@ -276,6 +147,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QProgressBar,
     QScrollArea,
+    QScrollBar,
     QSplitter,
     QStackedWidget,
     QSpinBox,
@@ -300,119 +172,61 @@ from tategakiXTC_gui_core import ConversionArgs
 WorkerConversionSettings = worker_logic.WorkerConversionSettings
 ConversionErrorItem = worker_logic.ConversionErrorItem
 
+from tategakiXTC_gui_studio_ui_helpers import (
+    _bulk_block_signals,
+    _coerce_ui_message_text,
+    _connect_signal_best_effort,
+    _safe_delete_qobject_later,
+)
 
+from tategakiXTC_gui_studio_dialog_helpers import (
+    ask_question_dialog_with_status_fallback as _ask_question_dialog_with_status_fallback_impl,
+    get_existing_directory_with_status_fallback as _get_existing_directory_with_status_fallback_impl,
+    get_open_file_name_with_status_fallback as _get_open_file_name_with_status_fallback_impl,
+    show_critical_dialog_with_status_fallback as _show_critical_dialog_with_status_fallback_impl,
+    show_information_dialog_with_status_fallback as _show_information_dialog_with_status_fallback_impl,
+    show_warning_dialog_with_status_fallback as _show_warning_dialog_with_status_fallback_impl,
+)
 
-def _coerce_ui_message_text(value: object, default: str = '') -> str:
-    text = worker_logic._coerce_path_text(value)
-    return text if text.strip() else default
+from tategakiXTC_gui_studio_desktop import (
+    _open_path_in_file_manager,
+)
 
+from tategakiXTC_gui_studio_preview_helpers import (
+    _coerce_preview_base64_text,
+    _coerce_preview_data_url,
+)
 
+from tategakiXTC_gui_studio_path_helpers import (
+    _supported_targets_for_path,
+    _default_output_name_for_target,
+)
 
-def _connect_signal_best_effort(signal: object, callback: object, *, queued: bool = False) -> bool:
-    """Connect a Qt signal while tolerating lightweight test stubs.
+from tategakiXTC_gui_studio_view_helpers import (
+    _normalized_main_view_mode,
+    _preview_view_help_text,
+    _main_view_mode_help_text,
+    _main_view_mode_status_text,
+)
 
-    Worker signals can be emitted from a background thread.  For real Qt objects
-    we request a queued connection so UI updates always run on the main-window
-    thread.  The small unit-test stubs only accept ``connect(callback)``, so this
-    helper falls back gracefully.
-    """
-    connect = getattr(signal, 'connect', None)
-    if not callable(connect):
-        return False
-    if queued:
-        queued_connection = getattr(Qt, 'QueuedConnection', None)
-        if queued_connection is not None:
-            try:
-                connect(callback, queued_connection)
-                return True
-            except TypeError:
-                pass
-            except Exception:
-                pass
-    try:
-        connect(callback)
-        return True
-    except Exception:
-        return False
+from tategakiXTC_gui_studio_settings_helpers import (
+    _settings_raw_value as _settings_raw_value_from_store,
+    _settings_contains_key as _settings_contains_key_in_store,
+    _settings_int_value as _settings_int_value_from_store,
+    _settings_bool_value as _settings_bool_value_from_store,
+    _settings_str_value as _settings_str_value_from_store,
+    _coerce_mapping_payload as _coerce_mapping_payload_value,
+    _plan_int_value as _plan_int_value_from_payload,
+    _plan_bool_value as _plan_bool_value_from_payload,
+    _plan_int_tuple_value as _plan_int_tuple_value_from_payload,
+    _plan_token_value as _plan_token_value_from_payload,
+    _combo_find_data_index as _combo_find_data_index_for_widget,
+)
 
-def _safe_delete_qobject_later(obj: object, *, context: str = '') -> bool:
-    """Qt wrapper が既に破棄済みでも終了処理を落とさず deleteLater する。"""
-    if obj is None:
-        return False
-    try:
-        delete_later = getattr(obj, 'deleteLater', None)
-    except RuntimeError:
-        # PySide6: C++ 側で既に破棄された QObject wrapper に触ると RuntimeError になる。
-        return False
-    except Exception:
-        return False
-    if not callable(delete_later):
-        return False
-    try:
-        delete_later()
-        return True
-    except RuntimeError:
-        return False
-    except Exception:
-        if context:
-            try:
-                APP_LOGGER.exception('%s の deleteLater に失敗しました', context)
-            except Exception:
-                pass
-        return False
-
-
-def _coerce_progress_number(value: object, default: int) -> int:
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return int(value)
-    if isinstance(value, float):
-        return int(value) if math.isfinite(value) else int(default)
-    if isinstance(value, (bytes, bytearray)):
-        value = worker_logic._coerce_path_text(value)
-    if isinstance(value, str):
-        normalized = value.strip()
-        if not normalized:
-            return int(default)
-        try:
-            return int(normalized, 10)
-        except (TypeError, ValueError, OverflowError):
-            try:
-                parsed = float(normalized)
-            except (TypeError, ValueError, OverflowError):
-                return int(default)
-            return int(parsed) if math.isfinite(parsed) else int(default)
-    return int(default)
-
-def _iter_runtime_xtc_page_items(value: object) -> Iterable[object]:
-    if value is None:
-        return
-    if isinstance(value, str):
-        text = value.strip()
-        if text:
-            yield text
-        return
-    if isinstance(value, (bytes, bytearray, memoryview)):
-        text = worker_logic._coerce_path_text(value).strip()
-        if text:
-            yield text
-        return
-    if isinstance(value, Mapping):
-        for nested in value.values():
-            yield from _iter_runtime_xtc_page_items(nested)
-        return
-    try:
-        iterator = iter(value)  # type: ignore[arg-type]
-    except TypeError:
-        yield value
-        return
-    for item in iterator:
-        yield from _iter_runtime_xtc_page_items(item)
-
-
-def _normalize_runtime_xtc_pages(value: object) -> list[object]:
-    return [item for item in _iter_runtime_xtc_page_items(value)]
+from tategakiXTC_gui_studio_runtime import (
+    _iter_runtime_xtc_page_items,
+    _normalize_runtime_xtc_pages,
+)
 
 MissingDependencyItem = dict[str, object]
 OutputPlan = dict[str, object]
@@ -421,926 +235,78 @@ PresetDefinitions = dict[str, PresetDefinition]
 ConversionResult = dict[str, object]
 
 
-def _scroll_combo_popup_to_top_now(combo: object) -> None:
-    view_getter = getattr(combo, 'view', None)
-    if not callable(view_getter):
-        return
-    try:
-        view = view_getter()
-    except Exception:
-        return
-    if view is None:
-        return
-    scroll_to_top = getattr(view, 'scrollToTop', None)
-    if callable(scroll_to_top):
-        try:
-            scroll_to_top()
-        except Exception:
-            pass
-    bar_getter = getattr(view, 'verticalScrollBar', None)
-    if not callable(bar_getter):
-        return
-    try:
-        bar = bar_getter()
-    except Exception:
-        return
-    if bar is None:
-        return
-    minimum_value = 0
-    minimum_getter = getattr(bar, 'minimum', None)
-    if callable(minimum_getter):
-        try:
-            minimum_value = int(minimum_getter())
-        except Exception:
-            minimum_value = 0
-    set_value = getattr(bar, 'setValue', None)
-    if callable(set_value):
-        try:
-            set_value(minimum_value)
-        except Exception:
-            pass
 
-
-class FontPopupTopComboBox(QComboBox):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__(parent)
-        self._first_popup_shown = True
-
-    def _reset_popup_scroll_to_top(self) -> None:
-        _scroll_combo_popup_to_top_now(self)
-        try:
-            QTimer.singleShot(0, lambda: _scroll_combo_popup_to_top_now(self))
-            QTimer.singleShot(25, lambda: _scroll_combo_popup_to_top_now(self))
-            if bool(getattr(self, '_first_popup_shown', False)):
-                QTimer.singleShot(80, lambda: _scroll_combo_popup_to_top_now(self))
-        except Exception:
-            pass
-
-    def showPopup(self) -> None:
-        super().showPopup()
-        self._reset_popup_scroll_to_top()
-        self._first_popup_shown = False
-
-
-APP_BASE_NAME = '縦書きXTC Studio'
-APP_VERSION = '1.1.0'
-APP_NAME = f'{APP_BASE_NAME} {APP_VERSION}'
-SETTINGS_FILE = Path(__file__).with_suffix('.ini')
-DEFAULT_WINDOW_WIDTH = 1600
-DEFAULT_WINDOW_HEIGHT = 1000
-DEFAULT_LEFT_PANEL_WIDTH = 620
-DEFAULT_STARTUP_PRESET_KEY = 'preset_4'
-DEFAULT_TOP_PATH_BUTTON_WIDTH = 84
-DEFAULT_LEFT_SPLITTER_TOP = 760
-DEFAULT_LEFT_SPLITTER_BOTTOM = 140
-DEFAULT_PREVIEW_PAGE_LIMIT = 10
-RESULT_TAB_INDEX = 0
-LOG_TAB_INDEX = 1
-SUPPORTED_INPUT_SUFFIXES = core.SUPPORTED_INPUT_SUFFIXES
-UI_ASSETS_DIR = Path(__file__).resolve().parent / 'ui_assets'
-SPIN_UP_ICON = (UI_ASSETS_DIR / 'spin_up.svg').as_posix()
-SPIN_DOWN_ICON = (UI_ASSETS_DIR / 'spin_down.svg').as_posix()
-SPIN_UP_ICON_DARK = (UI_ASSETS_DIR / 'spin_up_dark.svg').as_posix()
-SPIN_DOWN_ICON_DARK = (UI_ASSETS_DIR / 'spin_down_dark.svg').as_posix()
-
-TEXT_OR_MARKDOWN_LABEL = 'TXT / Markdown（簡易対応）'
-FONT_REQUIRED_SUFFIXES = {'.epub', '.txt', '.md', '.markdown'}
-def _write_output_bytes_atomic(output_path: Path, blob: bytes) -> Path:
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_handle = tempfile.NamedTemporaryFile(prefix=f'{output_path.stem}_', suffix='.partial', dir=str(output_path.parent), delete=False)
-    tmp_path = Path(tmp_handle.name)
-    try:
-        with tmp_handle:
-            tmp_handle.write(blob)
-            tmp_handle.flush()
-            os.fsync(tmp_handle.fileno())
-        os.replace(tmp_path, output_path)
-    except Exception:
-        try:
-            if tmp_path.exists():
-                tmp_path.unlink()
-        except OSError:
-            pass
-        raise
-    return output_path
-
-
-def _process_single_image_file(
-    path: Path,
-    font_value: str,
-    args: ConversionArgs,
-    output_path: Path,
-    should_cancel: Callable[[], bool] | None = None,
-    progress_cb: Callable[[int, int, str], None] | None = None,
-) -> Path:
-    if progress_cb is not None:
-        progress_cb(0, 1, '画像を読み込み中…')
-    blob = core.process_image_data(path, args, should_cancel=should_cancel)
-    if blob is None:
-        raise RuntimeError('変換データがありません。')
-    _write_output_bytes_atomic(output_path, blob)
-    if progress_cb is not None:
-        progress_cb(1, 1, '画像変換が完了しました。')
-    return output_path
-
-
-PROCESSOR_BY_SUFFIX = {
-    '.epub': core.process_epub,
-    '.txt': core.process_text_file,
-    '.md': core.process_markdown_file,
-    '.markdown': core.process_markdown_file,
-    '.png': _process_single_image_file,
-    '.jpg': _process_single_image_file,
-    '.jpeg': _process_single_image_file,
-    '.webp': _process_single_image_file,
-}
-
-
-def _format_missing_dependency_message(missing_items: list[dict[str, object]]) -> str:
-    lines = ['この操作に必要なライブラリが不足しています。', '']
-    for item in missing_items:
-        purpose = str(item.get('purpose', '')).strip()
-        label = str(item.get('label', '')).strip() or str(item.get('package', '')).strip()
-        if purpose:
-            lines.append(f'- {label}（{purpose}）')
-        else:
-            lines.append(f'- {label}')
-    install_packages = ' '.join(
-        str(item.get('package', '')).strip() or str(item.get('label', '')).strip()
-        for item in missing_items
-    ).strip()
-    if install_packages:
-        lines.extend(['', 'インストール例:', f'pip install {install_packages}', 'または', 'pip install -r requirements.txt'])
-    return '\n'.join(lines)
-
-
-def _summarize_error_headlines(errors: list[ConversionErrorItem]) -> list[str]:
-    return worker_logic.summarize_error_headlines(errors)
-
-
-# ─────────────────────────────────────────────────────────
-# データクラス
-# ─────────────────────────────────────────────────────────
-
-class VisibleArrowSpinBox(QSpinBox):
-    """Windows環境でも上下三角が確実に見えるよう、スピンボタン上に矢印を自前描画する。"""
-
-    def paintEvent(self, event: object) -> None:
-        super().paintEvent(event)
-        if not bool(self.property('showSpinButtons')):
-            return
-
-        opt = QStyleOptionSpinBox()
-        self.initStyleOption(opt)
-        style = self.style()
-        up_rect = style.subControlRect(QStyle.CC_SpinBox, opt, QStyle.SC_SpinBoxUp, self)
-        down_rect = style.subControlRect(QStyle.CC_SpinBox, opt, QStyle.SC_SpinBoxDown, self)
-        if not up_rect.isValid() or not down_rect.isValid():
-            return
-
-        theme = self.property('uiTheme') or 'light'
-        fill = QColor('#0B3E78') if theme != 'dark' else QColor('#F5FAFF')
-        outline = QColor('#06294D') if theme != 'dark' else QColor('#BFD8EE')
-
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setPen(QPen(outline, 1.2))
-        painter.setBrush(fill)
-
-        def triangle(rect: Any, up: bool = True) -> QPolygon:
-            cx = rect.center().x()
-            cy = rect.center().y()
-            half_w = max(5, min(7, rect.width() // 3))
-            half_h = max(3, min(5, rect.height() // 4))
-            if up:
-                return QPolygon([
-                    QPoint(cx, cy - half_h),
-                    QPoint(cx - half_w, cy + half_h),
-                    QPoint(cx + half_w, cy + half_h),
-                ])
-            return QPolygon([
-                QPoint(cx - half_w, cy - half_h),
-                QPoint(cx + half_w, cy - half_h),
-                QPoint(cx, cy + half_h),
-            ])
-
-        painter.drawPolygon(triangle(up_rect, up=True))
-        painter.drawPolygon(triangle(down_rect, up=False))
-
-
-@dataclass
-class DeviceProfile:
-    key: str
-    name: str
-    width_px: int
-    height_px: int
-    ppi: float
-    body_w_mm: float
-    body_h_mm: float
-    screen_w_mm: float
-    screen_h_mm: float
-    accent: str
-    tagline: str
-    top_bezel_ratio: float = 0.34
-
-
-DEVICE_PROFILES = {
-    'x4': DeviceProfile(
-        key='x4', name='Xteink X4', width_px=480, height_px=800, ppi=220.0,
-        body_w_mm=69.0, body_h_mm=114.0, screen_w_mm=55.42, screen_h_mm=92.36,
-        accent='#5DA9FF', tagline='', top_bezel_ratio=0.34,
-    ),
-    'x3': DeviceProfile(
-        # X3 の解像度は横 528px × 縦 792px（ユーザー指定）
-        # 画面寸法は解像度と 252ppi に整合する値を使う。
-        key='x3', name='Xteink X3', width_px=528, height_px=792, ppi=252.0,
-        body_w_mm=64.0, body_h_mm=98.0, screen_w_mm=53.21904761904762, screen_h_mm=79.82857142857142,
-        accent='#9B80FF', tagline='', top_bezel_ratio=0.28,
-    ),
-    'custom': DeviceProfile(
-        key='custom', name='Custom', width_px=480, height_px=800, ppi=220.0,
-        body_w_mm=69.0, body_h_mm=114.0, screen_w_mm=55.42, screen_h_mm=92.36,
-        accent='#38C172', tagline='任意サイズで確認', top_bezel_ratio=0.34,
-    ),
-}
-
-
-# ─────────────────────────────────────────────────────────
-# プリセット定義
-# ─────────────────────────────────────────────────────────
-
-def _make_preset(n: int, font_size: int = 20, ruby_size: int = 11, line_spacing: int = 35) -> dict:
-    """プリセット辞書を生成するファクトリ関数。"""
-    return {
-        'button_text': f'プリセット{n}',
-        'name': f'プリセット{n}',
-        'profile': 'x4',
-        'width': 480,
-        'height': 800,
-        'font_file': 'NotoSansJP-SemiBold.ttf',
-        'font_size': font_size,
-        'ruby_size': ruby_size,
-        'line_spacing': line_spacing,
-        'margin_t': 12,
-        'margin_b': 14,
-        'margin_r': 12,
-        'margin_l': 12,
-        'night_mode': False,
-        'dither': False,
-        'threshold': 128,
-        'kinsoku_mode': 'standard',
-        'output_format': 'xtc',
-    }
-
-
-DEFAULT_PRESET_DEFINITIONS = {
-    'preset_1':  _make_preset(1,  font_size=20, ruby_size=11, line_spacing=35),
-    'preset_2':  _make_preset(2,  font_size=22, ruby_size=11, line_spacing=37),
-    'preset_3':  _make_preset(3,  font_size=24, ruby_size=12, line_spacing=41),
-    'preset_4':  _make_preset(4,  font_size=26, ruby_size=12, line_spacing=41),
-    'preset_5':  _make_preset(5,  font_size=27, ruby_size=12, line_spacing=41),
-    'preset_6':  _make_preset(6,  font_size=28, ruby_size=12, line_spacing=44),
-    'preset_7':  _make_preset(7,  font_size=29, ruby_size=12, line_spacing=44),
-    'preset_8':  _make_preset(8,  font_size=30, ruby_size=13, line_spacing=44),
-    'preset_9':  _make_preset(9,  font_size=31, ruby_size=13, line_spacing=44),
-    'preset_10': _make_preset(10, font_size=32, ruby_size=13, line_spacing=44),
-}
-
-PRESET_FIELDS = [
-    'profile', 'width', 'height', 'font_file',
-    'font_size', 'ruby_size', 'line_spacing',
-    'margin_t', 'margin_b', 'margin_r', 'margin_l',
-    'night_mode', 'dither', 'threshold', 'kinsoku_mode', 'output_format',
-]
-
-KINSOKU_MODE_OPTIONS = [
-    ('off', 'オフ'),
-    ('simple', '簡易'),
-    ('standard', '標準'),
-]
-KINSOKU_MODE_LABELS = {key: label for key, label in KINSOKU_MODE_OPTIONS}
-OUTPUT_FORMAT_OPTIONS = [
-    ('xtc', 'XTC'),
-    ('xtch', 'XTCH'),
-]
-OUTPUT_FORMAT_LABELS = {key: label for key, label in OUTPUT_FORMAT_OPTIONS}
-OUTPUT_CONFLICT_OPTIONS = [
-    ('rename', '自動連番で保存'),
-    ('overwrite', '同名なら上書き'),
-    ('error', '同名ならエラー'),
-]
-OUTPUT_CONFLICT_LABELS = {key: label for key, label in OUTPUT_CONFLICT_OPTIONS}
-
-
-@dataclass
-class XtcPage:
-    offset: int
-    length: int
-    width: int
-    height: int
-
-
-# ─────────────────────────────────────────────────────────
-# 実機プレビューウィジェット
-# ─────────────────────────────────────────────────────────
-
-class XtcViewerWidget(QWidget):
-    def __init__(self: XtcViewerWidget, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setMinimumSize(420, 560)
-        self.profile = DEVICE_PROFILES['x4']
-        self.actual_size = False
-        self.show_guides = True
-        self.guide_margins = (0, 0, 0, 0)
-        self.calibration = 1.0
-        self.preview_zoom_factor = 1.0
-        self.page_image: Optional[QImage] = None
-        self.ui_theme = 'light'
-        self.setFocusPolicy(Qt.StrongFocus)
-
-    def set_ui_theme(self: XtcViewerWidget, theme: str) -> None:
-        self.ui_theme = 'dark' if theme == 'dark' else 'light'
-        self.update()
-
-    def set_profile(self: XtcViewerWidget, profile: DeviceProfile) -> None:
-        self.profile = profile
-        self.updateGeometry()
-        self.update()
-
-    def set_actual_size(self: XtcViewerWidget, enabled: bool) -> None:
-        self.actual_size = enabled
-        self.updateGeometry()
-        self.update()
-
-    def set_show_guides(self: XtcViewerWidget, enabled: bool) -> None:
-        self.show_guides = enabled
-        self.update()
-
-    def set_guide_margins(self: XtcViewerWidget, margin_t: int, margin_b: int, margin_r: int, margin_l: int) -> None:
-        self.guide_margins = (
-            max(0, int(margin_t)),
-            max(0, int(margin_b)),
-            max(0, int(margin_r)),
-            max(0, int(margin_l)),
-        )
-        self.update()
-
-    def _has_visible_guide_overlay(self: XtcViewerWidget) -> bool:
-        if not self.show_guides:
-            return False
-        return any(int(value) > 0 for value in tuple(getattr(self, 'guide_margins', (0, 0, 0, 0))))
-
-    def _guide_rect_for_screen_rect(self: XtcViewerWidget, screen_rect: QRectF) -> QRectF:
-        if not self._has_visible_guide_overlay():
-            return screen_rect
-        margin_t, margin_b, margin_r, margin_l = tuple(getattr(self, 'guide_margins', (0, 0, 0, 0)))
-        page_width = max(1, int(getattr(self.profile, 'width_px', 0) or 0))
-        page_height = max(1, int(getattr(self.profile, 'height_px', 0) or 0))
-        width = max(1.0, float(screen_rect.width()))
-        height = max(1.0, float(screen_rect.height()))
-        left_inset = int(round(width * max(0, margin_l) / page_width))
-        right_inset = int(round(width * max(0, margin_r) / page_width))
-        top_inset = int(round(height * max(0, margin_t) / page_height))
-        bottom_inset = int(round(height * max(0, margin_b) / page_height))
-        left_inset = max(0, min(left_inset, max(0, int(round(width)) - 1)))
-        right_inset = max(0, min(right_inset, max(0, int(round(width)) - left_inset - 1)))
-        top_inset = max(0, min(top_inset, max(0, int(round(height)) - 1)))
-        bottom_inset = max(0, min(bottom_inset, max(0, int(round(height)) - top_inset - 1)))
-        return screen_rect.adjusted(left_inset, top_inset, -right_inset, -bottom_inset)
-
-    def _screen_fill_hex(self: XtcViewerWidget, dark: bool) -> str:
-        if self._has_visible_guide_overlay():
-            return '#DDE4E8' if dark else '#E8EEF0'
-        return '#DCDCDC' if dark else '#F0F0F0'
-
-    def set_calibration(self: XtcViewerWidget, value: float) -> None:
-        self.calibration = value
-        self.updateGeometry()
-        self.update()
-
-    def set_preview_zoom_factor(self: XtcViewerWidget, value: object) -> None:
-        try:
-            zoom = float(value)
-        except Exception:
-            zoom = 1.0
-        if not math.isfinite(zoom):
-            zoom = 1.0
-        zoom = max(0.5, min(zoom, 3.0))
-        if abs(float(getattr(self, 'preview_zoom_factor', 1.0)) - zoom) < 0.0001:
-            return
-        self.preview_zoom_factor = zoom
-        self.updateGeometry()
-        self.update()
-
-    def _preview_zoom_factor(self: XtcViewerWidget) -> float:
-        try:
-            zoom = float(getattr(self, 'preview_zoom_factor', 1.0))
-        except Exception:
-            zoom = 1.0
-        if not math.isfinite(zoom):
-            zoom = 1.0
-        return max(0.5, min(zoom, 3.0))
-
-    def set_page_image(self: XtcViewerWidget, image: Optional[QImage]) -> None:
-        self.page_image = image
-        self.update()
-
-    def clear_page(self: XtcViewerWidget) -> None:
-        self.page_image = None
-        self.update()
-
-    def _px_per_mm(self: XtcViewerWidget) -> float:
-        screen = self.screen() or QApplication.primaryScreen()
-        dpi = screen.logicalDotsPerInch() if screen else 96
-        return max(1.0, dpi / 25.4) * self.calibration
-
-    def sizeHint(self: XtcViewerWidget) -> QSize:
-        margin = 48
-        zoom = self._preview_zoom_factor()
-        if self.actual_size:
-            px = self._px_per_mm()
-            body_w = int(round(float(self.profile.body_w_mm) * px * zoom))
-            body_h = int(round(float(self.profile.body_h_mm) * px * zoom))
-            return QSize(
-                max(1, body_w) + margin * 2,
-                max(1, body_h) + margin * 2,
-            )
-        base_w, base_h = 660, 860
-        content_w = max(1, base_w - margin * 2)
-        content_h = max(1, base_h - margin * 2)
-        return QSize(
-            margin * 2 + max(1, int(round(content_w * zoom))),
-            margin * 2 + max(1, int(round(content_h * zoom))),
-        )
-
-    def paintEvent(self: XtcViewerWidget, event: object) -> None:
-        rect = self.rect()
-        if rect.width() < 24 or rect.height() < 24:
-            return
-
-        painter = QPainter(self)
-        try:
-            painter.setRenderHint(QPainter.Antialiasing)
-            painter.setRenderHint(QPainter.SmoothPixmapTransform)
-
-            dark = self.ui_theme == 'dark'
-            outer_bg = QColor('#0D1520') if dark else QColor('#F3F6FA')
-            body_fill = QColor('#132131') if dark else QColor('#FCFEFF')
-            title_color = QColor('#DDEAF7') if dark else QColor('#1E3650')
-            sub_color = QColor('#8EA8BF') if dark else QColor('#6E8193')
-            screen_fill = QColor(self._screen_fill_hex(dark))
-            screen_border = QColor('#6D8295') if dark else QColor('#94A3B3')
-            empty_color = QColor('#93A7B9') if dark else QColor('#7E8B98')
-            guide_color = QColor(114, 173, 255, 120) if dark else QColor(75, 152, 255, 110)
-            guide_text = QColor('#8CA6BC') if dark else QColor('#73879A')
-
-            painter.fillRect(rect, outer_bg)
-            body_rect, screen_rect = self._calculate_rects()
-            if body_rect.width() <= 1 or body_rect.height() <= 1 or screen_rect.width() <= 1 or screen_rect.height() <= 1:
-                return
-
-            shadow_rect = body_rect.adjusted(-8, -8, 8, 8).toRect()
-            painter.fillRect(shadow_rect, QColor(0, 0, 0, 28))
-
-            body_rect_i = body_rect.toRect()
-            painter.fillRect(body_rect_i, body_fill)
-            painter.setPen(QPen(QColor(self.profile.accent), 2.2))
-            painter.drawRect(body_rect_i)
-
-            band = body_rect.adjusted(18, 16, -18, -(body_rect.height() - 52))
-            if band.width() > 1 and band.height() > 1:
-                painter.fillRect(band.toRect(), QColor(0, 0, 0, 6))
-
-            painter.setFont(QFont('Meiryo', 10))
-            painter.setPen(sub_color)
-            painter.drawText(
-                body_rect.adjusted(12, 18, -12, 0),
-                Qt.AlignTop | Qt.AlignHCenter | Qt.TextWordWrap,
-                self.profile.tagline,
-            )
-
-            sp = QPainterPath()
-            sp.addRect(screen_rect)
-            painter.fillPath(sp, screen_fill)
-            painter.setPen(QPen(screen_border, 1.0))
-            painter.drawPath(sp)
-
-            guide_rect = self._guide_rect_for_screen_rect(screen_rect)
-            if self.page_image and not self.page_image.isNull():
-                dpr_getter = getattr(self, 'devicePixelRatioF', None)
-                try:
-                    dpr = float(dpr_getter()) if callable(dpr_getter) else 1.0
-                except Exception:
-                    dpr = 1.0
-                if dpr <= 0:
-                    dpr = 1.0
-                pix = QPixmap.fromImage(self.page_image)
-                target_logical = screen_rect.size().toSize()
-                logical_w = max(1, min(int(round(target_logical.width())), 4096))
-                logical_h = max(1, min(int(round(target_logical.height())), 4096))
-                target_phys = QSize(
-                    max(1, min(int(round(logical_w * dpr)), 8192)),
-                    max(1, min(int(round(logical_h * dpr)), 8192)),
-                )
-                scaled = pix.scaled(target_phys, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                if hasattr(scaled, 'setDevicePixelRatio'):
-                    try:
-                        scaled.setDevicePixelRatio(dpr)
-                    except Exception:
-                        pass
-                logical_w = scaled.width() / dpr
-                logical_h = scaled.height() / dpr
-                scaled_logical_w = logical_w
-                scaled_logical_h = logical_h
-                ix = int(round(screen_rect.x() + (screen_rect.width() - scaled_logical_w) / 2.0))
-                iy = int(round(screen_rect.y() + (screen_rect.height() - logical_h) / 2.0))
-                painter.drawPixmap(ix, iy, scaled)
-            else:
-                painter.setPen(empty_color)
-                painter.setFont(QFont('Meiryo', 14))
-                painter.drawText(
-                    guide_rect.toRect(), Qt.AlignCenter,
-                    'XTCを読み込むと\nここに実機風プレビューを表示します',
-                )
-
-            if self._has_visible_guide_overlay():
-                guide_band = QPainterPath()
-                guide_band.addRect(screen_rect)
-                guide_band.addRect(guide_rect)
-                painter.fillPath(guide_band, QColor(75, 152, 255, 48) if not dark else QColor(114, 173, 255, 40))
-                painter.setPen(QPen(guide_color, 1, Qt.DashLine))
-                painter.drawRect(guide_rect.toRect())
-            if self.show_guides:
-                painter.setFont(QFont('Meiryo', 10))
-                painter.setPen(guide_text)
-                info = (
-                    f'{self.profile.width_px}×{self.profile.height_px}px'
-                    f' / {self.profile.screen_w_mm:.1f}×{self.profile.screen_h_mm:.1f}mm'
-                )
-                info_top = int(round(screen_rect.bottom())) + 6
-                info_rect = QRect(int(round(screen_rect.left())), info_top, int(round(screen_rect.width())), 18)
-                painter.drawText(
-                    info_rect,
-                    Qt.AlignTop | Qt.AlignHCenter,
-                    info,
-                )
-        except Exception:
-            APP_LOGGER.exception('実機風プレビュー描画に失敗しました')
-        finally:
-            try:
-                painter.end()
-            except Exception:
-                pass
-
-    def _calculate_rects(self: XtcViewerWidget) -> tuple[QRectF, QRectF]:
-        margin = 34
-        rect = self.rect()
-        if rect.width() <= margin * 2 + 2 or rect.height() <= margin * 2 + 2:
-            return QRectF(0, 0, 0, 0), QRectF(0, 0, 0, 0)
-
-        c = rect.adjusted(margin, margin, -margin, -margin)
-        available_w = max(1.0, float(c.width()))
-        available_h = max(1.0, float(c.height()))
-        zoom = self._preview_zoom_factor()
-        body_w_mm = max(1.0, float(getattr(self.profile, 'body_w_mm', 1.0) or 1.0))
-        body_h_mm = max(1.0, float(getattr(self.profile, 'body_h_mm', 1.0) or 1.0))
-        screen_w_mm = max(1.0, float(getattr(self.profile, 'screen_w_mm', body_w_mm) or body_w_mm))
-        screen_h_mm = max(1.0, float(getattr(self.profile, 'screen_h_mm', body_h_mm) or body_h_mm))
-
-        if self.actual_size:
-            px = max(0.01, self._px_per_mm())
-            base_body_w = max(1, min(int(round(body_w_mm * px)), 8192))
-            base_body_h = max(1, min(int(round(body_h_mm * px)), 8192))
-        else:
-            scale = min(available_w / body_w_mm, available_h / body_h_mm)
-            px = max(0.01, min(float(scale), 128.0))
-            base_body_w = max(1, min(int(round(body_w_mm * px)), int(max(1.0, available_w))))
-            base_body_h = max(1, min(int(round(body_h_mm * px)), int(max(1.0, available_h))))
-
-        body_w = max(1, min(int(round(base_body_w * zoom)), 8192))
-        body_h = max(1, min(int(round(base_body_h * zoom)), 8192))
-        scaled_px = px * zoom
-
-        x = float(c.x()) + max(0.0, (available_w - float(body_w)) / 2.0)
-        y = float(c.y()) + max(0.0, (available_h - float(body_h)) / 2.0)
-        body_rect = QRectF(x, y, float(body_w), float(body_h))
-
-        sw = max(1, min(int(round(screen_w_mm * scaled_px)), body_w))
-        sh = max(1, min(int(round(screen_h_mm * scaled_px)), body_h))
-        sx = body_rect.x() + max(0.0, (body_rect.width() - sw) / 2.0)
-        vertical_bezel = max(0.0, body_rect.height() - sh)
-        top_bezel_ratio = max(0.0, min(1.0, float(getattr(self.profile, 'top_bezel_ratio', 0.34))))
-        sy = body_rect.y() + vertical_bezel * top_bezel_ratio
-        return body_rect, QRectF(sx, sy, float(sw), float(sh))
-
-
-
-# ─────────────────────────────────────────────────────────
-# 変換ワーカー
-# ─────────────────────────────────────────────────────────
-
-def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
-    return worker_logic.build_conversion_args(cfg)
-
-
-def resolve_supported_conversion_targets(tp: Path) -> list[Path]:
-    return worker_logic.resolve_supported_conversion_targets(tp, SUPPORTED_INPUT_SUFFIXES)
-
-
-def sanitize_output_stem(name: str) -> str:
-    return worker_logic.sanitize_output_stem(name)
-
-
-def plan_output_path_for_target(
-    path: Path,
-    args: ConversionArgs,
-    requested_name: str,
-    supported_count: int,
-    conflict_strategy: str,
-    output_root: Path | None = None,
-    apply_conflict_strategy: Callable[[Path, str], tuple[Path, core.ConflictPlan]] | None = None,
-) -> tuple[Path | None, core.ConflictPlan | None, str | None]:
-    return worker_logic.plan_output_path_for_target(
-        path,
-        args,
-        requested_name,
-        supported_count,
-        conflict_strategy,
-        output_root=output_root,
-        apply_conflict_strategy=apply_conflict_strategy,
-    )
-
-
-def build_conversion_summary(
-    converted_count: int,
-    renamed_count: int,
-    overwritten_count: int,
-    errors: list[ConversionErrorItem],
-    stopped: bool,
-    *,
-    skipped_count: int = 0,
-) -> tuple[str, list[str]]:
-    return worker_logic.build_conversion_summary(
-        converted_count,
-        renamed_count,
-        overwritten_count,
-        errors,
-        stopped,
-        skipped_count=skipped_count,
-        summarize_error_headlines_func=_summarize_error_headlines,
-    )
-
-
-class ConversionWorker(QObject):
-    # GUI 依存は Signal / log emit / OS フォルダオープンのみに寄せる。
-    # 変換判断・集計・出力先決定は worker_logic 側の helper を優先して使う。
-    finished = Signal(dict)
-    error = Signal(str)
-    log = Signal(str)
-    progress = Signal(int, int, str)
-
-    def __init__(self: ConversionWorker, settings_dict: WorkerConversionSettings) -> None:
-        super().__init__()
-        self.settings_dict = settings_dict
-        self._stop_requested = threading.Event()
-
-    def stop(self: ConversionWorker) -> None:
-        self._stop_requested.set()
-
-    def _is_stop_requested(self: ConversionWorker) -> bool:
-        try:
-            return bool(self._stop_requested.is_set())
-        except Exception:
-            return False
-
-    def _emit_progress(self: ConversionWorker, current: int, total: int, message: str) -> None:
-        total_value = max(1, _coerce_progress_number(total, 1))
-        current_value = max(0, min(_coerce_progress_number(current, 0), total_value))
-        message_text = _coerce_ui_message_text(message)
-        self.progress.emit(current_value, total_value, message_text)
-
-    def _make_progress_callback(self: ConversionWorker, file_index: int, total_files: int, path: Path) -> Callable[[int, int, str], None]:
-        total_files = max(1, int(total_files or 1))
-
-        def callback(current: int, total: int, message: str) -> None:
-            total_value = max(1, _coerce_progress_number(total, 1))
-            current_value = max(0, min(_coerce_progress_number(current, 0), total_value))
-            message_text = _coerce_ui_message_text(message)
-            scale = 1000
-            base = (file_index - 1) / total_files
-            fraction = current_value / total_value
-            overall = int(round((base + fraction / total_files) * scale))
-            overall = max(0, min(overall, scale))
-            prefix = f'[{file_index}/{total_files}] {path.name}'
-            combined = f'{prefix} — {message_text}' if message_text else prefix
-            self._emit_progress(overall, scale, combined)
-
-        return callback
-
-    def run(self: ConversionWorker) -> None:
-        try:
-            self.finished.emit(self._convert())
-        except Exception as exc:
-            APP_LOGGER.exception('変換ワーカーでエラーが発生しました')
-            self.error.emit(str(exc))
-
-    @staticmethod
-    def _build_args(cfg: WorkerConversionSettings) -> ConversionArgs:
-        return build_conversion_args(cfg)
-
-    @staticmethod
-    def _resolve_supported_targets(tp: Path) -> list[Path]:
-        return resolve_supported_conversion_targets(tp)
-
-    @staticmethod
-    def _sanitize_output_stem(name: str) -> str:
-        return sanitize_output_stem(name)
-
-    @staticmethod
-    def _collect_conversion_counts(converted: list[str], renamed: list[dict[str, object]], overwritten: list[dict[str, object]], errors: list[ConversionErrorItem], skipped: int = 0) -> dict[str, int]:
-        return worker_logic.collect_conversion_counts(converted, renamed, overwritten, errors, skipped=skipped)
-
-    @staticmethod
-    def _resolve_open_folder_target(input_path: Path, converted_files: list[str]) -> str | None:
-        return worker_logic.resolve_open_folder_target(input_path, converted_files)
-
-    def _apply_output_conflict_strategy(self: ConversionWorker, desired_path: Path, strategy: str) -> tuple[Path, core.ConflictPlan]:
-        return core.resolve_output_path_with_conflict(desired_path, strategy)
-
-    def _output_path_for_target(self: ConversionWorker, path: Path, args: ConversionArgs, requested_name: str, supported_count: int, conflict_strategy: str, output_root: Path | None = None) -> tuple[Path | None, OutputPlan | None]:
-        out_path, plan, warning = plan_output_path_for_target(
-            path,
-            args,
-            requested_name,
-            supported_count,
-            conflict_strategy,
-            output_root=output_root,
-            apply_conflict_strategy=self._apply_output_conflict_strategy,
-        )
-        if warning:
-            self.log.emit(warning)
-        return out_path, plan
-
-    def _process_target(self: ConversionWorker, path: Path, font_value: str, args: ConversionArgs, out_path: Path, progress_cb: Callable[[int, int, str], None] | None = None) -> Path:
-        suffix = path.suffix.lower()
-        missing = core.get_missing_dependencies_for_suffixes([suffix])
-        if missing:
-            raise RuntimeError(_format_missing_dependency_message(missing))
-        processor = PROCESSOR_BY_SUFFIX.get(suffix)
-        if processor is not None:
-            return processor(path, str(font_value), args, output_path=out_path, should_cancel=self._is_stop_requested, progress_cb=progress_cb)
-        return core.process_archive(path, args, output_path=out_path, should_cancel=self._is_stop_requested, progress_cb=progress_cb)
-
-    def _convert(self: ConversionWorker) -> ConversionResult:
-        cfg = self.settings_dict
-        target_raw = str(cfg.get('target', '')).strip()
-        if not target_raw:
-            raise RuntimeError('変換対象ファイルまたはフォルダを指定してください。')
-        tp = Path(target_raw)
-        if not tp.exists():
-            raise RuntimeError(f'指定したパスが見つかりません: {tp}')
-
-        args = self._build_args(cfg)
-        supported = self._resolve_supported_targets(tp)
-        if not supported:
-            raise RuntimeError(f'変換対象の EPUB / ZIP / RAR / CBZ / CBR / PNG / JPG / JPEG / WEBP / {TEXT_OR_MARKDOWN_LABEL} が見つかりませんでした。')
-
-        font_value = str(cfg.get('font_file', '')).strip()
-        needs_font = any(p.suffix.lower() in FONT_REQUIRED_SUFFIXES for p in supported)
-        if needs_font:
-            font_path = core.resolve_font_path(font_value)
-            if not font_path or not Path(font_path).exists():
-                raise RuntimeError(f'フォントが見つかりません: {cfg.get("font_file", "") or font_path}')
-
-        requested_name = str(cfg.get('output_name', '')).strip()
-        conflict_strategy = str(cfg.get('output_conflict', 'rename')).strip().lower()
-        converted, stopped = [], False
-        errors, renamed_items, overwritten_items = [], [], []
-        skipped_count = 0
-        planned_desired_sources = {}
-        total = len(supported)
-        APP_LOGGER.info('変換開始: target=%s files=%s format=%s font=%s conflict=%s', tp, total, getattr(args, 'output_format', 'xtc'), font_value, conflict_strategy)
-        self._emit_progress(0, 1000, f'変換準備が完了しました。({total} 件)')
-        output_root = tp if tp.is_dir() else None
-        for idx, path in enumerate(supported, 1):
-            if self._is_stop_requested():
-                stopped = True
-                self.log.emit('停止要求を受け付けました。')
-                break
-            self.log.emit(f'[{idx}/{total}] 変換中: {path.name}')
-            progress_cb = self._make_progress_callback(idx, total, path)
-            progress_cb(0, 1, '変換を開始します。')
-            try:
-                out_path, plan = self._output_path_for_target(path, args, requested_name, total, conflict_strategy, output_root=output_root)
-                if not out_path:
-                    skipped_count += 1
-                    self.log.emit(f'スキップ: {path.name}')
-                    continue
-                if plan and plan.get('desired_path'):
-                    desired_raw = str(plan['desired_path']).strip()
-                    desired_key = worker_logic._normalize_path_match_key(desired_raw) or desired_raw
-                    source_key = worker_logic._normalize_path_match_key(path)
-                    previous_source = planned_desired_sources.get(desired_key)
-                    previous_source_key = worker_logic._normalize_path_match_key(previous_source) if previous_source else ''
-                    if previous_source and previous_source_key != source_key:
-                        warning = f'同じ出力名候補が複数入力で重複しました: {Path(plan["desired_path"]).name} <- {Path(previous_source).name} / {path.name}'
-                        self.log.emit(warning)
-                        APP_LOGGER.warning(warning)
-                    else:
-                        planned_desired_sources[desired_key] = str(path)
-                saved = self._process_target(path, font_value, args, out_path, progress_cb=progress_cb)
-                if plan and plan.get('renamed'):
-                    renamed_items.append(plan)
-                    self.log.emit(f'同名あり → 自動連番で保存: {Path(plan["desired_path"]).name} -> {Path(plan["final_path"]).name}')
-                elif plan and plan.get('overwritten'):
-                    overwritten_items.append(plan)
-                    self.log.emit(f'同名あり → 上書き保存: {Path(plan["final_path"]).name}')
-            except core.ConversionCancelled:
-                stopped = True
-                self.log.emit('停止要求を受け付けました。')
-                break
-            except Exception as exc:
-                APP_LOGGER.exception('個別変換エラー: %s', path)
-                report = core.build_conversion_error_report(path, exc)
-                errors.append({
-                    'source': str(path),
-                    'error': str(exc),
-                    'headline': report.get('headline', ''),
-                    'display': report.get('display', str(exc)),
-                })
-                self.log.emit(report.get('display', f'エラー: {path.name}: {exc}'))
-                if total == 1:
-                    raise RuntimeError(report.get('display', str(exc))) from exc
-                continue
-            progress_cb(1, 1, '保存が完了しました。')
-            converted.append(str(saved))
-            self.log.emit(f'保存: {Path(saved).name}')
-            if self._is_stop_requested():
-                stopped = True
-                self.log.emit('停止しました。')
-                break
-
-        postprocess_warnings: list[str] = []
-        open_folder_target = ''
-        open_folder_requested = worker_logic._bool_config_value(cfg, 'open_folder', True) and bool(converted)
-        if open_folder_requested:
-            try:
-                tgt = self._resolve_open_folder_target(tp, converted)
-                if not tgt:
-                    warning = f'完了後フォルダの対象を特定できませんでした: {tp}'
-                    self.log.emit(warning)
-                    APP_LOGGER.warning(warning)
-                    postprocess_warnings.append(warning)
-                else:
-                    open_folder_target = str(tgt)
-            except Exception as exc:
-                APP_LOGGER.exception('完了後フォルダの対象を特定できませんでした (target=%s converted=%s): %s', tp, len(converted), exc)
-                detail = _coerce_ui_message_text(exc).strip()
-                message = f'完了後フォルダを開けませんでした。 / 対象: {tp}'
-                if detail:
-                    message = f'{message} / {detail}'
-                self.log.emit(message)
-                postprocess_warnings.append(message)
-
-        counts = self._collect_conversion_counts(
-            converted,
-            renamed_items,
-            overwritten_items,
-            errors,
-            skipped=skipped_count,
-        )
-        msg, summary_lines = build_conversion_summary(
-            counts['converted'],
-            counts['renamed'],
-            counts['overwritten'],
-            errors,
-            stopped,
-            skipped_count=counts['skipped'],
-        )
-
-        self._emit_progress(1000, 1000, msg)
-        self.log.emit(msg)
-        APP_LOGGER.info('変換終了: saved=%s renamed=%s overwritten=%s errors=%s skipped=%s stopped=%s', counts['converted'], counts['renamed'], counts['overwritten'], counts['errors'], counts['skipped'], stopped)
-        normalized_postprocess_warnings = worker_logic.coerce_postprocess_warning_messages(
-            postprocess_warnings
-        )
-        summary_lines = worker_logic.merge_postprocess_warnings_into_summary_lines(
-            summary_lines,
-            normalized_postprocess_warnings,
-        )
-        return {
-            'message': msg,
-            'converted_files': converted,
-            'stopped': stopped,
-            'errors': errors,
-            'summary_lines': summary_lines,
-            'skipped_count': counts['skipped'],
-            'postprocess_warnings': normalized_postprocess_warnings,
-            'open_folder_requested': bool(open_folder_requested),
-            'open_folder_target': open_folder_target,
-        }
-
+from tategakiXTC_gui_studio_constants import (
+    APP_BASE_NAME,
+    APP_VERSION,
+    APP_NAME,
+    SETTINGS_FILE,
+    DEFAULT_WINDOW_WIDTH,
+    DEFAULT_WINDOW_HEIGHT,
+    DEFAULT_LEFT_PANEL_WIDTH,
+    DEFAULT_STARTUP_PRESET_KEY,
+    DEFAULT_TOP_PATH_BUTTON_WIDTH,
+    DEFAULT_LEFT_SPLITTER_TOP,
+    DEFAULT_LEFT_SPLITTER_BOTTOM,
+    DEFAULT_PREVIEW_PAGE_LIMIT,
+    SETTINGS_SCHEMA_VERSION,
+    DEFAULT_RENDER_SETTINGS,
+    RESULT_TAB_INDEX,
+    LOG_TAB_INDEX,
+    SUPPORTED_INPUT_SUFFIXES,
+    UI_ASSETS_DIR,
+    SPIN_UP_ICON,
+    SPIN_DOWN_ICON,
+    SPIN_UP_ICON_DARK,
+    SPIN_DOWN_ICON_DARK,
+    TEXT_OR_MARKDOWN_LABEL,
+    FONT_REQUIRED_SUFFIXES,
+    DeviceProfile,
+    DEVICE_PROFILES,
+    _make_preset,
+    DEFAULT_PRESET_DEFINITIONS,
+    PRESET_FIELDS,
+    KINSOKU_MODE_OPTIONS,
+    KINSOKU_MODE_LABELS,
+    GLYPH_POSITION_MODE_OPTIONS,
+    GLYPH_POSITION_MODE_LABELS,
+    CLOSING_BRACKET_POSITION_MODE_OPTIONS,
+    CLOSING_BRACKET_POSITION_MODE_LABELS,
+    OUTPUT_FORMAT_OPTIONS,
+    OUTPUT_FORMAT_LABELS,
+    OUTPUT_CONFLICT_OPTIONS,
+    OUTPUT_CONFLICT_LABELS,
+)
+
+from tategakiXTC_gui_studio_xtc_io import (
+    XtcPage,
+    parse_xtc_pages,
+    xt_page_blob_to_qimage,
+    xtg_blob_to_qimage,
+    xth_blob_to_qimage,
+)
+
+from tategakiXTC_gui_studio_widgets import (
+    _scroll_combo_popup_to_top_now,
+    FontPopupTopComboBox,
+    VisibleArrowSpinBox,
+    XtcViewerWidget,
+)
+
+from tategakiXTC_gui_studio_worker import (
+    _coerce_progress_number,
+    _write_output_bytes_atomic,
+    _process_single_image_file,
+    PROCESSOR_BY_SUFFIX,
+    _format_missing_dependency_message,
+    _summarize_error_headlines,
+    build_conversion_args,
+    resolve_supported_conversion_targets,
+    sanitize_output_stem,
+    plan_output_path_for_target,
+    build_conversion_summary,
+    ConversionWorker,
+)
 
 # ─────────────────────────────────────────────────────────
 # メインウィンドウ
@@ -1369,9 +335,9 @@ class MainWindow(QMainWindow):
         self.current_profile_key = 'x4'
         self.current_preview_mode = 'text'
         self.preview_image_data_url = None
-        self.preview_pages_b64: List[str] = []
+        self.preview_pages_b64: list[str] = []
         self.preview_pages_truncated = False
-        self.device_preview_pages_b64: List[str] = []
+        self.device_preview_pages_b64: list[str] = []
         self.device_preview_pages_truncated = False
         self.device_view_source = 'xtc'
         self.last_preview_requested_limit = DEFAULT_PREVIEW_PAGE_LIMIT
@@ -1381,8 +347,8 @@ class MainWindow(QMainWindow):
         self.preview_dirty = False
         self._preview_running = False
         self._pending_preview_refresh_request: dict[str, object] | None = None
-        self.xtc_bytes: Optional[bytes] = None
-        self.xtc_pages: List[XtcPage] = []
+        self.xtc_bytes: bytes | None = None
+        self.xtc_pages: list[XtcPage] = []
         self.loaded_xtc_viewer_profile: DeviceProfile | None = None
         self.loaded_xtc_profile_ui_override = False
         self._xtc_page_qimage_cache: OrderedDict[tuple[int, int, int], object] = OrderedDict()
@@ -1394,15 +360,20 @@ class MainWindow(QMainWindow):
         self.nav_buttons_reversed = False
         self.current_ui_theme = 'light'
         self.panel_button_visible = True
-        self.worker_thread: Optional[QThread] = None
-        self.worker: Optional[ConversionWorker] = None
+        self.worker_thread: QThread | None = None
+        self.worker: ConversionWorker | None = None
         self._conversion_run_token = 0
         self._active_conversion_run_token = 0
         self._connect_worker_dispatch_signals()
         self._startup_pending = True
         self._preview_resize_sync_pending = False
         self._preview_resize_sync_active = False
-        self._pending_left_panel_width: Optional[int] = None
+        self._settings_preview_refresh_scheduled = False
+        self._settings_preview_refresh_pending = False
+        self._settings_preview_refresh_pending_reset_page = False
+        self._settings_preview_refresh_generation = 0
+        self._preview_update_button_visual_state = 'idle'
+        self._pending_left_panel_width: int | None = None
         self._initialized = False  # 初期化完了前の save_ui_state を抑制
 
         self._build_ui()
@@ -1449,7 +420,7 @@ class MainWindow(QMainWindow):
                 lines.append(f"- {item['label']}（{item['purpose']}）")
         self._append_log_without_status_best_effort(' / '.join(lines))
 
-    def _missing_dependencies_for_targets(self: MainWindow, targets: List[Path]) -> list[MissingDependencyItem]:
+    def _missing_dependencies_for_targets(self: MainWindow, targets: list[Path]) -> list[MissingDependencyItem]:
         suffixes = {p.suffix.lower() for p in targets}
         return core.get_missing_dependencies_for_suffixes(suffixes)
 
@@ -1460,18 +431,14 @@ class MainWindow(QMainWindow):
         *,
         duration_ms: int = 5000,
     ) -> None:
-        try:
-            QMessageBox.warning(self, title, message)
-            return
-        except Exception:
-            pass
-        try:
-            self._show_ui_status_message_with_reflection_or_direct_fallback(
-                message,
-                duration_ms,
-            )
-        except Exception:
-            pass
+        _show_warning_dialog_with_status_fallback_impl(
+            self,
+            getattr(QMessageBox, 'warning', None),
+            self._show_ui_status_message_with_reflection_or_direct_fallback,
+            title,
+            message,
+            duration_ms=duration_ms,
+        )
 
     def _ask_question_dialog_with_status_fallback(
         self: MainWindow,
@@ -1484,20 +451,19 @@ class MainWindow(QMainWindow):
         fallback_status_message: str = '',
         fallback_answer: object = None,
     ) -> object:
-        try:
-            return QMessageBox.question(self, title, message, buttons, default_button)
-        except Exception:
-            pass
-        status_message = _coerce_ui_message_text(fallback_status_message) or _coerce_ui_message_text(message)
-        try:
-            self._show_ui_status_message_with_reflection_or_direct_fallback(
-                status_message,
-                duration_ms,
-                reuse_existing_message=False,
-            )
-        except Exception:
-            pass
-        return fallback_answer
+        return _ask_question_dialog_with_status_fallback_impl(
+            self,
+            getattr(QMessageBox, 'question', None),
+            self._show_ui_status_message_with_reflection_or_direct_fallback,
+            _coerce_ui_message_text,
+            title,
+            message,
+            buttons,
+            default_button,
+            duration_ms=duration_ms,
+            fallback_status_message=fallback_status_message,
+            fallback_answer=fallback_answer,
+        )
 
     def _show_information_dialog_with_status_fallback(
         self: MainWindow,
@@ -1507,20 +473,16 @@ class MainWindow(QMainWindow):
         duration_ms: int = 5000,
         fallback_status_message: str = '',
     ) -> None:
-        try:
-            QMessageBox.information(self, title, message)
-            return
-        except Exception:
-            pass
-        status_message = _coerce_ui_message_text(fallback_status_message) or _coerce_ui_message_text(message)
-        try:
-            self._show_ui_status_message_with_reflection_or_direct_fallback(
-                status_message,
-                duration_ms,
-                reuse_existing_message=False,
-            )
-        except Exception:
-            pass
+        _show_information_dialog_with_status_fallback_impl(
+            self,
+            getattr(QMessageBox, 'information', None),
+            self._show_ui_status_message_with_reflection_or_direct_fallback,
+            _coerce_ui_message_text,
+            title,
+            message,
+            duration_ms=duration_ms,
+            fallback_status_message=fallback_status_message,
+        )
 
     def _show_critical_dialog_with_status_fallback(
         self: MainWindow,
@@ -1530,20 +492,16 @@ class MainWindow(QMainWindow):
         duration_ms: int = 5000,
         fallback_status_message: str = '',
     ) -> None:
-        try:
-            QMessageBox.critical(self, title, message)
-            return
-        except Exception:
-            pass
-        status_message = _coerce_ui_message_text(fallback_status_message) or _coerce_ui_message_text(message)
-        try:
-            self._show_ui_status_message_with_reflection_or_direct_fallback(
-                status_message,
-                duration_ms,
-                reuse_existing_message=False,
-            )
-        except Exception:
-            pass
+        _show_critical_dialog_with_status_fallback_impl(
+            self,
+            getattr(QMessageBox, 'critical', None),
+            self._show_ui_status_message_with_reflection_or_direct_fallback,
+            _coerce_ui_message_text,
+            title,
+            message,
+            duration_ms=duration_ms,
+            fallback_status_message=fallback_status_message,
+        )
 
     def _get_open_file_name_with_status_fallback(
         self: MainWindow,
@@ -1554,15 +512,17 @@ class MainWindow(QMainWindow):
         warning_title: str = 'ファイル選択エラー',
         fallback_status_message: str = '',
     ) -> tuple[str, str]:
-        try:
-            return QFileDialog.getOpenFileName(self, title, start_dir, filter_text)
-        except Exception as exc:
-            detail = _coerce_ui_message_text(exc).strip()
-            message = _coerce_ui_message_text(fallback_status_message).strip() or f'{title}ダイアログを開けませんでした。'
-            if detail:
-                message = f'{message} / {detail}'
-            self._show_warning_dialog_with_status_fallback(warning_title, message)
-            return '', ''
+        return _get_open_file_name_with_status_fallback_impl(
+            self,
+            getattr(QFileDialog, 'getOpenFileName', None),
+            self._show_warning_dialog_with_status_fallback,
+            _coerce_ui_message_text,
+            title,
+            start_dir,
+            filter_text,
+            warning_title=warning_title,
+            fallback_status_message=fallback_status_message,
+        )
 
     def _get_existing_directory_with_status_fallback(
         self: MainWindow,
@@ -1572,15 +532,16 @@ class MainWindow(QMainWindow):
         warning_title: str = 'フォルダ選択エラー',
         fallback_status_message: str = '',
     ) -> str:
-        try:
-            return QFileDialog.getExistingDirectory(self, title, start_dir)
-        except Exception as exc:
-            detail = _coerce_ui_message_text(exc).strip()
-            message = _coerce_ui_message_text(fallback_status_message).strip() or f'{title}ダイアログを開けませんでした。'
-            if detail:
-                message = f'{message} / {detail}'
-            self._show_warning_dialog_with_status_fallback(warning_title, message)
-            return ''
+        return _get_existing_directory_with_status_fallback_impl(
+            self,
+            getattr(QFileDialog, 'getExistingDirectory', None),
+            self._show_warning_dialog_with_status_fallback,
+            _coerce_ui_message_text,
+            title,
+            start_dir,
+            warning_title=warning_title,
+            fallback_status_message=fallback_status_message,
+        )
 
     def _check_conversion_dependencies(self: MainWindow, cfg: WorkerConversionSettings) -> bool:
         supported = self._supported_targets_for_path(cfg.get('target', ''))
@@ -1593,23 +554,25 @@ class MainWindow(QMainWindow):
         return False
 
     def _settings_raw_value(self: MainWindow, key: str, default: object = None) -> object:
-        return self.settings_store.value(key, default)
+        return _settings_raw_value_from_store(self.settings_store, key, default)
+
+    def _settings_contains_key(self: MainWindow, key: str) -> bool:
+        return _settings_contains_key_in_store(self.settings_store, key)
 
     def _settings_int_value(self: MainWindow, key: str, default: int) -> int:
-        raw = self._settings_raw_value(key, default)
-        return worker_logic._int_config_value({key: raw}, key, default)
+        return _settings_int_value_from_store(self.settings_store, key, default)
 
     def _settings_bool_value(self: MainWindow, key: str, default: bool) -> bool:
-        raw = self._settings_raw_value(key, default)
-        return worker_logic._bool_config_value({key: raw}, key, default)
+        return _settings_bool_value_from_store(self.settings_store, key, default)
 
     def _settings_str_value(self: MainWindow, key: str, default: str = '') -> str:
-        raw = self._settings_raw_value(key, default)
-        return worker_logic._str_config_value({key: raw}, key, default)
+        return _settings_str_value_from_store(self.settings_store, key, default)
 
     def _mark_shutdown_clean(self: MainWindow, clean: bool) -> None:
         try:
             self.settings_store.setValue('last_shutdown_clean', bool(clean))
+            self.settings_store.setValue('settings_schema_version', SETTINGS_SCHEMA_VERSION)
+            self.settings_store.setValue('last_app_version', APP_VERSION)
             self.settings_store.sync()
         except Exception:
             APP_LOGGER.exception('終了状態フラグの保存に失敗しました')
@@ -1649,7 +612,7 @@ class MainWindow(QMainWindow):
         return dict(definitions.get(key) or DEFAULT_PRESET_DEFINITIONS.get(key) or {})
 
     def _settings_default_value(self: MainWindow, key: str, fallback: object) -> object:
-        if self.settings_store.contains(key):
+        if self._settings_contains_key(key):
             return self._settings_raw_value(key, fallback)
         preset_payload = self._startup_preset_payload()
         if key in preset_payload:
@@ -1661,7 +624,7 @@ class MainWindow(QMainWindow):
         if saved_preset_key and self._set_combo_to_data(self.preset_combo, saved_preset_key):
             return
         saved_preset_index = self._settings_int_value('preset_index', 0)
-        if self.settings_store.contains('preset_index'):
+        if self._settings_contains_key('preset_index'):
             if 0 <= saved_preset_index < self.preset_combo.count():
                 self.preset_combo.setCurrentIndex(saved_preset_index)
                 return
@@ -1693,15 +656,13 @@ class MainWindow(QMainWindow):
         return studio_logic.payload_optional_int_value(payload, key)
 
     def _coerce_mapping_payload(self: MainWindow, value: object) -> dict[str, object]:
-        return dict(value) if isinstance(value, Mapping) else {}
+        return _coerce_mapping_payload_value(value)
 
     def _plan_int_value(self: MainWindow, payload_obj: object, key: str, default: int) -> int:
-        payload = self._coerce_mapping_payload(payload_obj)
-        return worker_logic._int_config_value(payload, key, default)
+        return _plan_int_value_from_payload(payload_obj, key, default)
 
     def _plan_bool_value(self: MainWindow, payload_obj: object, key: str, default: bool) -> bool:
-        payload = self._coerce_mapping_payload(payload_obj)
-        return worker_logic._bool_config_value(payload, key, default)
+        return _plan_bool_value_from_payload(payload_obj, key, default)
 
     def _plan_int_tuple_value(
         self: MainWindow,
@@ -1711,52 +672,56 @@ class MainWindow(QMainWindow):
         *,
         expected_length: int | None = None,
     ) -> tuple[int, ...]:
-        payload = self._coerce_mapping_payload(payload_obj)
-        value = payload.get(key, default)
-        if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
-            return tuple(int(item) for item in default)
-        items = list(value)
-        if expected_length is not None and len(items) != expected_length:
-            return tuple(int(item) for item in default)
-        normalized: list[int] = []
-        try:
-            for item in items:
-                normalized.append(int(item))
-        except (TypeError, ValueError):
-            return tuple(int(item) for item in default)
-        return tuple(normalized)
+        return _plan_int_tuple_value_from_payload(
+            payload_obj,
+            key,
+            default,
+            expected_length=expected_length,
+        )
 
     def _plan_token_value(self: MainWindow, payload_obj: object, key: str, default: str) -> str:
-        payload = self._coerce_mapping_payload(payload_obj)
-        value = payload.get(key, default)
-        text = str(value).strip().lower().replace('-', '_')
-        return text or default
+        return _plan_token_value_from_payload(payload_obj, key, default)
+
+    def _qt_constant(self: MainWindow, name: str, fallback: object = 0):
+        return getattr(Qt, name, fallback)
 
     def _plan_alignment_value(self: MainWindow, payload_obj: object, key: str, default: str):
         token = self._plan_token_value(payload_obj, key, default)
         default_token = str(default or '').strip().lower().replace('-', '_')
+        align_center = self._qt_constant('AlignCenter', 0)
+        align_top = self._qt_constant('AlignTop', align_center)
+        align_left = self._qt_constant('AlignLeft', align_center)
+        align_left_top = align_left | align_top
         alignments = {
-            'center': Qt.AlignCenter,
-            'align_center': Qt.AlignCenter,
-            'left_top': Qt.AlignLeft | Qt.AlignTop,
-            'align_left_top': Qt.AlignLeft | Qt.AlignTop,
+            'center': align_center,
+            'align_center': align_center,
+            'left_top': align_left_top,
+            'align_left_top': align_left_top,
         }
-        return alignments.get(token, alignments.get(default_token, Qt.AlignCenter))
+        return alignments.get(token, alignments.get(default_token, align_center))
 
     def _plan_scroll_bar_policy_value(self: MainWindow, payload_obj: object, key: str, default: str):
         token = self._plan_token_value(payload_obj, key, default)
+        always_off = self._qt_constant('ScrollBarAlwaysOff', 0)
+        always_on = self._qt_constant('ScrollBarAlwaysOn', always_off)
+        as_needed = self._qt_constant('ScrollBarAsNeeded', always_off)
         return {
-            'always_off': Qt.ScrollBarAlwaysOff,
-            'always_on': Qt.ScrollBarAlwaysOn,
-            'as_needed': Qt.ScrollBarAsNeeded,
-        }.get(token, Qt.ScrollBarAlwaysOff if default == 'always_off' else Qt.ScrollBarAsNeeded)
+            'always_off': always_off,
+            'always_on': always_on,
+            'as_needed': as_needed,
+        }.get(token, always_off if default == 'always_off' else as_needed)
+
+    def _qframe_shape_constant(self: MainWindow, name: str, fallback: object = 0):
+        return getattr(QFrame, name, fallback)
 
     def _plan_frame_shape_value(self: MainWindow, payload_obj: object, key: str, default: str):
+        no_frame = self._qframe_shape_constant('NoFrame', 0)
+        hline = self._qframe_shape_constant('HLine', no_frame)
         token = self._plan_token_value(payload_obj, key, default)
         return {
-            'hline': QFrame.HLine,
-            'no_frame': QFrame.NoFrame,
-        }.get(token, QFrame.NoFrame if default == 'no_frame' else QFrame.HLine)
+            'hline': hline,
+            'no_frame': no_frame,
+        }.get(token, no_frame if default == 'no_frame' else hline)
 
     def _plan_focus_policy_value(self: MainWindow, payload_obj: object, key: str, default: str):
         token = self._plan_token_value(payload_obj, key, default)
@@ -1830,6 +795,7 @@ class MainWindow(QMainWindow):
             allowed_view_modes={'font', 'device'},
             allowed_profiles=DEVICE_PROFILES,
             allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
+            allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
             allowed_output_formats=OUTPUT_FORMAT_LABELS,
             allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
             normalize_font_setting_value=self._normalize_font_setting_value,
@@ -1842,14 +808,11 @@ class MainWindow(QMainWindow):
         return payload
 
     def _startup_preview_defaults_payload(self: MainWindow, payload: Mapping[str, object]) -> dict[str, object]:
-        normalized = dict(payload or {})
         # sweep348: 通常倍率UIは実寸近似OFFのフォントビュー用。
         # 起動直後に保存済みの実寸近似/実機ビューを復元すると、倍率ボタンが
         # 近くにあるのに効かない状態に見えるため、起動時だけ右ペインを
         # 通常フォントビューへ戻す。通常倍率値そのものは別途復元する。
-        normalized['main_view_mode'] = 'font'
-        normalized['actual_size'] = False
-        return normalized
+        return studio_logic.build_startup_preview_defaults_payload(payload)
 
     def _existing_widgets(self: MainWindow, *names: str) -> tuple[object, ...]:
         widgets: list[object] = []
@@ -1899,7 +862,7 @@ class MainWindow(QMainWindow):
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
             'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'dither_check', 'night_check',
             'open_folder_check', 'output_conflict_combo', 'output_format_combo',
-            'kinsoku_mode_combo', 'target_edit', 'preset_combo',
+            'kinsoku_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'lower_closing_bracket_position_combo', 'target_edit', 'preset_combo',
         )
 
     def _preset_apply_widgets(self: MainWindow) -> tuple[object, ...]:
@@ -1907,7 +870,7 @@ class MainWindow(QMainWindow):
             'profile_combo', 'width_spin', 'height_spin', 'font_combo',
             'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'night_check', 'dither_check', 'kinsoku_mode_combo', 'output_format_combo',
+            'night_check', 'dither_check', 'kinsoku_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'lower_closing_bracket_position_combo', 'output_format_combo',
         )
 
     def _apply_profile_dimensions_to_ui(
@@ -1955,6 +918,9 @@ class MainWindow(QMainWindow):
             output_conflict=self._safe_combo_data('output_conflict_combo', 'rename'),
             output_format=self._safe_combo_data('output_format_combo', 'xtc'),
             kinsoku_mode=self._safe_combo_data('kinsoku_mode_combo', 'standard'),
+            punctuation_position_mode=self._safe_combo_data('punctuation_position_combo', 'standard'),
+            ichi_position_mode=self._safe_combo_data('ichi_position_combo', 'standard'),
+            lower_closing_bracket_position_mode=self._safe_combo_data('lower_closing_bracket_position_combo', 'standard'),
             main_view_mode=getattr(self, 'main_view_mode', 'font'),
         )
         apply_plan = settings_controller.build_settings_ui_apply_plan(
@@ -1962,6 +928,7 @@ class MainWindow(QMainWindow):
             defaults=apply_defaults,
             allowed_view_modes={'font', 'device'},
             allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
+            allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
             allowed_output_formats=OUTPUT_FORMAT_LABELS,
             allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
             bottom_tab_count=self.bottom_tabs.count() if hasattr(self, 'bottom_tabs') else 0,
@@ -2045,6 +1012,12 @@ class MainWindow(QMainWindow):
             getattr(self, 'output_format_combo', None) is not None and self._set_combo_to_data(self.output_format_combo, str(apply_plan['output_format']))
         if 'kinsoku_mode' in apply_plan:
             getattr(self, 'kinsoku_mode_combo', None) is not None and self._set_combo_to_data(self.kinsoku_mode_combo, str(apply_plan['kinsoku_mode']))
+        if 'punctuation_position_mode' in apply_plan:
+            getattr(self, 'punctuation_position_combo', None) is not None and self._set_combo_to_data(self.punctuation_position_combo, str(apply_plan['punctuation_position_mode']))
+        if 'ichi_position_mode' in apply_plan:
+            getattr(self, 'ichi_position_combo', None) is not None and self._set_combo_to_data(self.ichi_position_combo, str(apply_plan['ichi_position_mode']))
+        if 'lower_closing_bracket_position_mode' in apply_plan:
+            getattr(self, 'lower_closing_bracket_position_combo', None) is not None and self._set_combo_to_data(self.lower_closing_bracket_position_combo, str(apply_plan['lower_closing_bracket_position_mode']))
 
         if 'target' in apply_plan:
             getattr(self, 'target_edit', None) is not None and self.target_edit.setText(str(apply_plan.get('target') or '').strip())
@@ -2143,6 +1116,16 @@ class MainWindow(QMainWindow):
     def _default_left_splitter_sizes(self: MainWindow) -> list[int]:
         top = max(280, self._settings_int_value('left_splitter_top', DEFAULT_LEFT_SPLITTER_TOP))
         bottom = max(92, self._settings_int_value('left_splitter_bottom', DEFAULT_LEFT_SPLITTER_BOTTOM))
+
+        has_saved_top = self._settings_contains_key('left_splitter_top')
+        has_saved_state = self._settings_contains_key('left_splitter_state')
+        if not has_saved_top and not has_saved_state:
+            content_height = self._left_settings_content_height_hint()
+            if content_height > 0:
+                top = max(280, content_height)
+                available_height = self._default_left_splitter_available_height()
+                if available_height > 0:
+                    bottom = max(92, available_height - top)
         return [top, bottom]
 
     def showEvent(self: MainWindow, event: object) -> None:
@@ -2150,25 +1133,134 @@ class MainWindow(QMainWindow):
         if self._startup_pending:
             self._startup_pending = False
             QTimer.singleShot(0, self._apply_initial_sizes)
-            # 起動直後に対象パスが空なら、従来どおりサンプル文章を表示する。
-            # 保存済み target がある場合は、大容量 EPUB/フォルダを勝手に解析しない。
-            QTimer.singleShot(0, self._request_startup_sample_preview_if_no_target)
+            # 起動直後は右ペインが空白で残らないよう、
+            # 保存済み target の復元可否を確認してからプレビューを初期化する。
+            QTimer.singleShot(0, self._request_startup_preview_after_restore)
             QTimer.singleShot(0, self._startup_font_combo_scroll_reset)
             QTimer.singleShot(0, self._schedule_deferred_preview_size_sync)
         else:
             QTimer.singleShot(0, self._sync_preview_size)
 
-    def _request_startup_sample_preview_if_no_target(self: MainWindow) -> None:
+    def _startup_target_text(self: MainWindow) -> str:
         try:
-            target_text = worker_logic.normalize_target_path_text(self.target_edit.text())
+            return worker_logic.normalize_target_path_text(self.target_edit.text())
         except Exception:
-            target_text = ''
-        if target_text:
+            return ''
+
+    def _startup_target_path_exists(self: MainWindow, target_text: str) -> bool:
+        if not target_text:
+            return False
+        try:
+            return Path(target_text).exists()
+        except (OSError, ValueError):
+            return False
+
+    def _startup_previous_target_display_text(self: MainWindow, target_text: str) -> str:
+        try:
+            name = Path(target_text).name
+        except (OSError, ValueError):
+            name = ''
+        return name or target_text or '前回の作業ファイル'
+
+    def _confirm_startup_previous_target_preview(self: MainWindow, target_text: str) -> bool:
+        question = getattr(QMessageBox, 'question', None)
+        standard_buttons = getattr(QMessageBox, 'StandardButton', None)
+        yes_button = getattr(QMessageBox, 'Yes', getattr(standard_buttons, 'Yes', None))
+        no_button = getattr(QMessageBox, 'No', getattr(standard_buttons, 'No', None))
+        if not callable(question) or yes_button is None or no_button is None:
+            return False
+        display_name = self._startup_previous_target_display_text(target_text)
+        message = (
+            '前回の作業ファイルが見つかりました。\n\n'
+            f'{display_name}\n'
+            f'{target_text}\n\n'
+            '前回の作業の続きを行いますか？'
+        )
+        try:
+            buttons = yes_button | no_button
+        except Exception:
+            buttons = yes_button
+        try:
+            response = question(self, '前回の作業', message, buttons, yes_button)
+        except TypeError:
+            try:
+                response = question(self, '前回の作業', message)
+            except Exception:
+                return False
+        except Exception:
+            return False
+        return response == yes_button
+
+    def _clear_startup_target_for_sample_preview(self: MainWindow) -> None:
+        target_edit = getattr(self, 'target_edit', None)
+        setter = getattr(target_edit, 'setText', None)
+        if not callable(setter):
             return
         try:
-            self.request_preview_refresh(reset_page=True)
+            with _bulk_block_signals(target_edit):
+                setter('')
+        except Exception:
+            try:
+                setter('')
+            except Exception:
+                pass
+
+    def _show_startup_sample_preview_status(self: MainWindow, message: str) -> None:
+        try:
+            self._show_ui_status_message_with_reflection_or_direct_fallback(message, 5000)
+        except Exception:
+            APP_LOGGER.info(message)
+
+    def _request_startup_sample_preview(self: MainWindow) -> bool:
+        try:
+            return bool(self.request_preview_refresh(reset_page=True))
+        except Exception:
+            APP_LOGGER.exception('起動時サンプルプレビューの生成に失敗しました')
+            return False
+
+    def _request_startup_preview_after_restore(self: MainWindow) -> None:
+        target_text = self._startup_target_text()
+        if not target_text:
+            self._request_startup_sample_preview()
+            return
+
+        if not self._startup_target_path_exists(target_text):
+            self._clear_startup_target_for_sample_preview()
+            self._request_startup_sample_preview()
+            self._show_startup_sample_preview_status('前回の作業ファイルが見つからないため、サンプルを表示しました。')
+            try:
+                self.save_ui_state()
+            except Exception:
+                pass
+            return
+
+        if not self._confirm_startup_previous_target_preview(target_text):
+            self._clear_startup_target_for_sample_preview()
+            self._request_startup_sample_preview()
+            self._show_startup_sample_preview_status('サンプルを表示しました。')
+            try:
+                self.save_ui_state()
+            except Exception:
+                pass
+            return
+
+        try:
+            if self.request_preview_refresh(reset_page=True):
+                return
+        except Exception:
+            APP_LOGGER.exception('前回作業ファイルの起動時プレビュー生成に失敗しました')
+
+        self._clear_startup_target_for_sample_preview()
+        self._request_startup_sample_preview()
+        self._show_startup_sample_preview_status('前回の作業ファイルをプレビューできなかったため、サンプルを表示しました。')
+        try:
+            self.save_ui_state()
         except Exception:
             pass
+
+    def _request_startup_sample_preview_if_no_target(self: MainWindow) -> None:
+        # 旧テスト/互換用の薄い wrapper。現在は target 復元時の確認もここで扱う。
+        self._request_startup_preview_after_restore()
 
     def _startup_font_combo_scroll_reset(self: MainWindow) -> None:
         """起動直後にフォントコンボの内部ビューを先頭へ戻す。"""
@@ -2332,7 +1424,7 @@ class MainWindow(QMainWindow):
             if left_panel_visible:
                 self._apply_left_panel_width(self._pending_left_panel_width)
                 self._pending_left_panel_width = None
-        if not self.settings_store.contains('left_splitter_state'):
+        if not self._settings_contains_key('left_splitter_state'):
             self.left_splitter.setSizes(self._default_left_splitter_sizes())
         self._sync_preview_size()
 
@@ -2348,7 +1440,9 @@ class MainWindow(QMainWindow):
         root.addWidget(self._build_top_bar())
 
         sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
+        sep.setFrameShape(
+            self._qframe_shape_constant('HLine', self._qframe_shape_constant('NoFrame', 0))
+        )
         sep.setObjectName('topSep')
         root.addWidget(sep)
 
@@ -2479,7 +1573,8 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _v_sep():
         line = QFrame()
-        line.setFrameShape(QFrame.VLine)
+        vline = getattr(QFrame, 'VLine', getattr(QFrame, 'HLine', getattr(QFrame, 'NoFrame', 0)))
+        line.setFrameShape(vline)
         line.setObjectName('vSep')
         line.setFixedWidth(1)
         return line
@@ -2503,13 +1598,15 @@ class MainWindow(QMainWindow):
 
         container = QWidget()
         container.setObjectName(str(container_plan.get('container_object_name', 'leftSettingsContainer')))
+        self.left_settings_container = container
+        self.left_settings_scroll = scroll
         lay = QVBoxLayout(container)
         lay.setContentsMargins(*self._plan_int_tuple_value(container_plan, 'contents_margins', (10, 9, 10, 9), expected_length=4))
         lay.setSpacing(self._plan_int_value(container_plan, 'spacing', 5))
         self._ensure_behavior_controls()
         for section in self._left_settings_sections():
             lay.addWidget(section)
-        lay.addStretch(1)
+        lay.addWidget(self._build_left_settings_bottom_separator(container_plan))
         scroll.setWidget(container)
 
         self.bottom_panel = self._build_bottom_panel()
@@ -2525,6 +1622,34 @@ class MainWindow(QMainWindow):
         )
         self.left_splitter.setSizes(self._default_left_splitter_sizes())
         return self.left_splitter
+
+    def _build_left_settings_bottom_separator(self: MainWindow, container_plan: Mapping[str, Any]) -> QFrame:
+        sep = QFrame()
+        sep.setFrameShape(
+            self._plan_frame_shape_value(container_plan, 'bottom_separator_frame_shape', 'hline')
+        )
+        sep.setObjectName(str(container_plan.get('bottom_separator_object_name', 'leftSettingsBottomSep')))
+        sep.setFixedHeight(self._plan_int_value(container_plan, 'bottom_separator_height', 1))
+        return sep
+
+    def _left_settings_content_height_hint(self: MainWindow) -> int:
+        container = getattr(self, 'left_settings_container', None)
+        if container is None:
+            return 0
+        try:
+            height = int(container.sizeHint().height())
+        except Exception:
+            return 0
+        return max(0, height)
+
+    def _default_left_splitter_available_height(self: MainWindow) -> int:
+        splitter = getattr(self, 'left_splitter', None)
+        if splitter is None:
+            return 0
+        try:
+            return max(0, int(splitter.height()))
+        except Exception:
+            return 0
 
     def _left_settings_section_factories(self):
         return {
@@ -2611,7 +1736,7 @@ class MainWindow(QMainWindow):
         self.output_format_combo = QComboBox()
         for key, label in OUTPUT_FORMAT_LABELS.items():
             self.output_format_combo.addItem(label, key)
-        self.output_format_combo.currentIndexChanged.connect(self._mark_preview_dirty_from_signal)
+        self.output_format_combo.currentIndexChanged.connect(self._schedule_live_preview_refresh_from_signal)
         self.output_format_combo.currentIndexChanged.connect(lambda _i, self=self: self.save_ui_state())
         format_kinsoku_row.addWidget(self.output_format_combo)
         format_kinsoku_row.addWidget(self._help_icon_button('XTC は 2 階調（白黒）、XTCH は 4 階調（白黒 4 段階）です。通常の白黒表示なら XTC、階調を残したい画像寄りの用途では XTCH を選びます。'))
@@ -2644,7 +1769,7 @@ class MainWindow(QMainWindow):
         for w in [
             self.font_size_spin, self.ruby_size_spin, self.line_spacing_spin,
         ]:
-            w.valueChanged.connect(self._mark_preview_dirty_from_signal)
+            w.valueChanged.connect(self._schedule_live_preview_refresh_from_signal)
             w.valueChanged.connect(lambda _v, self=self: self.save_ui_state())
         for w in [
             self.margin_t_spin, self.margin_b_spin, self.margin_r_spin, self.margin_l_spin,
@@ -2761,7 +1886,7 @@ class MainWindow(QMainWindow):
             ),
         )
         self.calib_help_btn = self._help_icon_button(
-            str(display_plan.get('calibration_help_text', '実寸補正: sweep361以降は右ペインの倍率UIに集約しています。'))
+            str(display_plan.get('calibration_help_text', '実寸補正は右ペインの倍率UIで調整します。'))
         )
         self._sync_legacy_calibration_control_state()
 
@@ -2807,7 +1932,7 @@ class MainWindow(QMainWindow):
         self.preview_status_label.setMinimumWidth(self._plan_int_value(display_plan, 'preview_status_min_width', 260))
         row4.addWidget(self.preview_status_label, 1)
         row4.addSpacing(self._plan_int_value(display_plan, 'preview_status_help_spacing', 4))
-        row4.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時にプレビューを自動生成します。設定変更後は自動再生成せず、［プレビュー更新］を押した時点で再生成します。プレビュー上限を増やすほど確認範囲は広がりますが、読込と再描画は重くなります。'))))
+        row4.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時にプレビューを自動生成します。文字サイズ・余白・禁則処理・保存形式などの見た目に関わる設定は、操作が止まったタイミングで自動的にプレビューへ反映します。手動で確実に再生成したい場合は［プレビュー更新］を押してください。プレビュー上限を増やすほど確認範囲は広がりますが、読込と再描画は重くなります。'))))
         lay.addLayout(row4)
 
         self.guides_check.toggled.connect(self.on_guides_toggled)
@@ -2848,6 +1973,24 @@ class MainWindow(QMainWindow):
         if self._plan_bool_value(image_plan, 'trailing_stretch', True):
             row.addStretch(1)
         lay.addLayout(row)
+
+        self._ensure_behavior_controls()
+        image_glyph_position_row = self._make_hbox_layout_from_plan(
+            gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))
+        )
+        image_glyph_position_row.addWidget(self._dim_label('句読点'))
+        image_glyph_position_row.addWidget(self.punctuation_position_combo)
+        image_glyph_position_row.addWidget(self._help_icon_button('ぶら下がり句読点のみ対象です。下補正 強/弱: 標準より下へ寄せます。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
+        image_glyph_position_row.addSpacing(10)
+        image_glyph_position_row.addWidget(self._dim_label('漢数字「一」'))
+        image_glyph_position_row.addWidget(self.ichi_position_combo)
+        image_glyph_position_row.addWidget(self._help_icon_button('文中すべての漢数字「一」が対象です。下補正 強/弱: 標準より下へ寄せます。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
+        image_glyph_position_row.addSpacing(10)
+        image_glyph_position_row.addWidget(self._dim_label('下鍵括弧'))
+        image_glyph_position_row.addWidget(self.lower_closing_bracket_position_combo)
+        image_glyph_position_row.addWidget(self._help_icon_button('閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみ対象です。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
+        image_glyph_position_row.addStretch(1)
+        lay.addLayout(image_glyph_position_row)
         return box
 
     # ── 設定セクション：プリセット ────────────────────────
@@ -2857,8 +2000,8 @@ class MainWindow(QMainWindow):
         box, lay, section_plan = self._build_section_box_layout(
             'preset',
             'プリセット',
-            default_margins=(8, 14, 8, 8),
-            default_spacing=6,
+            default_margins=(8, 14, 8, 2),
+            default_spacing=4,
         )
 
         row = self._make_hbox_layout_from_plan()
@@ -2908,6 +2051,14 @@ class MainWindow(QMainWindow):
         self.preset_summary_label.setAlignment(
             self._plan_alignment_value(preset_plan, 'summary_label_alignment', 'left_top')
         )
+        self.preset_summary_label.setContentsMargins(0, 0, 0, 0)
+        self.preset_summary_label.setMargin(0)
+        set_indent = getattr(self.preset_summary_label, 'setIndent', None)
+        if callable(set_indent):
+            set_indent(0)
+        set_text_format = getattr(self.preset_summary_label, 'setTextFormat', None)
+        if callable(set_text_format):
+            set_text_format(Qt.PlainText)
         lay.addWidget(self.preset_summary_label)
         return box
 
@@ -2923,6 +2074,21 @@ class MainWindow(QMainWindow):
         for key, label in KINSOKU_MODE_OPTIONS:
             self.kinsoku_mode_combo.addItem(label, key)
         self.kinsoku_mode_combo.currentIndexChanged.connect(self._on_kinsoku_mode_changed)
+
+        self.punctuation_position_combo = QComboBox()
+        for key, label in GLYPH_POSITION_MODE_OPTIONS:
+            self.punctuation_position_combo.addItem(label, key)
+        self.punctuation_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
+
+        self.ichi_position_combo = QComboBox()
+        for key, label in GLYPH_POSITION_MODE_OPTIONS:
+            self.ichi_position_combo.addItem(label, key)
+        self.ichi_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
+
+        self.lower_closing_bracket_position_combo = QComboBox()
+        for key, label in CLOSING_BRACKET_POSITION_MODE_OPTIONS:
+            self.lower_closing_bracket_position_combo.addItem(label, key)
+        self.lower_closing_bracket_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
 
         self.output_conflict_combo = QComboBox()
         for key, label in OUTPUT_CONFLICT_OPTIONS:
@@ -2994,11 +2160,6 @@ class MainWindow(QMainWindow):
         lay.setSpacing(self._plan_int_value(preview_panel_plan, 'panel_spacing', 0))
 
         lay.addWidget(self._build_view_toggle_bar())
-
-        sep = QFrame()
-        sep.setFrameShape(self._plan_frame_shape_value(preview_panel_plan, 'top_separator_frame_shape', 'hline'))
-        sep.setObjectName(str(preview_panel_plan.get('top_separator_object_name', 'topSep')))
-        lay.addWidget(sep)
 
         self.preview_stack = QStackedWidget()
 
@@ -3098,6 +2259,11 @@ class MainWindow(QMainWindow):
         top_lay.addStretch(1)
         outer_lay.addLayout(top_lay)
 
+        sep = QFrame()
+        sep.setFrameShape(self._qframe_shape_constant('HLine', self._qframe_shape_constant('NoFrame', 0)))
+        sep.setObjectName(str(toggle_plan.get('top_separator_object_name', 'topSep')))
+        outer_lay.addWidget(sep)
+
         bottom_lay = QHBoxLayout()
         bottom_lay.setContentsMargins(*self._plan_int_tuple_value(toggle_plan, 'bottom_row_contents_margins', (0, 0, 0, 0), expected_length=4))
         bottom_lay.setSpacing(self._plan_int_value(toggle_plan, 'bottom_row_spacing', self._plan_int_value(toggle_plan, 'spacing', 6)))
@@ -3127,7 +2293,7 @@ class MainWindow(QMainWindow):
         self._add_nav_controls_to_layout(lay, nav_bar_plan=nav_bar_plan, current_label_stretch=1)
         return bar
 
-    def _add_nav_controls_to_layout(self, lay: QHBoxLayout, *, nav_bar_plan: Optional[dict] = None, current_label_stretch: int = 0) -> None:
+    def _add_nav_controls_to_layout(self, lay: QHBoxLayout, *, nav_bar_plan: dict | None = None, current_label_stretch: int = 0) -> None:
         nav_bar_plan = nav_bar_plan or gui_layouts.build_nav_bar_plan()
 
         self.current_xtc_label = QLabel(str(nav_bar_plan.get('current_xtc_label_text', '表示中: なし')))
@@ -3136,13 +2302,15 @@ class MainWindow(QMainWindow):
         self.current_xtc_label.setMaximumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_max_width', 220))
         lay.addWidget(self.current_xtc_label, current_label_stretch)
 
-        self.nav_reverse_check = QCheckBox(str(nav_bar_plan.get('nav_reverse_text', '反転')))
+        self.nav_reverse_check = QCheckBox(str(nav_bar_plan.get('nav_reverse_text', 'ボタン反転')))
         self.nav_reverse_check.setObjectName(str(nav_bar_plan.get('nav_reverse_object_name', 'navToggle')))
         self.nav_reverse_check.setFocusPolicy(
             self._plan_focus_policy_value(nav_bar_plan, 'nav_reverse_focus_policy', 'no_focus')
         )
         self.nav_reverse_check.toggled.connect(self.on_nav_reverse_toggled)
         lay.addWidget(self.nav_reverse_check)
+        lay.addWidget(self._nav_section_separator(nav_bar_plan))
+        lay.addSpacing(self._plan_int_value(nav_bar_plan, 'nav_button_side_spacing', 10))
 
         self.prev_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
@@ -3183,10 +2351,18 @@ class MainWindow(QMainWindow):
             lambda: self.on_nav_button_clicked(1),
         )
         lay.addWidget(self.next_btn)
+        lay.addSpacing(self._plan_int_value(nav_bar_plan, 'nav_button_side_spacing', 10))
+        lay.addWidget(self._nav_section_separator(nav_bar_plan))
 
         self._update_nav_button_texts()
 
-    def _add_preview_zoom_controls_to_layout(self, lay: QHBoxLayout, *, toggle_plan: Optional[dict] = None) -> None:
+    def _nav_section_separator(self, nav_bar_plan: Mapping[str, Any]) -> QFrame:
+        sep = QFrame()
+        sep.setFrameShape(self._qframe_shape_constant('VLine', self._qframe_shape_constant('NoFrame', 0)))
+        sep.setObjectName(str(nav_bar_plan.get('nav_section_separator_object_name', 'navSectionSep')))
+        return sep
+
+    def _add_preview_zoom_controls_to_layout(self, lay: QHBoxLayout, *, toggle_plan: dict | None = None) -> None:
         toggle_plan = toggle_plan or gui_layouts.build_view_toggle_bar_plan()
         lay.addSpacing(self._plan_int_value(toggle_plan, 'preview_zoom_spacing', 8))
         self.preview_zoom_label = self._dim_label(str(toggle_plan.get('preview_zoom_label_text', '表示倍率')))
@@ -3236,9 +2412,15 @@ class MainWindow(QMainWindow):
         bottom_panel_plan = gui_layouts.build_bottom_panel_layout_plan()
         panel = QFrame()
         panel.setObjectName(str(bottom_panel_plan.get('panel_object_name', 'bottomPanel')))
-        lay = QVBoxLayout(panel)
-        lay.setContentsMargins(*self._plan_int_tuple_value(bottom_panel_plan, 'panel_contents_margins', (0, 0, 0, 0), expected_length=4))
-        lay.setSpacing(self._plan_int_value(bottom_panel_plan, 'panel_spacing', 0))
+        outer_lay = QHBoxLayout(panel)
+        outer_lay.setContentsMargins(*self._plan_int_tuple_value(bottom_panel_plan, 'panel_contents_margins', (0, 0, 0, 0), expected_length=4))
+        outer_lay.setSpacing(self._plan_int_value(bottom_panel_plan, 'panel_spacing', 0))
+
+        content = QFrame()
+        content.setObjectName(str(bottom_panel_plan.get('content_object_name', 'bottomPanelContent')))
+        lay = QVBoxLayout(content)
+        lay.setContentsMargins(*self._plan_int_tuple_value(bottom_panel_plan, 'content_contents_margins', (0, 0, 0, 0), expected_length=4))
+        lay.setSpacing(self._plan_int_value(bottom_panel_plan, 'content_spacing', 0))
 
         strip = QFrame()
         strip.setObjectName(str(bottom_panel_plan.get('status_strip_object_name', 'statusStrip')))
@@ -3272,13 +2454,26 @@ class MainWindow(QMainWindow):
 
         sep = QFrame()
         sep.setFrameShape(self._plan_frame_shape_value(bottom_panel_plan, 'bottom_separator_frame_shape', 'hline'))
-        sep.setObjectName(str(bottom_panel_plan.get('bottom_separator_object_name', 'topSep')))
+        sep.setObjectName(str(bottom_panel_plan.get('bottom_separator_object_name', 'bottomPanelSep')))
         lay.addWidget(sep)
 
         self.bottom_tabs = QTabWidget()
         self.bottom_tabs.addTab(self._build_results_tab(), str(bottom_panel_plan.get('results_tab_title', '変換結果')))
         self.bottom_tabs.addTab(self._build_log_tab(), str(bottom_panel_plan.get('log_tab_title', 'ログ')))
+        self.bottom_tabs.currentChanged.connect(lambda _index: self._bind_bottom_panel_external_scrollbar())
         lay.addWidget(self.bottom_tabs, 1)
+
+        outer_lay.addWidget(content, 1)
+        self.bottom_panel_scrollbar = QScrollBar(Qt.Vertical)
+        self.bottom_panel_scrollbar.setObjectName(
+            str(bottom_panel_plan.get('external_scrollbar_object_name', 'bottomPanelScrollBar'))
+        )
+        self.bottom_panel_scrollbar.setSingleStep(
+            self._plan_int_value(bottom_panel_plan, 'external_scrollbar_single_step', 20)
+        )
+        self.bottom_panel_scrollbar.valueChanged.connect(self._apply_bottom_panel_external_scroll_value)
+        outer_lay.addWidget(self.bottom_panel_scrollbar, 0)
+        self._bind_bottom_panel_external_scrollbar()
         return panel
 
     def _build_results_tab(self):
@@ -3293,6 +2488,8 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.results_summary_label, 0)
 
         self.results_list = QListWidget()
+        self.results_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.results_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.results_list.setSelectionMode(
             self._plan_list_selection_mode_value(results_tab_plan, 'results_list_selection_mode', 'single_selection')
         )
@@ -3328,10 +2525,121 @@ class MainWindow(QMainWindow):
         lay.addLayout(top)
 
         self.log_edit = QTextEdit()
+        self.log_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.log_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         log_edit_read_only = self._plan_bool_value(log_tab_plan, 'log_edit_read_only', True)
         self.log_edit.setReadOnly(log_edit_read_only)
         lay.addWidget(self.log_edit, 1)
         return w
+
+
+    def _active_bottom_panel_scrollbar(self: MainWindow) -> object | None:
+        tabs = getattr(self, 'bottom_tabs', None)
+        try:
+            index = int(tabs.currentIndex()) if tabs is not None else 0
+        except Exception:
+            index = 0
+        if index == 1:
+            widget = getattr(self, 'log_edit', None)
+        else:
+            widget = getattr(self, 'results_list', None)
+        if widget is None or not hasattr(widget, 'verticalScrollBar'):
+            return None
+        try:
+            return widget.verticalScrollBar()
+        except Exception:
+            return None
+
+    def _bind_bottom_panel_external_scrollbar(self: MainWindow) -> None:
+        external = getattr(self, 'bottom_panel_scrollbar', None)
+        if external is None:
+            return
+        source = self._active_bottom_panel_scrollbar()
+        previous = getattr(self, '_bottom_panel_bound_scrollbar', None)
+        if previous is not None and previous is not source:
+            for signal_name in ('rangeChanged', 'valueChanged'):
+                signal = getattr(previous, signal_name, None)
+                if signal is None:
+                    continue
+                try:
+                    signal.disconnect(self._sync_bottom_panel_external_scrollbar)
+                except Exception:
+                    pass
+        if source is None:
+            self._bottom_panel_bound_scrollbar = None
+            self._set_bottom_panel_external_scrollbar_range(0, 0, 0, 0, 0)
+            return
+        if previous is not source:
+            for signal_name in ('rangeChanged', 'valueChanged'):
+                signal = getattr(source, signal_name, None)
+                if signal is None:
+                    continue
+                try:
+                    signal.connect(self._sync_bottom_panel_external_scrollbar)
+                except Exception:
+                    pass
+            self._bottom_panel_bound_scrollbar = source
+        self._sync_bottom_panel_external_scrollbar()
+
+    def _set_bottom_panel_external_scrollbar_range(
+        self: MainWindow,
+        minimum: int,
+        maximum: int,
+        value: int,
+        page_step: int,
+        single_step: int,
+    ) -> None:
+        external = getattr(self, 'bottom_panel_scrollbar', None)
+        if external is None:
+            return
+        self._bottom_panel_scrollbar_syncing = True
+        try:
+            external.blockSignals(True)
+            external.setRange(max(0, int(minimum)), max(0, int(maximum)))
+            external.setPageStep(max(1, int(page_step or 1)))
+            external.setSingleStep(max(1, int(single_step or 1)))
+            external.setValue(max(external.minimum(), min(external.maximum(), int(value))))
+            external.setEnabled(external.maximum() > external.minimum())
+        finally:
+            try:
+                external.blockSignals(False)
+            except Exception:
+                pass
+            self._bottom_panel_scrollbar_syncing = False
+
+    def _sync_bottom_panel_external_scrollbar(self: MainWindow, *_args: object) -> None:
+        if bool(getattr(self, '_bottom_panel_scrollbar_syncing', False)):
+            return
+        source = self._active_bottom_panel_scrollbar()
+        if source is None:
+            self._set_bottom_panel_external_scrollbar_range(0, 0, 0, 0, 0)
+            return
+        try:
+            minimum = int(source.minimum())
+            maximum = int(source.maximum())
+            value = int(source.value())
+            page_step = int(source.pageStep())
+            single_step = int(source.singleStep())
+        except Exception:
+            self._set_bottom_panel_external_scrollbar_range(0, 0, 0, 0, 0)
+            return
+        self._set_bottom_panel_external_scrollbar_range(minimum, maximum, value, page_step, single_step)
+
+    def _apply_bottom_panel_external_scroll_value(self: MainWindow, value: int) -> None:
+        if bool(getattr(self, '_bottom_panel_scrollbar_syncing', False)):
+            return
+        source = self._active_bottom_panel_scrollbar()
+        if source is None:
+            return
+        self._bottom_panel_scrollbar_syncing = True
+        try:
+            try:
+                source.setValue(int(value))
+            except Exception:
+                pass
+        finally:
+            self._bottom_panel_scrollbar_syncing = False
+        self._sync_bottom_panel_external_scrollbar()
 
     # ── ヘルパー ───────────────────────────────────────────
 
@@ -3393,7 +2701,7 @@ class MainWindow(QMainWindow):
     def _note_label(text: str) -> QLabel:
         return gui_widget_factory.make_note_label(text)
 
-    def _help_icon_button(self, text: str, *, tooltip: Optional[str] = None) -> QPushButton:
+    def _help_icon_button(self, text: str, *, tooltip: str | None = None) -> QPushButton:
         return gui_widget_factory.make_help_icon_button(
             text,
             tooltip=tooltip,
@@ -3509,6 +2817,8 @@ class MainWindow(QMainWindow):
         }
         QFrame#vSep { background: #D5E0EB; }
         QFrame#topSep { background: #DDE6EF; border: none; max-height: 1px; }
+        QFrame#leftSettingsBottomSep { background: #DDE6EF; border: none; max-height: 1px; }
+        QFrame#bottomPanelSep { background: #DDE6EF; border: none; max-height: 1px; }
 
         QLabel#appTitle {
             font-size: 17px;
@@ -3772,6 +3082,20 @@ class MainWindow(QMainWindow):
             min-height: 20px;
         }
         QPushButton#smallBtn:hover { background: #EEF5FC; }
+        QPushButton#smallBtn[previewState="pending"] {
+            background: #FFF1DF;
+            border: 1px solid #F0A84F;
+            color: #8A4D00;
+            font-weight: 700;
+        }
+        QPushButton#smallBtn[previewState="pending"]:hover { background: #FFE5C2; }
+        QPushButton#smallBtn[previewState="refreshing"],
+        QPushButton#smallBtn[previewState="refreshing"]:disabled {
+            background: #F59E0B;
+            border: 1px solid #D97706;
+            color: #FFFFFF;
+            font-weight: 700;
+        }
 
         QPushButton#stepBtn {
             background: #FFFFFF;
@@ -3829,6 +3153,10 @@ class MainWindow(QMainWindow):
         }
         QPushButton#navBtn:hover { background: #EEF5FC; }
         QPushButton#navBtn:disabled { color: #A4B3C0; border-color: #D6DFE8; }
+        QFrame#navSectionSep {
+            color: #D2DEE9;
+            background: transparent;
+        }
         QCheckBox#navToggle, QCheckBox#previewToolbarToggle {
             color: #35506A;
             spacing: 6px;
@@ -3965,6 +3293,8 @@ class MainWindow(QMainWindow):
         }
         QFrame#vSep { background: #1E3040; }
         QFrame#topSep { background: #1A2D3F; border: none; max-height: 1px; }
+        QFrame#leftSettingsBottomSep { background: #1A2D3F; border: none; max-height: 1px; }
+        QFrame#bottomPanelSep { background: #1A2D3F; border: none; max-height: 1px; }
 
         QLabel#appTitle {
             font-size: 17px;
@@ -4228,6 +3558,20 @@ class MainWindow(QMainWindow):
             min-height: 20px;
         }
         QPushButton#smallBtn:hover { background: #1E3850; }
+        QPushButton#smallBtn[previewState="pending"] {
+            background: #4A2B10;
+            border: 1px solid #B7791F;
+            color: #FFE1B8;
+            font-weight: 700;
+        }
+        QPushButton#smallBtn[previewState="pending"]:hover { background: #5C3514; }
+        QPushButton#smallBtn[previewState="refreshing"],
+        QPushButton#smallBtn[previewState="refreshing"]:disabled {
+            background: #A16207;
+            border: 1px solid #D97706;
+            color: #FFF7ED;
+            font-weight: 700;
+        }
 
         QPushButton#stepBtn {
             background: #182C3E;
@@ -4285,6 +3629,10 @@ class MainWindow(QMainWindow):
         }
         QPushButton#navBtn:hover { background: #1E3850; }
         QPushButton#navBtn:disabled { color: #4D6475; border-color: #172030; }
+        QFrame#navSectionSep {
+            color: #243C52;
+            background: transparent;
+        }
         QCheckBox#navToggle, QCheckBox#previewToolbarToggle {
             color: #A8C8E0;
             spacing: 6px;
@@ -4408,50 +3756,46 @@ class MainWindow(QMainWindow):
     # ── ビュー切替 ────────────────────────────────────────
 
     def _normalized_main_view_mode(self: MainWindow, mode: object) -> str:
-        return self._normalize_choice_value(mode, 'font', {'font', 'device'})
+        return _normalized_main_view_mode(mode)
 
     def _preview_view_help_text(self: MainWindow) -> str:
+        # Keep this small wrapper source-compatible with legacy regression tests
+        # that assert the help text is owned by build_view_toggle_bar_plan(), while
+        # still delegating to the split helper as the fallback implementation.
         toggle_plan = gui_layouts.build_view_toggle_bar_plan()
-        return str(toggle_plan.get(
-            'help_text',
-            'フォントビュー: 文字サイズ・余白・ルビの見え方を調整するときに使います。\n'
-            '実機ビュー: 変換後のXTCをページ送りしながら実機に近い形で確認します。',
-        ))
+        if 'help_text' in toggle_plan:
+            return str(toggle_plan.get('help_text'))
+        return _preview_view_help_text()
 
     def _main_view_mode_help_text(self: MainWindow, mode: object) -> str:
-        return self._preview_view_help_text()
+        return _main_view_mode_help_text(mode)
 
     def _main_view_mode_status_text(self: MainWindow, mode: object) -> str:
-        normalized = self._normalized_main_view_mode(mode)
-        if normalized == 'font':
-            return 'フォントビューに切り替えました。'
-        return '実機ビューに切り替えました。'
+        return _main_view_mode_status_text(mode)
 
     def _sync_preview_view_page_index_for_mode(self: MainWindow, mode: object) -> None:
         normalized = self._normalized_main_view_mode(mode)
-        if self._effective_device_view_source() != 'preview':
+        effective_source = self._effective_device_view_source()
+        preview_pages = self._runtime_preview_pages() if normalized == 'font' else []
+        device_pages = self._runtime_device_preview_pages() if normalized != 'font' else []
+        sync_state = studio_logic.build_preview_view_page_sync_state(
+            mode=normalized,
+            effective_device_view_source=effective_source,
+            preview_page_count=len(preview_pages),
+            device_preview_page_count=len(device_pages),
+            current_preview_index=getattr(self, 'current_preview_page_index', 0),
+            current_device_preview_index=getattr(self, 'current_device_preview_page_index', 0),
+        )
+        if not bool(sync_state.get('should_sync')):
             return
-        if normalized == 'font':
-            pages = self._runtime_preview_pages()
-            if not pages:
-                return
-            target_index = preview_controller._clamp_preview_index(
-                getattr(self, 'current_device_preview_page_index', 0),
-                total=len(pages),
-            )
+        target_index = worker_logic._int_config_value({'value': sync_state.get('target_index')}, 'value', 0)
+        if sync_state.get('target') == 'font':
             if getattr(self, 'current_preview_page_index', 0) != target_index:
                 self.current_preview_page_index = target_index
             return
-
-        pages = self._runtime_device_preview_pages()
-        if not pages:
-            return
-        target_index = preview_controller._clamp_preview_index(
-            getattr(self, 'current_preview_page_index', 0),
-            total=len(pages),
-        )
-        if getattr(self, 'current_device_preview_page_index', 0) != target_index:
-            self.current_device_preview_page_index = target_index
+        if sync_state.get('target') == 'device':
+            if getattr(self, 'current_device_preview_page_index', 0) != target_index:
+                self.current_device_preview_page_index = target_index
 
     def _apply_main_view_mode_ui(self: MainWindow, mode: object) -> str:
         normalized = self._normalized_main_view_mode(mode)
@@ -4677,26 +4021,8 @@ class MainWindow(QMainWindow):
             default_preview_page_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
         )
 
-    @staticmethod
-    def _coerce_preview_data_url(value: object) -> str | None:
-        if value is None:
-            return None
-        if isinstance(value, (bytes, bytearray)):
-            try:
-                value = bytes(value).decode('utf-8')
-            except Exception:
-                value = bytes(value).decode('ascii', errors='ignore')
-        text = str(value).strip()
-        return text or None
-
-    @staticmethod
-    def _coerce_preview_base64_text(value: object) -> str:
-        if isinstance(value, (bytes, bytearray)):
-            try:
-                value = bytes(value).decode('ascii')
-            except Exception:
-                value = bytes(value).decode('utf-8', errors='ignore')
-        return str(value or '').strip()
+    _coerce_preview_data_url = staticmethod(_coerce_preview_data_url)
+    _coerce_preview_base64_text = staticmethod(_coerce_preview_base64_text)
 
     def _show_preview_message(self: MainWindow, message: str) -> None:
         self._clear_preview_label_pixmap()
@@ -4780,6 +4106,177 @@ class MainWindow(QMainWindow):
 
     def _mark_preview_dirty_from_signal(self: MainWindow, *_args: object) -> None:
         self.mark_preview_dirty()
+
+    def _set_preview_update_button_visual_state(self: MainWindow, state: object) -> None:
+        """Apply a lightweight visual state to the Preview Update button."""
+        button = getattr(self, 'preview_update_btn', None)
+        if button is None:
+            return
+        normalized = str(state or 'idle').strip().lower()
+        if normalized not in {'idle', 'pending', 'refreshing'}:
+            normalized = 'idle'
+        self._preview_update_button_visual_state = normalized
+        try:
+            button.setProperty('previewState', normalized)
+        except Exception:
+            return
+        try:
+            style = button.style()
+            if hasattr(style, 'unpolish'):
+                style.unpolish(button)
+            if hasattr(style, 'polish'):
+                style.polish(button)
+        except Exception:
+            pass
+        try:
+            button.update()
+        except Exception:
+            pass
+
+    def _mark_preview_update_button_pending(self: MainWindow) -> None:
+        """Show that a debounced live preview refresh has been queued."""
+        button = getattr(self, 'preview_update_btn', None)
+        if button is None:
+            return
+        try:
+            button.setEnabled(True)
+        except Exception:
+            pass
+        try:
+            button.setText('更新待ち…')
+        except Exception:
+            pass
+        self._set_preview_update_button_visual_state('pending')
+
+    def _schedule_live_preview_refresh_from_signal(self: MainWindow, *_args: object) -> None:
+        self._schedule_live_preview_refresh(reset_page=False)
+
+    def _has_refreshable_preview_target(self: MainWindow) -> bool:
+        """Return True when settings changes can regenerate a preview from the current target.
+
+        Live preview must keep working even after an intermediate UI action clears
+        the cached preview pages.  In that state the presence of an existing
+        target path is enough to allow a debounced settings refresh to rebuild
+        the preview instead of silently falling back to a dirty placeholder.
+        """
+        try:
+            payload = self._current_preview_payload()
+        except Exception:
+            payload = {}
+        target_text = str(payload.get('target', '') if isinstance(payload, Mapping) else '').strip()
+        if target_text:
+            try:
+                return Path(target_text).exists()
+            except (OSError, ValueError):
+                return False
+        image_data_url = ''
+        if isinstance(payload, Mapping):
+            image_data_url = str(payload.get('preview_image_data_url', '') or '').strip()
+        return bool(image_data_url)
+
+    def _has_active_preview_for_live_refresh(self: MainWindow) -> bool:
+        font_view_active = self._normalized_main_view_mode(
+            getattr(self, 'main_view_mode', 'font')
+        ) == 'font'
+        try:
+            has_font_preview = bool(self._runtime_preview_pages())
+        except Exception:
+            has_font_preview = False
+        try:
+            device_preview_active = self._effective_device_view_source() == 'preview'
+        except Exception:
+            device_preview_active = False
+        try:
+            has_device_preview = bool(self._runtime_device_preview_pages())
+        except Exception:
+            has_device_preview = False
+        has_runtime_preview = bool((font_view_active and has_font_preview) or (device_preview_active and has_device_preview))
+        return bool(has_runtime_preview or self._has_refreshable_preview_target())
+
+    def _queue_live_preview_refresh_timer(self: MainWindow, callback: Callable[[], None], delay_ms: int) -> bool:
+        single_shot = getattr(QTimer, 'singleShot', None)
+        if callable(single_shot):
+            try:
+                single_shot(max(0, int(delay_ms)), callback)
+                return True
+            except Exception:
+                pass
+        return False
+
+    def _schedule_live_preview_refresh(
+        self: MainWindow,
+        *,
+        reset_page: bool = False,
+        delay_ms: int = _SETTINGS_PREVIEW_REFRESH_DELAY_MS,
+    ) -> bool:
+        """Debounce appearance/layout setting changes into one preview refresh.
+
+        Font size, ruby size, line spacing, margins, kinsoku mode, glyph-position
+        correction, font choice, and output format all affect the preview image.
+        Running a full preview for every spin-box step is wasteful, so keep the
+        preview visibly stale immediately and let only the newest timer callback
+        regenerate the preview after the event stream settles.  When no preview
+        has been generated yet, fall back to the existing dirty placeholder
+        instead of starting an empty refresh.
+        """
+        if not self._has_active_preview_for_live_refresh():
+            try:
+                self.mark_preview_dirty()
+            except Exception:
+                pass
+            return False
+
+        try:
+            self.mark_preview_dirty()
+        except Exception:
+            pass
+
+        generation = int(getattr(self, '_settings_preview_refresh_generation', 0) or 0) + 1
+        self._settings_preview_refresh_generation = generation
+        self._settings_preview_refresh_pending = True
+        self._settings_preview_refresh_pending_reset_page = bool(reset_page) or bool(
+            getattr(self, '_settings_preview_refresh_pending_reset_page', False)
+        )
+        self._settings_preview_refresh_scheduled = True
+        self._mark_preview_update_button_pending()
+
+        def _run_live_preview_refresh(expected_generation: int) -> None:
+            if expected_generation != int(getattr(self, '_settings_preview_refresh_generation', 0) or 0):
+                return
+            self._settings_preview_refresh_scheduled = False
+            if not bool(getattr(self, '_settings_preview_refresh_pending', False)):
+                return
+            if bool(getattr(self, '_preview_running', False)):
+                rerun_generation = int(getattr(self, '_settings_preview_refresh_generation', 0) or 0) + 1
+                self._settings_preview_refresh_generation = rerun_generation
+                self._settings_preview_refresh_scheduled = True
+                if self._queue_live_preview_refresh_timer(
+                    lambda: _run_live_preview_refresh(rerun_generation),
+                    50,
+                ):
+                    return
+                self._settings_preview_refresh_scheduled = False
+                return
+            reset_page_for_run = bool(
+                getattr(self, '_settings_preview_refresh_pending_reset_page', reset_page)
+            )
+            self._settings_preview_refresh_pending = False
+            self._settings_preview_refresh_pending_reset_page = False
+            try:
+                refreshed = bool(self.request_preview_refresh(reset_page=reset_page_for_run))
+            except Exception:
+                refreshed = False
+            if not refreshed:
+                try:
+                    self.mark_preview_dirty()
+                except Exception:
+                    pass
+
+        if self._queue_live_preview_refresh_timer(lambda: _run_live_preview_refresh(generation), delay_ms):
+            return True
+        self._settings_preview_refresh_scheduled = False
+        _run_live_preview_refresh(generation)
+        return True
 
     def mark_preview_dirty_for_target_change(self: MainWindow) -> None:
         """Mark preview stale after target-path changes without heavy side effects.
@@ -4913,7 +4410,13 @@ class MainWindow(QMainWindow):
         bottom_inset = max(0, min(bottom_inset, max(0, rect_height - top_inset - 1)))
         return rect.adjusted(left_inset, top_inset, -right_inset, -bottom_inset)
 
-    def _decorate_font_view_pixmap(self: MainWindow, pix: object) -> object:
+    def _decorate_font_view_pixmap(
+        self: MainWindow,
+        pix: object,
+        *,
+        page_width: int = 0,
+        page_height: int = 0,
+    ) -> object:
         """Fontビューのプレビューを実機に近い見た目へ寄せるための装飾。
 
         - ガイドOFF: 青い帯は出さない（枠線だけ）
@@ -4943,7 +4446,9 @@ class MainWindow(QMainWindow):
             painter.drawRect(rect)
 
             if show_guides:
-                guide_rect = self._guide_rect_for_preview_rect(rect, out.width(), out.height())
+                ref_w = max(1, int(page_width or out.width() or 1))
+                ref_h = max(1, int(page_height or out.height() or 1))
+                guide_rect = self._guide_rect_for_preview_rect(rect, ref_w, ref_h)
                 if guide_rect != rect:
                     guide_band = QPainterPath()
                     guide_band.addRect(rect)
@@ -4976,11 +4481,16 @@ class MainWindow(QMainWindow):
         return pix
 
     def _apply_preview_pixmap(self: MainWindow, pix: object) -> None:
+        try:
+            orig_w = max(1, int(pix.width()))
+            orig_h = max(1, int(pix.height()))
+        except Exception:
+            orig_w = orig_h = 0
         target = self._font_preview_target_size()
         if target.width() < 10 or target.height() < 10:
             target = QSize(480, 720)
         scaled = pix.scaled(target, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        scaled = self._decorate_font_view_pixmap(scaled)
+        scaled = self._decorate_font_view_pixmap(scaled, page_width=orig_w, page_height=orig_h)
         self.preview_label.resize(scaled.size())
         try:
             self.preview_label.setMinimumSize(0, 0)
@@ -5024,7 +4534,7 @@ class MainWindow(QMainWindow):
                 return ''
         return ''
 
-    def _ui_widget_index(self: MainWindow, widget: object) -> Optional[int]:
+    def _ui_widget_index(self: MainWindow, widget: object) -> int | None:
         current_index_getter = getattr(widget, 'currentIndex', None)
         if callable(current_index_getter):
             try:
@@ -5039,39 +4549,19 @@ class MainWindow(QMainWindow):
         return None
 
     def _is_render_failure_status_text(self: MainWindow, text: object) -> bool:
-        normalized = _coerce_ui_message_text(text).strip()
-        return self._is_device_render_failure_status_text(normalized) or self._is_preview_render_failure_status_text(normalized)
+        return studio_logic.is_render_failure_status_text(text)
 
     def _is_preview_render_failure_status_text(self: MainWindow, text: object) -> bool:
-        normalized = _coerce_ui_message_text(text).strip()
-        return (
-            normalized.startswith('プレビュー表示エラー')
-            or normalized.startswith('プレビュー生成エラー')
-        )
+        return studio_logic.is_preview_render_failure_status_text(text)
 
     def _is_device_render_failure_status_text(self: MainWindow, text: object) -> bool:
-        normalized = _coerce_ui_message_text(text).strip()
-        return normalized.startswith('ページ表示エラー')
+        return studio_logic.is_device_render_failure_status_text(text)
 
     def _display_context_name_from_label_text(self: MainWindow, text: object) -> str:
-        normalized = _coerce_ui_message_text(text).strip()
-        prefix = '表示中:'
-        if normalized.startswith(prefix):
-            normalized = normalized[len(prefix):].strip()
-        return normalized
+        return studio_logic.display_context_name_from_label_text(text)
 
     def _render_failure_preserved_display_name(self: MainWindow, text: object) -> str:
-        normalized = _coerce_ui_message_text(text).strip()
-        marker = '（表示は '
-        suffix = ' のまま）'
-        start = normalized.find(marker)
-        if start < 0:
-            return ''
-        start += len(marker)
-        end = normalized.find(suffix, start)
-        if end < 0:
-            return ''
-        return normalized[start:end].strip()
+        return studio_logic.render_failure_preserved_display_name(text)
 
     def _device_render_failure_matches_visible_display_context(self: MainWindow, text: object) -> bool:
         normalized = _coerce_ui_message_text(text).strip()
@@ -5082,10 +4572,7 @@ class MainWindow(QMainWindow):
         visible_display_name = ''
         if visible_label_normalized.startswith('表示中:'):
             visible_display_name = self._display_context_name_from_label_text(visible_label_normalized)
-        preserved_display_name = self._render_failure_preserved_display_name(normalized)
-        if visible_display_name and preserved_display_name:
-            return preserved_display_name == visible_display_name
-        return True
+        return studio_logic.render_failure_matches_display_context(normalized, visible_display_name)
 
     def _preview_render_failure_matches_visible_display_context(self: MainWindow, text: object) -> bool:
         normalized = _coerce_ui_message_text(text).strip()
@@ -5383,33 +4870,31 @@ class MainWindow(QMainWindow):
 
     def _current_preview_success_status_message(self: MainWindow) -> str:
         pages = self._runtime_preview_pages()
-        page_count = len(pages)
-        preview_limit = max(page_count, int(getattr(self, 'last_preview_requested_limit', 0) or 0))
-        truncated = bool(getattr(self, 'preview_pages_truncated', False))
-        return studio_logic.build_preview_status_message(
-            'complete',
-            preview_limit=preview_limit,
-            generated_pages=page_count,
-            truncated=truncated,
+        status_state = studio_logic.build_preview_success_status_state(
+            page_count=len(pages),
+            requested_limit=getattr(self, 'last_preview_requested_limit', 0),
+            truncated=getattr(self, 'preview_pages_truncated', False),
         )
+        return str(status_state.get('status_message', ''))
 
     def _current_preview_render_status_message(self: MainWindow) -> str:
         pages = self._runtime_preview_pages()
-        page_count = len(pages)
-        preview_limit = max(page_count, int(getattr(self, 'last_preview_requested_limit', 0) or 0))
-        if preview_limit <= 0:
-            limit_widget = getattr(self, 'preview_page_limit_spin', None)
-            value_getter = getattr(limit_widget, 'value', None)
-            if callable(value_getter):
-                try:
-                    preview_limit = max(1, int(value_getter()))
-                except Exception:
-                    preview_limit = 0
-        if getattr(self, '_preview_running', False):
-            return studio_logic.build_preview_status_message('running', preview_limit=max(1, preview_limit or 1))
-        if getattr(self, 'preview_dirty', False):
-            return studio_logic.build_preview_status_message('dirty')
-        return self._current_preview_success_status_message()
+        widget_limit = 0
+        limit_widget = getattr(self, 'preview_page_limit_spin', None)
+        value_getter = getattr(limit_widget, 'value', None)
+        if callable(value_getter):
+            try:
+                widget_limit = int(value_getter())
+            except Exception:
+                widget_limit = 0
+        return studio_logic.build_preview_render_status_message(
+            page_count=len(pages),
+            requested_limit=getattr(self, 'last_preview_requested_limit', 0),
+            truncated=getattr(self, 'preview_pages_truncated', False),
+            running=getattr(self, '_preview_running', False),
+            dirty=getattr(self, 'preview_dirty', False),
+            widget_limit=widget_limit,
+        )
 
     def _refresh_successful_preview_render_status(self: MainWindow) -> None:
         preview_replacement = self._current_preview_render_status_message()
@@ -5418,41 +4903,34 @@ class MainWindow(QMainWindow):
         view_mode = self._normalized_main_view_mode(
             getattr(self, 'main_view_mode', 'font')
         )
-        font_view_visible = view_mode == 'font'
-        device_view_visible = view_mode == 'device'
-        visible_font_preview_active = font_view_visible and bool(self._runtime_preview_pages())
-        stale_preview_status = False
+        visible_font_preview_active = view_mode == 'font' and bool(self._runtime_preview_pages())
+        preview_status_text = ''
+        progress_status_text = ''
         if hasattr(self, 'preview_status_label'):
-            current_preview_status = self._ui_widget_text(self.preview_status_label)
-            stale_preview_status = (
-                self._is_render_failure_status_text(current_preview_status)
-                or current_preview_status == 'プレビューを生成できませんでした'
-            )
-            if stale_preview_status:
-                try:
-                    self._update_preview_status_label(preview_replacement)
-                except Exception:
-                    pass
-        progress_replacement = preview_replacement
-        if device_view_visible:
-            progress_replacement = self._ui_widget_text(getattr(self, 'current_xtc_label', None)) or preview_replacement
-        stale_progress_status = False
+            preview_status_text = self._ui_widget_text(self.preview_status_label)
         if hasattr(self, 'progress_label'):
-            current_progress_status = self._ui_widget_text(self.progress_label)
-            stale_progress_status = self._is_preview_render_failure_status_text(current_progress_status)
-            if not stale_progress_status and visible_font_preview_active:
-                stale_progress_status = self._is_device_render_failure_status_text(current_progress_status)
-            if stale_progress_status:
-                try:
-                    self.progress_label.setText(progress_replacement)
-                except Exception:
-                    pass
-        current_status_bar_status = self._status_bar_message_text()
-        stale_status_bar = self._is_preview_render_failure_status_text(current_status_bar_status)
-        if not stale_status_bar and visible_font_preview_active:
-            stale_status_bar = self._is_device_render_failure_status_text(current_status_bar_status)
-        should_notify_status_bar = stale_progress_status or stale_status_bar or (stale_preview_status and font_view_visible)
-        if should_notify_status_bar:
+            progress_status_text = self._ui_widget_text(self.progress_label)
+        status_state = studio_logic.build_successful_preview_render_status_refresh_state(
+            preview_replacement=preview_replacement,
+            view_mode=view_mode,
+            visible_font_preview_active=visible_font_preview_active,
+            preview_status_text=preview_status_text,
+            progress_status_text=progress_status_text,
+            status_bar_text=self._status_bar_message_text(),
+            current_label_text=self._ui_widget_text(getattr(self, 'current_xtc_label', None)),
+        )
+        if status_state.get('stale_preview_status') and hasattr(self, 'preview_status_label'):
+            try:
+                self._update_preview_status_label(str(status_state.get('preview_replacement', preview_replacement)))
+            except Exception:
+                pass
+        progress_replacement = str(status_state.get('progress_replacement', preview_replacement))
+        if status_state.get('stale_progress_status') and hasattr(self, 'progress_label'):
+            try:
+                self.progress_label.setText(progress_replacement)
+            except Exception:
+                pass
+        if status_state.get('should_notify_status_bar'):
             self._show_ui_status_message_direct_with_reflection_best_effort(progress_replacement, 5000)
 
     def render_current_preview_page(self: MainWindow) -> None:
@@ -5494,65 +4972,67 @@ class MainWindow(QMainWindow):
             )
 
     def _normalized_preview_page_cache_tokens(self: MainWindow, tokens: object, *, expected_len: int) -> list[int] | None:
-        if not isinstance(tokens, (list, tuple)) or len(tokens) != expected_len:
-            return None
-        normalized: list[int] = []
-        for value in tokens:
-            try:
-                normalized.append(int(value))
-            except Exception:
-                return None
-        return normalized
+        return studio_logic.normalize_preview_page_cache_tokens(tokens, expected_len=expected_len)
 
     def _normalized_device_view_source_value(self: MainWindow, value: object, *, default: str = 'xtc') -> str:
-        normalized = worker_logic._normalized_path_text(value).strip().lower()
-        if normalized in {'preview', 'xtc'}:
-            return normalized
-        return default
+        return studio_logic.normalize_device_view_source_value(value, default=default)
 
     def _effective_device_view_source(self: MainWindow, value: object = None) -> str:
         source = self._normalized_device_view_source_value(
             getattr(self, 'device_view_source', 'xtc') if value is None else value,
             default='xtc',
         )
-        if source == 'preview' and self._runtime_device_preview_pages():
-            return 'preview'
-        return 'xtc'
+        has_preview_pages = bool(self._runtime_device_preview_pages()) if source == 'preview' else False
+        return studio_logic.resolve_effective_device_view_source(
+            source,
+            has_preview_pages=has_preview_pages,
+        )
 
     def _is_preview_display_active(self: MainWindow) -> bool:
         mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
-        if mode == 'font':
-            return bool(self._runtime_preview_pages())
-        return self._effective_device_view_source() == 'preview'
+        has_font_preview_pages = bool(self._runtime_preview_pages()) if mode == 'font' else False
+        effective_device_view_source = self._effective_device_view_source() if mode != 'font' else 'xtc'
+        return studio_logic.is_preview_display_active(
+            mode,
+            has_font_preview_pages=has_font_preview_pages,
+            effective_device_view_source=effective_device_view_source,
+        )
 
     def _apply_preview_page_cache_tokens_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
-        context = self._coerce_mapping_payload(context)
         preview_pages = self._runtime_preview_pages()
         device_pages = self._runtime_device_preview_pages()
-        preview_tokens = self._normalized_preview_page_cache_tokens(
-            context.get('preview_page_cache_tokens'),
-            expected_len=len(preview_pages),
+        tokens_state = studio_logic.build_preview_page_cache_tokens_state(
+            context,
+            preview_page_count=len(preview_pages),
+            device_preview_page_count=len(device_pages),
         )
-        device_tokens = self._normalized_preview_page_cache_tokens(
-            context.get('device_preview_page_cache_tokens'),
-            expected_len=len(device_pages),
-        )
-        if preview_tokens is None or device_tokens is None:
+        if tokens_state.get('should_rebuild'):
             self._rebuild_preview_page_cache_tokens()
             return
-        self._preview_page_cache_tokens = list(preview_tokens)
-        self._device_preview_page_cache_tokens = list(device_tokens)
+        self._preview_page_cache_tokens = list(tokens_state.get('preview_page_cache_tokens', []))
+        self._device_preview_page_cache_tokens = list(tokens_state.get('device_preview_page_cache_tokens', []))
 
     def _apply_preview_button_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
-        context = self._coerce_mapping_payload(context)
+        button_state = studio_logic.build_preview_button_state(context)
         if not hasattr(self, 'preview_update_btn'):
             return
-        self.preview_update_btn.setEnabled(self._payload_bool_value(context, 'button_enabled', True))
-        self.preview_update_btn.setText(str(context.get('button_text', 'プレビュー更新')))
+        button_enabled = bool(button_state.get('button_enabled', True))
+        button_text = str(button_state.get('button_text', 'プレビュー更新'))
+        if not button_enabled or button_text == '生成中…':
+            self.preview_update_btn.setEnabled(button_enabled)
+            self.preview_update_btn.setText(button_text)
+            self._set_preview_update_button_visual_state('refreshing')
+            return
+        if bool(getattr(self, '_settings_preview_refresh_pending', False)):
+            self._mark_preview_update_button_pending()
+            return
+        self.preview_update_btn.setEnabled(button_enabled)
+        self.preview_update_btn.setText(button_text)
+        self._set_preview_update_button_visual_state('idle')
 
     def _apply_preview_progress_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
-        context = self._coerce_mapping_payload(context)
-        self._update_preview_status_label(str(context.get('status_message', '')))
+        progress_state = studio_logic.build_preview_progress_context_state(context)
+        self._update_preview_status_label(str(progress_state.get('status_message', '')))
 
     def _normalized_preview_pages_for_runtime(self: MainWindow, value: object) -> list[str]:
         try:
@@ -5750,7 +5230,7 @@ class MainWindow(QMainWindow):
         self: MainWindow,
         *,
         reset_page: bool = False,
-        preview_payload: Optional[dict[str, object]] = None,
+        preview_payload: dict[str, object] | None = None,
     ) -> bool:
         if getattr(self, '_preview_running', False):
             # プレビュー実行中の追加要求はキューに積まない。
@@ -5995,8 +5475,7 @@ class MainWindow(QMainWindow):
     def _normalize_preview_zoom_pct(self: MainWindow, value: object = None) -> int:
         if value is None:
             value = self._safe_widget_value('preview_zoom_spin', 100)
-        normalized = worker_logic._int_config_value({'preview_zoom_pct': value}, 'preview_zoom_pct', 100)
-        return max(50, min(int(normalized), 300))
+        return studio_logic.normalize_preview_zoom_pct(value)
 
     def _preview_zoom_factor(self: MainWindow) -> float:
         return self._normalize_preview_zoom_pct() / 100.0
@@ -6005,15 +5484,11 @@ class MainWindow(QMainWindow):
         return self._safe_widget_checked('actual_size_check')
 
     def _actual_size_calibration_factor(self: MainWindow) -> float:
-        if self._actual_size_uses_preview_zoom_calibration():
-            return self._preview_zoom_factor()
-        try:
-            value = float(self._safe_widget_value('calib_spin', 100)) / 100.0
-        except Exception:
-            value = 1.0
-        if not math.isfinite(value):
-            value = 1.0
-        return max(0.5, min(value, 3.0))
+        return studio_logic.build_actual_size_calibration_factor(
+            uses_preview_zoom=self._actual_size_uses_preview_zoom_calibration(),
+            preview_zoom_pct=self._safe_widget_value('preview_zoom_spin', 100),
+            calibration_pct=self._safe_widget_value('calib_spin', 100),
+        )
 
     def _sync_legacy_calibration_control_state(self: MainWindow) -> None:
         # sweep361: 実寸近似ON時の補正は右ペインの倍率UIへ集約する。
@@ -6035,14 +5510,14 @@ class MainWindow(QMainWindow):
     def _sync_preview_zoom_control_state(self: MainWindow) -> None:
         actual_size = self._actual_size_uses_preview_zoom_calibration()
         toggle_plan = gui_layouts.build_view_toggle_bar_plan()
-        label_text = str(toggle_plan.get(
-            'preview_zoom_actual_size_label_text' if actual_size else 'preview_zoom_label_text',
-            '実寸補正' if actual_size else '表示倍率',
-        ))
-        tooltip = str(toggle_plan.get(
-            'preview_zoom_actual_size_tooltip' if actual_size else 'preview_zoom_normal_tooltip',
-            '実寸近似ON: 実機サイズに合わせる補正倍率です。' if actual_size else 'フォントビュー（実寸近似OFF）と実機ビューの表示倍率です。',
-        ))
+        zoom_control_state = studio_logic.build_preview_zoom_control_state(
+            toggle_plan,
+            actual_size=actual_size,
+            label_key='preview_zoom_actual_size_label_text' if actual_size else 'preview_zoom_label_text',
+            tooltip_key='preview_zoom_actual_size_tooltip' if actual_size else 'preview_zoom_normal_tooltip',
+        )
+        label_text = zoom_control_state['label_text']
+        tooltip = zoom_control_state['tooltip']
         label = getattr(self, 'preview_zoom_label', None)
         if label is not None:
             try:
@@ -6069,20 +5544,27 @@ class MainWindow(QMainWindow):
 
     def _font_preview_target_size(self: MainWindow) -> QSize:
         profile = self._font_preview_viewer_profile()
-        if self.actual_size_check.isChecked():
-            px = self._preview_px_per_mm()
-            return QSize(max(180, int(profile.screen_w_mm * px)), max(240, int(profile.screen_h_mm * px)))
-        if hasattr(self, 'preview_scroll'):
+        actual_size = self.actual_size_check.isChecked()
+        px_per_mm = self._preview_px_per_mm() if actual_size else 1.0
+        viewport_width = 0
+        viewport_height = 0
+        zoom = 1.0
+        if not actual_size and hasattr(self, 'preview_scroll'):
             vp = self.preview_scroll.viewport().size()
-            if vp.width() >= 10 and vp.height() >= 10:
+            viewport_width = vp.width()
+            viewport_height = vp.height()
+            if viewport_width >= 10 and viewport_height >= 10:
                 zoom = self._preview_zoom_factor()
-                if abs(zoom - 1.0) < 0.001:
-                    return vp
-                return QSize(
-                    max(10, int(round(vp.width() * zoom))),
-                    max(10, int(round(vp.height() * zoom))),
-                )
-        return QSize(480, 720)
+        width, height = studio_logic.build_font_preview_target_size(
+            actual_size=actual_size,
+            screen_w_mm=getattr(profile, 'screen_w_mm', 0),
+            screen_h_mm=getattr(profile, 'screen_h_mm', 0),
+            px_per_mm=px_per_mm,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height,
+            zoom_factor=zoom,
+        )
+        return QSize(width, height)
 
     def _preview_px_per_mm(self: MainWindow) -> float:
         screen = self.screen() or QApplication.primaryScreen()
@@ -6090,27 +5572,21 @@ class MainWindow(QMainWindow):
         return max(1.0, dpi / 25.4) * self._actual_size_calibration_factor()
 
     def _safe_preview_layout_size(self: MainWindow, size: object, *, fallback: tuple[int, int] = (480, 720)) -> QSize:
-        fallback_w, fallback_h = fallback
-        try:
-            width = int(size.width())
-            height = int(size.height())
-        except Exception:
-            width, height = fallback_w, fallback_h
-        width = max(10, min(width, 4096))
-        height = max(10, min(height, 4096))
+        width, height = studio_logic.build_safe_preview_layout_size(size, fallback=fallback)
         return QSize(width, height)
 
     def _sync_preview_size(self: MainWindow) -> None:
         self._sync_viewer_size()
-        if not hasattr(self, 'preview_label'):
+        preview_label = getattr(self, 'preview_label', None)
+        if preview_label is None:
             return
         target = self._safe_preview_layout_size(self._font_preview_target_size())
         try:
-            self.preview_label.setMinimumSize(target)
+            preview_label.setMinimumSize(target)
         except Exception:
             APP_LOGGER.exception('フォントプレビューの最小サイズ更新に失敗しました')
         try:
-            self.preview_label.updateGeometry()
+            preview_label.updateGeometry()
         except Exception:
             APP_LOGGER.exception('フォントプレビューのレイアウト更新に失敗しました')
 
@@ -6121,11 +5597,7 @@ class MainWindow(QMainWindow):
         except Exception:
             APP_LOGGER.exception('実機ビューの表示倍率更新に失敗しました')
         hint = self.viewer_widget.sizeHint()
-        try:
-            w = max(360, min(int(hint.width()), 4096))
-            h = max(600, min(int(hint.height()), 4096))
-        except Exception:
-            w, h = 660, 860
+        w, h = studio_logic.build_viewer_minimum_size(hint)
         try:
             self.viewer_widget.setMinimumSize(w, h)
         except Exception:
@@ -6180,49 +5652,26 @@ class MainWindow(QMainWindow):
     def _normalized_device_preview_page_index(self: MainWindow, index: object = None, *, total: object = None) -> int:
         default_total = len(self._runtime_device_preview_pages())
         total_pages = default_total if total is None else worker_logic._int_config_value({'value': total}, 'value', default_total)
-        total_pages = max(0, total_pages)
         raw_value = getattr(self, 'current_device_preview_page_index', 0) if index is None else index
         current_index = worker_logic._int_config_value({'value': raw_value}, 'value', 0)
-        if total_pages > 0:
-            return max(0, min(total_pages - 1, current_index))
-        return 0
+        return studio_logic.normalize_navigation_index(total_pages, current_index)
 
     def _normalized_xtc_page_index(self: MainWindow, index: object = None, *, total: object = None) -> int:
         total_pages = self._xtc_page_count() if total is None else worker_logic._int_config_value({'value': total}, 'value', self._xtc_page_count())
-        total_pages = max(0, total_pages)
         raw_value = getattr(self, 'current_page_index', 0) if index is None else index
         current_index = worker_logic._int_config_value({'value': raw_value}, 'value', 0)
-        if total_pages > 0:
-            return max(0, min(total_pages - 1, current_index))
-        return 0
+        return studio_logic.normalize_navigation_index(total_pages, current_index)
 
     def _xtc_page_state_payload(self: MainWindow, index: object = None) -> dict[str, object]:
         if self._effective_device_view_source() == 'preview':
             pages = self._runtime_device_preview_pages()
             total = len(pages)
             current_index = self._normalized_device_preview_page_index(index, total=total)
-            page = pages[current_index] if total > 0 else None
-            return {
-                'total': total,
-                'current_index': current_index,
-                'current_page': current_index + 1 if total > 0 else 0,
-                'page': page,
-            }
+            return studio_logic.build_xtc_page_state_payload(pages, current_index)
         pages = self._runtime_xtc_pages()
         total = len(pages)
         current_index = self._normalized_xtc_page_index(index, total=total)
-        page = None
-        if total > 0:
-            try:
-                page = pages[current_index]
-            except Exception:
-                page = None
-        return {
-            'total': total,
-            'current_index': current_index,
-            'current_page': current_index + 1 if total > 0 else 0,
-            'page': page,
-        }
+        return studio_logic.build_xtc_page_state_payload(pages, current_index)
 
     def _xtc_navigation_payload(self: MainWindow) -> dict[str, object]:
         view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
@@ -6251,15 +5700,14 @@ class MainWindow(QMainWindow):
             total = max(0, worker_logic._int_config_value(page_payload, 'total', 0))
             current_index = worker_logic._int_config_value(page_payload, 'current_index', 0)
             current_page = worker_logic._int_config_value(page_payload, 'current_page', 0)
-        payload = studio_logic.build_navigation_display_state(
-            view_mode='device',
+        return studio_logic.build_device_navigation_payload(
+            view_mode=view_mode,
             total=total,
             current_index=current_index,
-            truncated=bool(is_preview and getattr(self, 'device_preview_pages_truncated', False)),
+            current_page=current_page,
+            is_preview=is_preview,
+            truncated=getattr(self, 'device_preview_pages_truncated', False),
         )
-        payload['active'] = bool(view_mode == 'device' and self._payload_bool_value(payload, 'active', False))
-        payload['current_page'] = current_page
-        return payload
 
     def _apply_xtc_navigation_ui(self: MainWindow, payload: Mapping[str, object]) -> None:
         if not hasattr(self, 'prev_btn'):
@@ -6280,11 +5728,17 @@ class MainWindow(QMainWindow):
             truncated=False,
         )
         nav_state_mapping = nav_state if isinstance(nav_state, Mapping) else {}
-        nav_active = self._payload_bool_value(nav_state_mapping, 'active', False)
-        active = self._payload_bool_value(payload, 'active', nav_active) and nav_active
-        current_page = self._payload_int_value(nav_state_mapping, 'current_page', 0) if total > 0 else 0
-        can_go_prev = active and self._payload_bool_value(nav_state_mapping, 'can_go_prev', False)
-        can_go_next = active and self._payload_bool_value(nav_state_mapping, 'can_go_next', False)
+        nav_bar_plan = gui_layouts.build_nav_bar_plan()
+        total_label_format = nav_bar_plan.get('page_total_label_format', '/ {total}')
+        fallback_total_label = total_label_format.format(total=total)
+        apply_state = studio_logic.build_navigation_apply_state(
+            payload,
+            nav_state_mapping,
+            total_label_format=total_label_format,
+            nav_buttons_reversed=getattr(self, 'nav_buttons_reversed', False),
+        )
+        active = self._payload_bool_value(apply_state, 'active', False)
+        current_page = self._payload_int_value(apply_state, 'current_page', 0)
         if view_mode != 'font':
             if is_preview:
                 if getattr(self, 'current_device_preview_page_index', 0) != current_index:
@@ -6292,20 +5746,12 @@ class MainWindow(QMainWindow):
             elif getattr(self, 'current_page_index', 0) != current_index:
                 self.current_page_index = current_index
                 self._refresh_loaded_xtc_viewer_profile_cache()
-        if bool(getattr(self, 'nav_buttons_reversed', False)):
-            self.prev_btn.setEnabled(can_go_next)
-            self.next_btn.setEnabled(can_go_prev)
-        else:
-            self.prev_btn.setEnabled(can_go_prev)
-            self.next_btn.setEnabled(can_go_next)
+        self.prev_btn.setEnabled(self._payload_bool_value(apply_state, 'prev_enabled', False))
+        self.next_btn.setEnabled(self._payload_bool_value(apply_state, 'next_enabled', False))
         if hasattr(self, 'page_input'):
             self.page_input.setEnabled(active)
-        nav_bar_plan = gui_layouts.build_nav_bar_plan()
-        total_label_format = str(nav_bar_plan.get('page_total_label_format', '/ {total}'))
-        total_label_fallback = total_label_format.format(total=total)
-        total_label = str(payload.get('total_label', total_label_fallback))
         if hasattr(self, 'page_total_label'):
-            self.page_total_label.setText(total_label)
+            self.page_total_label.setText(str(apply_state.get('total_label', fallback_total_label)))
         if view_mode == 'font':
             current_preview_index = max(0, min(total - 1, current_index)) if total > 0 else 0
             if getattr(self, 'current_preview_page_index', 0) != current_preview_index:
@@ -6495,7 +5941,8 @@ class MainWindow(QMainWindow):
         self._finalize_setting_change()
 
     def on_night_toggled(self: MainWindow, checked: bool) -> None:
-        self._finalize_setting_change()
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
 
     def on_guides_toggled(self: MainWindow, checked: bool) -> None:
         self._apply_viewer_display_runtime_state()
@@ -6508,10 +5955,16 @@ class MainWindow(QMainWindow):
                 pass
         self._finalize_setting_change(refresh_preview=False)
 
+    def _request_preview_refresh_after_margin_change(self: MainWindow) -> bool:
+        """Compatibility wrapper for margin-driven live preview refreshes."""
+        return self._schedule_live_preview_refresh(reset_page=False)
+
     def on_margin_changed(self: MainWindow, value: int) -> None:
         self._apply_viewer_display_runtime_state()
-        self._refresh_font_preview_display_if_needed()
-        self._finalize_setting_change()
+        refreshed = self._request_preview_refresh_after_margin_change()
+        if not refreshed:
+            self._refresh_font_preview_display_if_needed()
+        self._finalize_setting_change(refresh_preview=False)
 
     def on_threshold_changed(self: MainWindow, value: int) -> None:
         self._finalize_setting_change()
@@ -6521,13 +5974,40 @@ class MainWindow(QMainWindow):
         self._finalize_setting_change()
 
     def _on_kinsoku_mode_changed(self: MainWindow) -> None:
-        self._finalize_setting_change()
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
 
     def current_kinsoku_mode(self: MainWindow) -> str:
         if not hasattr(self, 'kinsoku_mode_combo'):
             return 'standard'
         value = str(self.kinsoku_mode_combo.currentData() or 'standard').strip().lower()
         return value if value in KINSOKU_MODE_LABELS else 'standard'
+
+    def _on_glyph_position_mode_changed(self: MainWindow) -> None:
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
+
+    def _current_glyph_position_mode(self: MainWindow, combo_name: str, allowed_values: object = None) -> str:
+        combo = self.__dict__.get(combo_name)
+        if combo is None:
+            return 'standard'
+        current_data = getattr(combo, 'currentData', None)
+        raw_value = current_data() if callable(current_data) else None
+        value = str(raw_value or 'standard').strip().lower()
+        allowed = allowed_values if allowed_values is not None else GLYPH_POSITION_MODE_LABELS
+        return value if value in allowed else 'standard'
+
+    def current_punctuation_position_mode(self: MainWindow) -> str:
+        return self._current_glyph_position_mode('punctuation_position_combo')
+
+    def current_ichi_position_mode(self: MainWindow) -> str:
+        return self._current_glyph_position_mode('ichi_position_combo')
+
+    def current_lower_closing_bracket_position_mode(self: MainWindow) -> str:
+        return self._current_glyph_position_mode(
+            'lower_closing_bracket_position_combo',
+            CLOSING_BRACKET_POSITION_MODE_LABELS,
+        )
 
     def current_output_format(self: MainWindow) -> str:
         combo = self.__dict__.get('output_format_combo')
@@ -6552,7 +6032,8 @@ class MainWindow(QMainWindow):
         return value if value in OUTPUT_CONFLICT_LABELS else 'rename'
 
     def on_font_changed(self: MainWindow, _value: object) -> None:
-        self._finalize_setting_change()
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
 
     def manual_refresh_preview(self: MainWindow) -> None:
         self._flush_pending_ui_changes()
@@ -6586,7 +6067,7 @@ class MainWindow(QMainWindow):
             )
         self.save_ui_state()
 
-    def selected_preset_key(self: MainWindow) -> Optional[str]:
+    def selected_preset_key(self: MainWindow) -> str | None:
         if not hasattr(self, 'preset_combo'):
             return None
         key = self.preset_combo.currentData()
@@ -6701,10 +6182,14 @@ class MainWindow(QMainWindow):
             dither=dither,
             kinsoku_mode=self.current_kinsoku_mode() if self.__dict__.get('kinsoku_mode_combo') is not None else None,
             output_format=self.current_output_format() if self.__dict__.get('output_format_combo') is not None else None,
+            punctuation_position_mode=self.current_punctuation_position_mode() if self.__dict__.get('punctuation_position_combo') is not None else None,
+            ichi_position_mode=self.current_ichi_position_mode() if self.__dict__.get('ichi_position_combo') is not None else None,
+            lower_closing_bracket_position_mode=self.current_lower_closing_bracket_position_mode() if self.__dict__.get('lower_closing_bracket_position_combo') is not None else None,
             font_file=font_value,
             default_font_name=self._default_font_name(),
             allowed_profiles=DEVICE_PROFILES,
             allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
+            allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
             allowed_output_formats=OUTPUT_FORMAT_LABELS,
             normalize_choice_value=self._normalize_choice_value,
             normalize_font_setting_value=self._normalize_font_setting_value,
@@ -6717,11 +6202,14 @@ class MainWindow(QMainWindow):
         self: MainWindow,
         payload: object,
         *,
-        fallback: Optional[PresetDefinition] = None,
+        fallback: PresetDefinition | None = None,
         fallback_font: str = '',
         fallback_night_mode: bool = False,
         fallback_dither: bool = False,
         fallback_kinsoku_mode: str = 'standard',
+        fallback_punctuation_position_mode: str = 'standard',
+        fallback_ichi_position_mode: str = 'standard',
+        fallback_lower_closing_bracket_position_mode: str = 'standard',
         fallback_output_format: str = 'xtc',
     ) -> PresetDefinition:
         source = payload if isinstance(payload, dict) else {}
@@ -6780,6 +6268,21 @@ class MainWindow(QMainWindow):
             'xtc',
             OUTPUT_FORMAT_LABELS,
         )
+        normalized['punctuation_position_mode'] = self._normalize_choice_value(
+            source.get('punctuation_position_mode', fallback_payload.get('punctuation_position_mode', fallback_punctuation_position_mode)),
+            'standard',
+            GLYPH_POSITION_MODE_LABELS,
+        )
+        normalized['ichi_position_mode'] = self._normalize_choice_value(
+            source.get('ichi_position_mode', fallback_payload.get('ichi_position_mode', fallback_ichi_position_mode)),
+            'standard',
+            GLYPH_POSITION_MODE_LABELS,
+        )
+        normalized['lower_closing_bracket_position_mode'] = self._normalize_choice_value(
+            source.get('lower_closing_bracket_position_mode', fallback_payload.get('lower_closing_bracket_position_mode', fallback_lower_closing_bracket_position_mode)),
+            'standard',
+            CLOSING_BRACKET_POSITION_MODE_LABELS,
+        )
 
         candidate_width = worker_logic._int_config_value(source, 'width', int(normalized['width']))
         candidate_height = worker_logic._int_config_value(source, 'height', int(normalized['height']))
@@ -6817,7 +6320,7 @@ class MainWindow(QMainWindow):
             prefix = self._preset_settings_prefix(key)
             for field in PRESET_FIELDS:
                 sk = f'{prefix}/{field}'
-                if self.settings_store.contains(sk):
+                if self._settings_contains_key(sk):
                     dv = preset.get(field)
                     preset[field] = self._settings_raw_value(sk, dv)
             presets[key] = self._normalize_preset_payload(
@@ -6840,6 +6343,7 @@ class MainWindow(QMainWindow):
         p: PresetDefinition,
         *,
         summary_tag: str = '',
+        include_name_line: bool = True,
     ) -> str:
         font_text = core.describe_font_value(p.get('font_file') or self._default_font_name())
         return studio_logic.build_preset_summary_text(
@@ -6849,6 +6353,7 @@ class MainWindow(QMainWindow):
             kinsoku_mode_labels=KINSOKU_MODE_LABELS,
             output_format_labels=OUTPUT_FORMAT_LABELS,
             summary_tag=summary_tag,
+            include_name_line=include_name_line,
         )
 
     def _preset_summary_text(
@@ -6856,6 +6361,7 @@ class MainWindow(QMainWindow):
         p: PresetDefinition,
         *,
         summary_tag: str = '',
+        include_name_line: bool = True,
     ) -> str:
         font_text = core.describe_font_value(p.get('font_file') or self._default_font_name())
         return studio_logic.build_preset_summary_html(
@@ -6865,9 +6371,10 @@ class MainWindow(QMainWindow):
             kinsoku_mode_labels=KINSOKU_MODE_LABELS,
             output_format_labels=OUTPUT_FORMAT_LABELS,
             summary_tag=summary_tag,
+            include_name_line=include_name_line,
         )
 
-    def _current_settings_summary_payload(self: MainWindow, key: Optional[str] = None) -> PresetDefinition:
+    def _current_settings_summary_payload(self: MainWindow, key: str | None = None) -> PresetDefinition:
         selected_key = key or self.selected_preset_key()
         base_preset = dict(self.preset_definitions.get(selected_key) or {}) if selected_key else {}
         current_payload = dict(self.current_preset_payload())
@@ -6877,7 +6384,85 @@ class MainWindow(QMainWindow):
             return merged
         return current_payload
 
-    def _update_preset_summary_label_layout(self: MainWindow) -> None:
+    def _preset_summary_label_measurement_width(self: MainWindow, label: object) -> int:
+        """Return the best available real QLabel width for compact summary height."""
+        candidate_widths: list[int] = []
+
+        contents_rect_getter = getattr(label, 'contentsRect', None)
+        if callable(contents_rect_getter):
+            try:
+                contents_width = int(contents_rect_getter().width())
+                if contents_width > 0:
+                    candidate_widths.append(contents_width)
+            except Exception:
+                pass
+
+        label_width_getter = getattr(label, 'width', None)
+        if callable(label_width_getter):
+            try:
+                label_width = int(label_width_getter())
+                if label_width > 0:
+                    candidate_widths.append(label_width)
+            except Exception:
+                pass
+
+        parent_getter = getattr(label, 'parentWidget', None)
+        parent = None
+        if callable(parent_getter):
+            try:
+                parent = parent_getter()
+            except Exception:
+                parent = None
+        parent_width_getter = getattr(parent, 'width', None)
+        if callable(parent_width_getter):
+            try:
+                parent_width = int(parent_width_getter())
+                if parent_width > 0:
+                    margin_total = 0
+                    layout_getter = getattr(parent, 'layout', None)
+                    layout = None
+                    if callable(layout_getter):
+                        try:
+                            layout = layout_getter()
+                        except Exception:
+                            layout = None
+                    margins_getter = getattr(layout, 'contentsMargins', None)
+                    if callable(margins_getter):
+                        try:
+                            margins = margins_getter()
+                            margin_total = int(margins.left()) + int(margins.right())
+                        except Exception:
+                            margin_total = 0
+                    candidate_widths.append(max(1, parent_width - margin_total))
+            except Exception:
+                pass
+
+        reliable_widths = [width for width in candidate_widths if width >= 240]
+        if reliable_widths:
+            return max(reliable_widths)
+        if candidate_widths:
+            return max(candidate_widths)
+        return 320
+
+    def _queue_preset_summary_label_layout_retry(self: MainWindow) -> None:
+        """Re-measure the preset summary after Qt has assigned the real label width."""
+        if getattr(self, '_preset_summary_layout_retry_queued', False):
+            return
+        timer_single_shot = getattr(QTimer, 'singleShot', None)
+        if not callable(timer_single_shot):
+            return
+        self._preset_summary_layout_retry_queued = True
+
+        def _retry() -> None:
+            self._preset_summary_layout_retry_queued = False
+            self._update_preset_summary_label_layout(queue_retry=False)
+
+        try:
+            timer_single_shot(0, _retry)
+        except Exception:
+            self._preset_summary_layout_retry_queued = False
+
+    def _update_preset_summary_label_layout(self: MainWindow, *, queue_retry: bool = True) -> None:
         label = getattr(self, 'preset_summary_label', None)
         if label is None:
             return
@@ -6888,16 +6473,58 @@ class MainWindow(QMainWindow):
                 text = str(text_getter() or '')
             except Exception:
                 text = ''
+        compact_text = studio_logic.compact_multiline_label_text(text)
+        if compact_text != text:
+            set_text = getattr(label, 'setText', None)
+            if callable(set_text):
+                try:
+                    set_text(compact_text)
+                    text = compact_text
+                except Exception:
+                    text = compact_text
+            else:
+                text = compact_text
         height = 0
         if text.strip():
-            height_for_width = getattr(label, 'heightForWidth', None)
-            label_width = getattr(label, 'width', None)
-            if callable(height_for_width) and callable(label_width):
+            width_value = self._preset_summary_label_measurement_width(label)
+            used_precise_metrics = False
+            font_metrics_getter = getattr(label, 'fontMetrics', None)
+            if callable(font_metrics_getter) and width_value > 0:
                 try:
-                    width_value = max(180, int(label_width()))
-                    height = int(height_for_width(width_value))
+                    metrics = font_metrics_getter()
+                    text_word_wrap = getattr(Qt, 'TextWordWrap', 0)
+                    align_top = getattr(Qt, 'AlignTop', 0)
+                    align_left = getattr(Qt, 'AlignLeft', 0)
+                    flags = int(text_word_wrap) | int(align_top) | int(align_left)
+                    line_spacing_value = 0
+                    line_spacing_getter = getattr(metrics, 'lineSpacing', None)
+                    if callable(line_spacing_getter):
+                        try:
+                            line_spacing_value = max(1, int(line_spacing_getter()))
+                        except Exception:
+                            line_spacing_value = 0
+                    if line_spacing_value > 0:
+                        measured_height = 0
+                        for line in text.splitlines():
+                            rect = metrics.boundingRect(QRect(0, 0, width_value, 10000), flags, line)
+                            measured_height += max(line_spacing_value, int(rect.height()))
+                        if measured_height > 0:
+                            height = measured_height
+                            used_precise_metrics = True
+                    if height <= 0:
+                        rect = metrics.boundingRect(QRect(0, 0, width_value, 10000), flags, text)
+                        height = int(rect.height())
+                        if height > 0:
+                            used_precise_metrics = True
                 except Exception:
                     height = 0
+            if height <= 0:
+                height_for_width = getattr(label, 'heightForWidth', None)
+                if callable(height_for_width) and width_value > 0:
+                    try:
+                        height = int(height_for_width(width_value))
+                    except Exception:
+                        height = 0
             if height <= 0:
                 size_hint = getattr(label, 'sizeHint', None)
                 if callable(size_hint):
@@ -6905,42 +6532,50 @@ class MainWindow(QMainWindow):
                         height = int(size_hint().height())
                     except Exception:
                         height = 0
-            if height > 0:
+            if height > 0 and not used_precise_metrics:
                 height = max(1, height - 2)
-        set_fixed_height = getattr(label, 'setFixedHeight', None)
-        if callable(set_fixed_height) and height > 0:
-            try:
-                set_fixed_height(height)
-            except Exception:
-                pass
-        else:
-            set_minimum_height = getattr(label, 'setMinimumHeight', None)
-            if callable(set_minimum_height):
+        fixed_height_applied = False
+        if height > 0:
+            set_fixed_height = getattr(label, 'setFixedHeight', None)
+            if callable(set_fixed_height):
                 try:
-                    set_minimum_height(max(0, height))
+                    set_fixed_height(height)
+                    fixed_height_applied = True
                 except Exception:
-                    pass
+                    fixed_height_applied = False
+            if not fixed_height_applied:
+                for setter_name in ('setMinimumHeight', 'setMaximumHeight'):
+                    setter = getattr(label, setter_name, None)
+                    if callable(setter):
+                        try:
+                            setter(height)
+                        except Exception:
+                            pass
         update_geometry = getattr(label, 'updateGeometry', None)
         if callable(update_geometry):
             update_geometry()
+        if queue_retry:
+            self._queue_preset_summary_label_layout_retry()
 
-    def _sync_summary_payload(self: MainWindow, payload: Optional[PresetDefinition], *, summary_tag: str = '') -> None:
+    def _sync_summary_payload(self: MainWindow, payload: PresetDefinition | None, *, summary_tag: str = '') -> None:
         if not hasattr(self, 'preset_summary_label') or not hasattr(self, 'preset_combo'):
             return
         if not payload:
             return
-        summary = self._preset_summary_plain_text(payload, summary_tag=summary_tag)
+        summary = studio_logic.compact_multiline_label_text(
+            self._preset_summary_plain_text(payload, summary_tag=summary_tag, include_name_line=False)
+        )
         self.preset_summary_label.setText(summary)
         self.preset_combo.setToolTip(summary)
         self._update_preset_summary_label_layout()
 
-    def _sync_current_settings_summary(self: MainWindow, key: Optional[str] = None) -> None:
+    def _sync_current_settings_summary(self: MainWindow, key: str | None = None) -> None:
         summary_payload = self._current_settings_summary_payload(key)
         if not summary_payload:
             return
         self._sync_summary_payload(summary_payload, summary_tag='（現在の設定）')
 
-    def _sync_selected_preset_summary(self: MainWindow, key: Optional[str] = None) -> None:
+    def _sync_selected_preset_summary(self: MainWindow, key: str | None = None) -> None:
         if not hasattr(self, 'preset_summary_label') or not hasattr(self, 'preset_combo'):
             return
         selected_key = key or self.selected_preset_key()
@@ -6949,7 +6584,9 @@ class MainWindow(QMainWindow):
             self.preset_summary_label.setText('')
             self.preset_combo.setToolTip('')
             return
-        summary = self._preset_summary_plain_text(preset)
+        summary = studio_logic.compact_multiline_label_text(
+            self._preset_summary_plain_text(preset, include_name_line=False)
+        )
         self.preset_summary_label.setText(summary)
         self.preset_combo.setToolTip(summary)
         adjust = getattr(self.preset_summary_label, 'adjustSize', None)
@@ -7302,11 +6939,14 @@ class MainWindow(QMainWindow):
             return base_label
         return f'{base_label}{suffix}'
 
+    def _combo_find_data_index(self: MainWindow, combo: object, value: object) -> int:
+        return _combo_find_data_index_for_widget(combo, value)
+
     def _ensure_font_combo_value(self: MainWindow, font_value: str) -> None:
         font_value = core.build_font_spec(*core.parse_font_spec(font_value))
         if not font_value or not hasattr(self, 'font_combo'):
             return
-        if self.font_combo.findData(font_value) >= 0:
+        if self._combo_find_data_index(self.font_combo, font_value) >= 0:
             return
         added = False
         path_value, _font_index = core.parse_font_spec(font_value)
@@ -7318,11 +6958,11 @@ class MainWindow(QMainWindow):
                 continue
             if value == font_value:
                 exact_detected = True
-            if self.font_combo.findData(value) >= 0:
+            if self._combo_find_data_index(self.font_combo, value) >= 0:
                 continue
             self.font_combo.addItem(str(entry.get('label', value)), value)
             added = True
-        if self.font_combo.findData(font_value) < 0:
+        if self._combo_find_data_index(self.font_combo, font_value) < 0:
             label = self._missing_font_combo_label(font_value) if not exact_detected else (core.describe_font_value(font_value) or Path(path_value or font_value).name)
             self.font_combo.addItem(label, font_value)
         elif added:
@@ -7347,7 +6987,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 preserved_night_mode = None
         self._ensure_font_combo_value(font_value)
-        idx = self.font_combo.findData(font_value)
+        idx = self._combo_find_data_index(self.font_combo, font_value)
         if idx >= 0:
             self.font_combo.setCurrentIndex(idx)
             reset_popup_scroll = getattr(self.font_combo, '_reset_popup_scroll_to_top', None)
@@ -7400,21 +7040,25 @@ class MainWindow(QMainWindow):
 
     def _current_render_settings_base(self: MainWindow) -> WorkerConversionSettings:
         width, height = self._effective_output_dimensions()
+        defaults = DEFAULT_RENDER_SETTINGS
         return {
             'target': worker_logic.normalize_target_path_text(self._safe_line_edit_text('target_edit')),
-            'font_file': self.current_font_value() if hasattr(self, 'current_font_value') else '',
-            'font_size': self._safe_widget_value('font_size_spin', 26),
-            'ruby_size': self._safe_widget_value('ruby_size_spin', 12),
-            'line_spacing': self._safe_widget_value('line_spacing_spin', 44),
-            'margin_t': self._safe_widget_value('margin_t_spin', 12),
-            'margin_b': self._safe_widget_value('margin_b_spin', 14),
-            'margin_r': self._safe_widget_value('margin_r_spin', 12),
-            'margin_l': self._safe_widget_value('margin_l_spin', 12),
-            'dither': self._safe_widget_checked('dither_check'),
-            'threshold': self._safe_widget_value('threshold_spin', 128),
-            'night_mode': self._safe_widget_checked('night_check'),
-            'kinsoku_mode': self.current_kinsoku_mode() if hasattr(self, 'current_kinsoku_mode') else 'standard',
-            'output_format': self.current_output_format() if hasattr(self, 'current_output_format') else 'xtc',
+            'font_file': self.current_font_value() if hasattr(self, 'current_font_value') else str(defaults['font_file']),
+            'font_size': self._safe_widget_value('font_size_spin', defaults['font_size']),
+            'ruby_size': self._safe_widget_value('ruby_size_spin', defaults['ruby_size']),
+            'line_spacing': self._safe_widget_value('line_spacing_spin', defaults['line_spacing']),
+            'margin_t': self._safe_widget_value('margin_t_spin', defaults['margin_t']),
+            'margin_b': self._safe_widget_value('margin_b_spin', defaults['margin_b']),
+            'margin_r': self._safe_widget_value('margin_r_spin', defaults['margin_r']),
+            'margin_l': self._safe_widget_value('margin_l_spin', defaults['margin_l']),
+            'dither': self._safe_widget_checked('dither_check', bool(defaults['dither'])),
+            'threshold': self._safe_widget_value('threshold_spin', defaults['threshold']),
+            'night_mode': self._safe_widget_checked('night_check', bool(defaults['night_mode'])),
+            'kinsoku_mode': self.current_kinsoku_mode() if hasattr(self, 'current_kinsoku_mode') else str(defaults['kinsoku_mode']),
+            'punctuation_position_mode': self.current_punctuation_position_mode() if hasattr(self, 'current_punctuation_position_mode') else str(defaults['punctuation_position_mode']),
+            'ichi_position_mode': self.current_ichi_position_mode() if hasattr(self, 'current_ichi_position_mode') else str(defaults['ichi_position_mode']),
+            'lower_closing_bracket_position_mode': self.current_lower_closing_bracket_position_mode() if hasattr(self, 'current_lower_closing_bracket_position_mode') else str(defaults['lower_closing_bracket_position_mode']),
+            'output_format': self.current_output_format() if hasattr(self, 'current_output_format') else str(defaults['output_format']),
             'width': width,
             'height': height,
         }
@@ -7476,6 +7120,7 @@ class MainWindow(QMainWindow):
             allowed_view_modes={'font', 'device'},
             allowed_profiles=DEVICE_PROFILES,
             allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
+            allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
             allowed_output_formats=OUTPUT_FORMAT_LABELS,
             allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
             default_preview_page_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
@@ -7483,22 +7128,18 @@ class MainWindow(QMainWindow):
         payload['preview_zoom_pct'] = self._normalize_preview_zoom_pct()
         return payload
 
-    def _supported_targets_for_path(self: MainWindow, target_raw: str) -> List[Path]:
-        target_raw = str(target_raw).strip()
-        if not target_raw:
-            return []
-        tp = Path(target_raw)
-        if not tp.exists():
-            return []
-        return ConversionWorker._resolve_supported_targets(tp)
+    def _supported_targets_for_path(self: MainWindow, target_raw: str) -> list[Path]:
+        return _supported_targets_for_path(target_raw, ConversionWorker._resolve_supported_targets)
 
     def _default_output_name_for_target(self: MainWindow, path: Path) -> str:
-        desired = core.get_output_path_for_target(path, self.current_output_format())
-        candidate = Path(desired).stem if desired else path.stem
-        sanitized = ConversionWorker._sanitize_output_stem(candidate)
-        return sanitized or 'output'
+        return _default_output_name_for_target(
+            path,
+            self.current_output_format(),
+            get_output_path_for_target=core.get_output_path_for_target,
+            sanitize_output_stem=ConversionWorker._sanitize_output_stem,
+        )
 
-    def _prepare_conversion_settings(self: MainWindow) -> Optional[WorkerConversionSettings]:
+    def _prepare_conversion_settings(self: MainWindow) -> WorkerConversionSettings | None:
         cfg = self.current_settings_dict()
         target_value = str(cfg.get('target', '')).strip()
         supported = self._supported_targets_for_path(target_value)
@@ -8041,7 +7682,7 @@ class MainWindow(QMainWindow):
         *,
         badge_text: object,
         status_message: object = None,
-        status_timeout: Optional[int] = None,
+        status_timeout: int | None = None,
     ) -> bool:
         normalized_message = _coerce_ui_message_text(message)
         normalized_badge_text = _coerce_ui_message_text(badge_text)
@@ -8092,8 +7733,8 @@ class MainWindow(QMainWindow):
         message: str,
         *,
         badge_text: str,
-        status_message: Optional[str] = None,
-        status_timeout: Optional[int] = None,
+        status_message: str | None = None,
+        status_timeout: int | None = None,
     ) -> None:
         self._apply_direct_conversion_terminal_fallback(
             message,
@@ -8144,8 +7785,8 @@ class MainWindow(QMainWindow):
 
     def _show_conversion_results(
         self: MainWindow,
-        converted_files: List[object],
-        summary_lines: Optional[List[str]] = None,
+        converted_files: list[object],
+        summary_lines: list[str] | None = None,
     ) -> None:
         self.populate_results(converted_files, summary_lines)
         context = self._resolved_result_load_context()
@@ -8180,11 +7821,7 @@ class MainWindow(QMainWindow):
         prefix: object,
         message: object,
     ) -> str:
-        prefix_text = _coerce_ui_message_text(prefix).strip()
-        message_text = _coerce_ui_message_text(message, '不明なエラー').strip() or '不明なエラー'
-        if not prefix_text:
-            return message_text
-        return f'{prefix_text}: {message_text}'
+        return studio_logic.build_conversion_failure_summary_text(prefix, message)
 
     def _apply_conversion_failure_ui(
         self: MainWindow,
@@ -8536,11 +8173,10 @@ class MainWindow(QMainWindow):
         collected_warnings: object,
         warning_values: object,
     ) -> tuple[object, list[str]]:
-        merged_warnings = worker_logic.coerce_postprocess_warning_messages(collected_warnings)
-        new_warnings = worker_logic.coerce_postprocess_warning_messages(warning_values)
-        for warning_message in new_warnings:
-            if warning_message not in merged_warnings:
-                merged_warnings.append(warning_message)
+        merged_warnings = studio_logic.merge_unique_message_values(
+            worker_logic.coerce_postprocess_warning_messages(collected_warnings),
+            worker_logic.coerce_postprocess_warning_messages(warning_values),
+        )
         if not merged_warnings:
             return summary_lines, []
         return (
@@ -9083,6 +8719,34 @@ class MainWindow(QMainWindow):
     def on_conversion_finished(self: MainWindow, result: ConversionResult) -> None:
         self._clear_active_conversion_run_token()
         msg = worker_logic._str_config_value(result, 'message', '変換完了しました。').strip() or '変換完了しました。'
+        for helper_name in (
+            '_open_finished_conversion_folder',
+            '_merge_results_summary_lines_with_warnings',
+            '_merge_results_summary_lines_and_collect_warnings',
+            '_append_log_without_status_best_effort',
+            '_append_log_without_status_or_status_bar',
+            '_append_log_without_status_with_optional_status_fallback',
+            '_emit_postprocess_warning_via_log_and_optional_status_fallback',
+            '_emit_postprocess_warnings_and_collect',
+            '_emit_unique_postprocess_warnings_with_fallback',
+            '_append_unique_postprocess_warnings_to_log_with_fallback',
+            '_emit_unique_postprocess_warnings_or_append_to_log',
+            '_build_results_summary_text',
+            '_coerce_mapping_payload',
+            '_clear_results_selection_with_fallback',
+            '_ui_widget_index',
+            '_set_bottom_tab_index_with_fallback',
+            '_set_results_summary_text_with_fallback',
+            '_show_ui_status_message_with_reflection_or_direct_fallback',
+        ):
+            if hasattr(self, helper_name):
+                continue
+            helper = getattr(MainWindow, helper_name, None)
+            if callable(helper):
+                try:
+                    setattr(self, helper_name, helper.__get__(self, type(self)))
+                except Exception:
+                    pass
         stopped = worker_logic._bool_config_value(result, 'stopped', False)
         converted_files = results_controller.coerce_result_path_list(result.get('converted_files'))
         postprocess_warnings = worker_logic.coerce_postprocess_warning_messages(
@@ -9158,8 +8822,10 @@ class MainWindow(QMainWindow):
                     except Exception:
                         pass
             fallback_summary_text = _coerce_ui_message_text(status_message).strip()
+            fallback_results_visible = False
             try:
                 self.populate_results(converted_files, summary_lines)
+                fallback_results_visible = not hasattr(self, 'results_list')
             except Exception:
                 try:
                     fallback_summary_text = self._build_results_summary_text(
@@ -9186,7 +8852,9 @@ class MainWindow(QMainWindow):
             self._clear_results_selection_with_fallback({'clear_selection': True})
             if hasattr(self, 'bottom_tabs'):
                 try:
-                    self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)
+                    self._set_bottom_tab_index_with_fallback(
+                        RESULT_TAB_INDEX if fallback_results_visible else LOG_TAB_INDEX
+                    )
                 except Exception:
                     pass
         self._emit_unique_postprocess_warnings_or_append_to_log(
@@ -9263,12 +8931,7 @@ class MainWindow(QMainWindow):
                     pass
 
     def _progress_status_text(self: MainWindow, current: int, total: int, message: object) -> str:
-        total_value = max(1, _coerce_progress_number(total, 1))
-        current_value = max(0, min(_coerce_progress_number(current, 0), total_value))
-        detail = _coerce_ui_message_text(message).strip()
-        base = detail or '変換中…'
-        percent = int(round((current_value / total_value) * 100.0)) if total_value > 0 else 0
-        return f'{base} ({current_value}/{total_value}, {percent}%)'
+        return studio_logic.build_progress_status_text(current, total, message)
 
     def update_conversion_progress(self: MainWindow, current: int, total: int, message: str) -> None:
         total_value = max(1, _coerce_progress_number(total, 1))
@@ -9437,7 +9100,7 @@ class MainWindow(QMainWindow):
     def _result_display_name(self: MainWindow, path_text: str) -> str:
         return studio_logic.build_result_display_name(path_text)
 
-    def _normalized_result_entries(self: MainWindow, paths: List[object]) -> list[tuple[str, str]]:
+    def _normalized_result_entries(self: MainWindow, paths: list[object]) -> list[tuple[str, str]]:
         return results_controller.build_results_entries(paths)
 
     def _apply_results_entries_to_ui(
@@ -9464,7 +9127,7 @@ class MainWindow(QMainWindow):
         if normalized_index is not None:
             self._set_results_current_index_with_fallback(normalized_index)
 
-    def populate_results(self: MainWindow, paths: List[object], summary_lines: Optional[List[str]] = None) -> None:
+    def populate_results(self: MainWindow, paths: list[object], summary_lines: list[str] | None = None) -> None:
         context = results_controller.build_results_apply_context(paths, summary_lines)
         self._apply_results_entries_to_ui(
             context.get('entries', []),
@@ -9587,12 +9250,12 @@ class MainWindow(QMainWindow):
         if self._payload_bool_value(selection_context, 'clear_selection', False):
             return self._clear_results_selection_with_fallback(selection_context)
         matched_index = studio_logic.payload_optional_int_value(selection_context, 'matched_index')
+        if matched_index is None:
+            return self._clear_results_selection_with_fallback(
+                results_controller.build_results_clear_selection_context()
+            )
         try:
             self._apply_results_selection_context(selection_context)
-            if matched_index is None:
-                return self._clear_results_selection_with_fallback(
-                    results_controller.build_results_clear_selection_context()
-                )
             current_index = self._current_results_index()
             if current_index == matched_index:
                 return True
@@ -9647,7 +9310,7 @@ class MainWindow(QMainWindow):
         except Exception:
             return 0
 
-    def _result_item_at(self: MainWindow, index: object) -> Optional[QListWidgetItem]:
+    def _result_item_at(self: MainWindow, index: object) -> QListWidgetItem | None:
         if not hasattr(self, 'results_list'):
             return None
         item_at = getattr(self.results_list, 'item', None)
@@ -9715,7 +9378,7 @@ class MainWindow(QMainWindow):
             return True
         return False
 
-    def _apply_results_selection_context(self: MainWindow, context: Mapping[str, object] | object) -> Optional[QListWidgetItem]:
+    def _apply_results_selection_context(self: MainWindow, context: Mapping[str, object] | object) -> QListWidgetItem | None:
         context = self._coerce_mapping_payload(context)
         if not hasattr(self, 'results_list'):
             return None
@@ -9788,7 +9451,7 @@ class MainWindow(QMainWindow):
             loaded_path=self.__dict__.get('_loaded_xtc_path_text'),
         )
 
-    def _resolved_results_item_for_loading(self: MainWindow) -> Optional[QListWidgetItem]:
+    def _resolved_results_item_for_loading(self: MainWindow) -> QListWidgetItem | None:
         context = self._resolved_result_load_context()
         preferred_index = studio_logic.payload_optional_int_value(context, 'preferred_index')
         if preferred_index is None:
@@ -9796,20 +9459,10 @@ class MainWindow(QMainWindow):
         return self._result_item_at(preferred_index)
 
     def _fallback_loaded_result_load_context(self: MainWindow) -> dict[str, object]:
-        loaded_path = worker_logic._normalized_path_text(self.__dict__.get('_loaded_xtc_path_text')).strip()
-        if not loaded_path:
-            return {}
-        matched_index = results_controller.find_matching_loaded_path_index(loaded_path, self._result_item_paths())
-        if matched_index is None:
-            return {}
-        matched_item = self._result_item_at(matched_index)
-        resolved_path = self._results_item_path(matched_item) if matched_item is not None else None
-        path_text = worker_logic._normalized_path_text(resolved_path).strip()
-        return {
-            'preferred_index': matched_index,
-            'resolved_path': resolved_path,
-            'has_path': bool(path_text),
-        }
+        return results_controller.build_fallback_loaded_result_load_context(
+            self.__dict__.get('_loaded_xtc_path_text'),
+            self._result_item_paths(),
+        )
 
     def _results_item_path(self: MainWindow, item: object) -> object:
         data = getattr(item, 'data', None)
@@ -9887,60 +9540,43 @@ class MainWindow(QMainWindow):
 
     def _xtc_source_payload(self: MainWindow, path: object) -> dict[str, str]:
         path_text = worker_logic._normalized_path_text(path).strip()
-        return {
-            'path_text': path_text,
-            'display_name': self._xtc_display_name(path_text),
-        }
+        return studio_logic.build_xtc_source_payload(
+            path_text,
+            self._xtc_display_name(path_text),
+        )
 
     def _normalized_xtc_bytes(self: MainWindow, data: object) -> bytes:
-        if isinstance(data, bytes):
-            return data
-        if isinstance(data, bytearray):
-            return bytes(data)
-        if isinstance(data, memoryview):
-            return data.tobytes()
-        raise TypeError('XTCデータは bytes 系である必要があります。')
+        return studio_logic.normalize_xtc_bytes(data)
 
     def _xtc_document_payload(self: MainWindow, data: object) -> dict[str, object]:
         xtc_data = self._normalized_xtc_bytes(data)
         pages = parse_xtc_pages(xtc_data)
-        if not pages:
-            raise RuntimeError('XTC内にページがありません。')
-        return {
-            'data': xtc_data,
-            'pages': list(pages),
-            'total': len(pages),
-            'current_index': 0,
-            'current_page': 1,
-        }
+        return studio_logic.build_xtc_document_payload_from_pages(xtc_data, pages)
 
     def _xtc_source_document_payload(self: MainWindow, path: object) -> dict[str, object]:
-        payload = dict(self._xtc_source_payload(path))
-        raw = Path(payload['path_text']).read_bytes()
-        payload.update(self._xtc_document_payload(raw))
-        return payload
+        source_payload = self._xtc_source_payload(path)
+        raw = Path(source_payload['path_text']).read_bytes()
+        document_payload = self._xtc_document_payload(raw)
+        return studio_logic.build_xtc_source_document_payload(source_payload, document_payload)
 
     def _xtc_display_name(self: MainWindow, path: object) -> str:
         path_text = worker_logic._normalized_path_text(path).strip()
-        if not path_text:
-            return ''
-        return self._result_display_name(path_text)
+        return studio_logic.build_xtc_display_name(path_text)
 
     def _reset_xtc_page_input(self: MainWindow, total_pages: object, current_page: object = 0) -> None:
         if not hasattr(self, 'page_input'):
             return
         nav_bar_plan = gui_layouts.build_nav_bar_plan()
-        empty_minimum = self._plan_int_value(nav_bar_plan, 'page_input_empty_minimum', 0)
-        empty_maximum = self._plan_int_value(nav_bar_plan, 'page_input_empty_maximum', 0)
-        active_minimum = self._plan_int_value(nav_bar_plan, 'page_input_active_minimum', 1)
-        total = max(0, worker_logic._int_config_value({'value': total_pages}, 'value', 0))
-        value = max(0, worker_logic._int_config_value({'value': current_page}, 'value', 0))
-        if total <= 0:
-            minimum, maximum = empty_minimum, empty_maximum
-            value = empty_minimum
-        else:
-            minimum, maximum = active_minimum, total
-            value = max(active_minimum, min(value or active_minimum, total))
+        page_input_state = studio_logic.build_page_input_apply_state(
+            total_pages=total_pages,
+            current_page=current_page,
+            empty_minimum=self._plan_int_value(nav_bar_plan, 'page_input_empty_minimum', 0),
+            empty_maximum=self._plan_int_value(nav_bar_plan, 'page_input_empty_maximum', 0),
+            active_minimum=self._plan_int_value(nav_bar_plan, 'page_input_active_minimum', 1),
+        )
+        minimum = self._payload_int_value(page_input_state, 'minimum', 0)
+        maximum = self._payload_int_value(page_input_state, 'maximum', 0)
+        value = self._payload_int_value(page_input_state, 'value', 0)
         with _bulk_block_signals(self.page_input):
             self.page_input.setRange(minimum, maximum)
             self.page_input.setValue(value)
@@ -10003,54 +9639,52 @@ class MainWindow(QMainWindow):
             self.update_navigation_ui()
 
     def _page_image_dimensions(self: MainWindow, image: object) -> tuple[int, int]:
-        if image is None:
-            return 0, 0
-
-        def _read_dimension(name: str) -> int:
-            candidate = getattr(image, name, None)
-            try:
-                value = candidate() if callable(candidate) else candidate
-            except Exception:
-                value = 0
-            try:
-                return max(0, int(value))
-            except Exception:
-                return 0
-
-        return _read_dimension('width'), _read_dimension('height')
+        return studio_logic.read_image_dimensions(image)
 
     def _viewer_profile_for_dimensions(self: MainWindow, width: object, height: object) -> DeviceProfile:
-        width_px = max(0, worker_logic._int_config_value({'value': width}, 'value', 0))
-        height_px = max(0, worker_logic._int_config_value({'value': height}, 'value', 0))
-        if width_px <= 0 or height_px <= 0:
-            return self._current_viewer_profile()
         current_profile = self._current_viewer_profile()
-        if (
-            int(getattr(current_profile, 'width_px', 0) or 0) == width_px
-            and int(getattr(current_profile, 'height_px', 0) or 0) == height_px
-        ):
+        resolution = studio_logic.build_viewer_profile_resolution_state(
+            width,
+            height,
+            current_width=getattr(current_profile, 'width_px', 0),
+            current_height=getattr(current_profile, 'height_px', 0),
+            profile_dimensions={
+                key: (getattr(profile, 'width_px', 0), getattr(profile, 'height_px', 0))
+                for key, profile in DEVICE_PROFILES.items()
+            },
+            preferred_profile_keys=('x4', 'x3'),
+        )
+        resolution_kind = str(resolution.get('kind') or '').strip()
+        if resolution_kind == 'current':
             return current_profile
-        for key in ('x4', 'x3'):
-            profile = DEVICE_PROFILES.get(key)
-            if profile and int(profile.width_px) == width_px and int(profile.height_px) == height_px:
+        if resolution_kind == 'profile':
+            profile = DEVICE_PROFILES.get(str(resolution.get('profile_key') or '').strip())
+            if profile is not None:
                 return profile
+            return current_profile
+        width_px = max(0, worker_logic._int_config_value({'value': resolution.get('width_px')}, 'value', 0))
+        height_px = max(0, worker_logic._int_config_value({'value': resolution.get('height_px')}, 'value', 0))
         return self._custom_viewer_profile_for_dimensions(width_px, height_px)
 
     def _custom_viewer_profile_for_dimensions(self: MainWindow, width: int, height: int) -> DeviceProfile:
         base_profile = DEVICE_PROFILES.get('custom', DEVICE_PROFILES['x4'])
-        px_per_mm = max(1e-6, float(base_profile.ppi) / 25.4)
-        screen_w_mm = float(width) / px_per_mm
-        screen_h_mm = float(height) / px_per_mm
-        body_w_ratio = base_profile.body_w_mm / max(base_profile.screen_w_mm, 1e-6)
-        body_h_ratio = base_profile.body_h_mm / max(base_profile.screen_h_mm, 1e-6)
+        metrics = studio_logic.build_custom_viewer_profile_metrics(
+            width_px=width,
+            height_px=height,
+            ppi=getattr(base_profile, 'ppi', 300.0),
+            screen_w_mm=getattr(base_profile, 'screen_w_mm', 1.0),
+            screen_h_mm=getattr(base_profile, 'screen_h_mm', 1.0),
+            body_w_mm=getattr(base_profile, 'body_w_mm', 1.0),
+            body_h_mm=getattr(base_profile, 'body_h_mm', 1.0),
+        )
         return replace(
             base_profile,
-            width_px=int(width),
-            height_px=int(height),
-            screen_w_mm=screen_w_mm,
-            screen_h_mm=screen_h_mm,
-            body_w_mm=screen_w_mm * body_w_ratio,
-            body_h_mm=screen_h_mm * body_h_ratio,
+            width_px=int(metrics['width_px']),
+            height_px=int(metrics['height_px']),
+            screen_w_mm=float(metrics['screen_w_mm']),
+            screen_h_mm=float(metrics['screen_h_mm']),
+            body_w_mm=float(metrics['body_w_mm']),
+            body_h_mm=float(metrics['body_h_mm']),
         )
 
     def _viewer_profile_for_xtc_pages(self: MainWindow, pages: object) -> DeviceProfile | None:
@@ -10108,34 +9742,29 @@ class MainWindow(QMainWindow):
         view_mode = self._normalized_main_view_mode(
             getattr(self, 'main_view_mode', 'font')
         )
-        device_view_visible = view_mode == 'device'
-        font_view_visible = view_mode == 'font'
-        if device_view_visible:
-            replacement = self._ui_widget_text(getattr(self, 'current_xtc_label', None))
-        elif font_view_visible and self._runtime_preview_pages():
-            replacement = self._current_preview_render_status_message()
-        else:
-            replacement = ''
+        has_font_preview_pages = bool(self._runtime_preview_pages()) if view_mode == 'font' else False
+        preview_replacement = self._current_preview_render_status_message() if has_font_preview_pages else ''
+        progress_status_text = ''
+        if hasattr(self, 'progress_label'):
+            progress_status_text = self._ui_widget_text(self.progress_label)
+        status_state = studio_logic.build_successful_device_render_status_refresh_state(
+            view_mode=view_mode,
+            current_label_text=self._ui_widget_text(getattr(self, 'current_xtc_label', None)),
+            preview_replacement=preview_replacement,
+            has_font_preview_pages=has_font_preview_pages,
+            progress_status_text=progress_status_text,
+            status_bar_text=self._status_bar_message_text(),
+        )
+        replacement = str(status_state.get('replacement', ''))
         if not replacement:
             return
-        stale_progress_status = False
-        if hasattr(self, 'progress_label'):
-            current_progress_status = self._ui_widget_text(self.progress_label)
-            if device_view_visible:
-                stale_progress_status = self._is_render_failure_status_text(current_progress_status)
-            else:
-                stale_progress_status = self._is_device_render_failure_status_text(current_progress_status)
-            if stale_progress_status:
-                try:
-                    self.progress_label.setText(replacement)
-                except Exception:
-                    pass
-        current_status_bar_status = self._status_bar_message_text()
-        if device_view_visible:
-            stale_status_bar = self._is_render_failure_status_text(current_status_bar_status)
-        else:
-            stale_status_bar = self._is_device_render_failure_status_text(current_status_bar_status)
-        if stale_progress_status or stale_status_bar:
+        stale_progress_status = bool(status_state.get('stale_progress_status'))
+        if stale_progress_status and hasattr(self, 'progress_label'):
+            try:
+                self.progress_label.setText(replacement)
+            except Exception:
+                pass
+        if status_state.get('should_notify_status_bar'):
             self._show_ui_status_message_direct_with_reflection_best_effort(replacement, 5000)
 
     def _apply_rendered_xtc_page(
@@ -10159,15 +9788,12 @@ class MainWindow(QMainWindow):
     def _render_failure_status_message(self: MainWindow, title: object, exc: Exception) -> str:
         title_text = worker_logic._normalized_path_text(title).strip() or '表示エラー'
         detail = worker_logic._normalized_path_text(exc).strip()
-        if detail == 'Non-base64 digit found':
-            detail = 'Only base64 data is allowed'
         preserved = self._xtc_load_failure_preserved_display_name()
-        message = title_text
-        if preserved:
-            message += f'（表示は {preserved} のまま）'
-        if detail:
-            message += f': {detail}'
-        return message
+        return studio_logic.build_render_failure_status_message(
+            title_text,
+            detail,
+            preserved,
+        )
 
     def _handle_xtc_render_failure(self: MainWindow, exc: Exception, *, refresh_navigation: bool = True) -> None:
         try:
@@ -10251,18 +9877,20 @@ class MainWindow(QMainWindow):
         return True
 
     def _apply_loaded_xtc_view_mode(self: MainWindow, mode: object, *, safe: bool = False) -> None:
-        mode_text = worker_logic._normalized_path_text(mode).strip()
-        if not mode_text:
+        can_apply_full_view_mode = all(hasattr(self, name) for name in ('preview_stack', 'font_view_btn', 'device_view_btn'))
+        can_apply_full_view_mode = can_apply_full_view_mode and hasattr(QTimer, 'singleShot')
+        view_mode_state = studio_logic.build_loaded_xtc_view_mode_state(
+            mode,
+            safe=safe,
+            can_apply_full_view_mode=can_apply_full_view_mode,
+        )
+        if not view_mode_state.get('has_mode'):
             return
-        if safe:
-            can_apply_full_view_mode = all(hasattr(self, name) for name in ('preview_stack', 'font_view_btn', 'device_view_btn'))
-            can_apply_full_view_mode = can_apply_full_view_mode and hasattr(QTimer, 'singleShot')
-            if can_apply_full_view_mode:
-                self.set_main_view_mode(mode_text)
-            else:
-                self.main_view_mode = mode_text
+        mode_text = str(view_mode_state.get('mode', '')).strip()
+        if view_mode_state.get('apply_full_view_mode'):
+            self.set_main_view_mode(mode_text)
             return
-        self.set_main_view_mode(mode_text)
+        self.main_view_mode = mode_text
 
     def _apply_loaded_xtc_ui_context(self: MainWindow, context: Mapping[str, object] | object) -> None:
         context = self._coerce_mapping_payload(context)
@@ -10330,42 +9958,40 @@ class MainWindow(QMainWindow):
             preview_active = self._is_preview_display_active()
         except Exception:
             preview_active = False
-        if preview_active:
-            return 'プレビュー'
-        remembered = worker_logic._normalized_path_text(getattr(self, '_loaded_xtc_display_name', None)).strip()
-        if remembered and remembered != 'なし':
-            return remembered
-        remembered_path = worker_logic._normalized_path_text(getattr(self, '_loaded_xtc_path_text', None)).strip()
+        remembered_display_name = worker_logic._normalized_path_text(
+            getattr(self, '_loaded_xtc_display_name', None)
+        ).strip()
+        remembered_path = worker_logic._normalized_path_text(
+            getattr(self, '_loaded_xtc_path_text', None)
+        ).strip()
+        remembered_path_display_name = ''
         if remembered_path:
-            display_name = worker_logic._normalized_path_text(self._xtc_display_name(remembered_path)).strip()
-            if display_name and display_name != 'なし':
-                return display_name
+            remembered_path_display_name = worker_logic._normalized_path_text(
+                self._xtc_display_name(remembered_path)
+            ).strip()
+        label_text = ''
         if hasattr(self, 'current_xtc_label'):
             text_getter = getattr(self.current_xtc_label, 'text', None)
             try:
                 label_text = text_getter() if callable(text_getter) else text_getter
             except Exception:
                 label_text = ''
-            normalized = worker_logic._normalized_path_text(label_text).strip()
-            prefix = '表示中:'
-            if normalized.startswith(prefix):
-                normalized = normalized[len(prefix):].strip()
-            if normalized and normalized != 'なし':
-                return normalized
-        return ''
+        return studio_logic.build_xtc_load_failure_preserved_display_name(
+            preview_active=preview_active,
+            remembered_display_name=remembered_display_name,
+            remembered_path_display_name=remembered_path_display_name,
+            current_label_text=label_text,
+        )
 
     def _xtc_load_failure_status_message(self: MainWindow, path: object, exc: Exception) -> str:
         target = worker_logic._normalized_path_text(path).strip() or '指定ファイル'
         detail = worker_logic._normalized_path_text(exc).strip()
-        if detail == 'Non-base64 digit found':
-            detail = 'Only base64 data is allowed'
         preserved = self._xtc_load_failure_preserved_display_name()
-        message = f'XTC/XTCH読込失敗: {target}'
-        if preserved:
-            message += f'（表示は {preserved} のまま）'
-        if detail:
-            message += f' / {detail}'
-        return message
+        return studio_logic.build_xtc_load_failure_status_message(
+            target,
+            detail,
+            preserved,
+        )
 
     def _apply_loaded_xtc_bytes_success(self: MainWindow) -> None:
         self._apply_loaded_xtc_ui_context(results_controller.build_loaded_xtc_bytes_success_context())
@@ -10611,7 +10237,7 @@ class MainWindow(QMainWindow):
 ・フォントビュー: 設定中の文字の見え方を確認します。
 ・実機ビュー: 変換後の XTC を X3/X4 の外形で確認します。
 ・ページ送りは右ペインの「前/次」ボタン、またはページ番号入力で行います。
-・「反転」を ON にすると、前/次 ボタンの左右配置と動作感を入れ替えられます。
+・「ボタン反転」を ON にすると、前/次 ボタンの左右配置と動作感を入れ替えられます。
 
 【右ペイン表示ツールバー】
 ・「実寸近似」は PC 画面上の実機サイズに近い表示へ切り替えます。
@@ -10620,7 +10246,7 @@ class MainWindow(QMainWindow):
 ・「ガイド」は余白・非描画域の補助線を表示します。
 
 【左ペインの出力・機種設定】
-・試作版では、機種選択を「出力・フォント・組版」内の出力形式付近へ移動しています。
+・機種選択は「出力・フォント・組版」内の出力形式付近にあります。
 ・機種を選ぶと解像度が自動設定されます（Custom では手動指定）。
 
 【ファイルビューワー】
@@ -10659,184 +10285,6 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(help_message, 5000)
             except Exception:
                 pass
-
-
-# ─────────────────────────────────────────────────────────
-# XTC パーサ
-# ─────────────────────────────────────────────────────────
-
-def parse_xtc_pages(data: bytes) -> List[XtcPage]:
-    if len(data) < 48 or data[:4] not in {b'XTC\x00', b'XTCH'}:
-        raise RuntimeError('XTC/XTCHファイルのヘッダが不正です。')
-
-    container_mark = data[:4]
-    expected_blob_magic = b'XTH\x00' if container_mark == b'XTCH' else b'XTG\x00'
-    count = struct.unpack_from('<H', data, 6)[0]
-    idx_off = struct.unpack_from('<Q', data, 24)[0] or 48
-    data_off = struct.unpack_from('<Q', data, 32)[0]
-
-    if idx_off < 48 or idx_off > len(data):
-        raise RuntimeError('XTCページテーブルの開始位置が不正です。')
-
-    entry_size = 16
-    if count > 0 and data_off > idx_off:
-        span = data_off - idx_off
-        if span >= count * 16 and span % count == 0:
-            candidate = span // count
-            if candidate >= 16:
-                entry_size = candidate
-
-    table_end = idx_off + count * entry_size
-    if table_end > len(data):
-        raise RuntimeError('XTCページテーブルが途中で切れています。')
-
-    min_data_offset = max(idx_off + count * entry_size, data_off or 0)
-    pages: List[XtcPage] = []
-    prev_end = min_data_offset
-    for i in range(count):
-        off = idx_off + i * entry_size
-        page = XtcPage(
-            offset=struct.unpack_from('<Q', data, off)[0],
-            length=struct.unpack_from('<I', data, off + 8)[0],
-            width=struct.unpack_from('<H', data, off + 12)[0],
-            height=struct.unpack_from('<H', data, off + 14)[0],
-        )
-        end = page.offset + page.length
-        invalid = (
-            page.length <= 0
-            or page.width <= 0
-            or page.height <= 0
-            or page.offset < min_data_offset
-            or page.offset < prev_end
-            or end > len(data)
-        )
-        if not invalid:
-            blob_header = data[page.offset: page.offset + min(22, page.length)]
-            if len(blob_header) < 22:
-                invalid = True
-            else:
-                magic = blob_header[:4]
-                blob_w = struct.unpack_from('<H', blob_header, 4)[0]
-                blob_h = struct.unpack_from('<H', blob_header, 6)[0]
-                payload_len = struct.unpack_from('<I', blob_header, 10)[0]
-                invalid = (
-                    magic != expected_blob_magic
-                    or blob_w != page.width
-                    or blob_h != page.height
-                    or payload_len <= 0
-                    or (22 + payload_len) != page.length
-                )
-        if invalid:
-            if pages:
-                APP_LOGGER.warning(
-                    'XTC/XTCHページ索引またはページデータの不整合を検出したため、有効な先頭 %s / %s ページのみを読み込みます。停止ページ: %s offset=%s length=%s file_size=%s',
-                    len(pages), count, i + 1, page.offset, page.length, len(data)
-                )
-                break
-            raise RuntimeError(f'XTCページ {i + 1} のオフセット、長さ、またはページデータが不正です。')
-        pages.append(page)
-        prev_end = end
-
-    if not pages:
-        raise RuntimeError('XTC/XTCH内に有効なページが見つかりませんでした。')
-    return pages
-
-
-def _pil_image_to_qimage(img: Image.Image) -> QImage:
-    bio = BytesIO()
-    img.save(bio, format='PNG')
-    qimg = QImage.fromData(bio.getvalue(), 'PNG')
-    if qimg.isNull():
-        raise RuntimeError('画像データのQImage変換に失敗しました。')
-    return qimg.copy()
-
-
-_XTCH_SHADE_MAP = (255, 85, 170, 0)
-
-
-def _get_xtch_shade_lut(np_module: Any) -> Any:
-    global _XTCH_SHADE_LUT
-    if _XTCH_SHADE_LUT is None:
-        _XTCH_SHADE_LUT = np_module.array(_XTCH_SHADE_MAP, dtype=np_module.uint8)
-    return _XTCH_SHADE_LUT
-
-
-def xtg_blob_to_qimage(blob: bytes) -> QImage:
-    if len(blob) < 22 or blob[:4] != b'XTG\x00':
-        raise RuntimeError('XTC/XTCH内ページデータが不正です。')
-    width = struct.unpack_from('<H', blob, 4)[0]
-    height = struct.unpack_from('<H', blob, 6)[0]
-    if width <= 0 or height <= 0:
-        raise RuntimeError('XTC内ページのサイズ情報が不正です。')
-    row_bytes = (width + 7) // 8
-    expected_payload_len = row_bytes * height
-    payload = blob[22:22 + expected_payload_len]
-    if len(payload) != expected_payload_len:
-        raise RuntimeError('XTC内ページデータが途中で切れています。')
-
-    img = Image.frombytes('1', (width, height), payload).convert('L')
-    return _pil_image_to_qimage(img)
-
-
-def xth_blob_to_qimage(blob: bytes) -> QImage:
-    if len(blob) < 22 or blob[:4] != b'XTH\x00':
-        raise RuntimeError('XTCH内ページデータが不正です。')
-    width = struct.unpack_from('<H', blob, 4)[0]
-    height = struct.unpack_from('<H', blob, 6)[0]
-    if width <= 0 or height <= 0:
-        raise RuntimeError('XTCH内ページのサイズ情報が不正です。')
-    plane_size = ((width * height) + 7) // 8
-    expected_payload_len = plane_size * 2
-    payload = blob[22:22 + expected_payload_len]
-    if len(payload) != expected_payload_len:
-        raise RuntimeError('XTCH内ページデータが途中で切れています。')
-    plane1 = payload[:plane_size]
-    plane2 = payload[plane_size:]
-    pixel_count = width * height
-
-    np_module = _get_numpy_module()
-    if np_module is not None and pixel_count >= 256:
-        plane1_bits = np_module.unpackbits(np_module.frombuffer(plane1, dtype=np_module.uint8), bitorder='big')[:pixel_count]
-        plane2_bits = np_module.unpackbits(np_module.frombuffer(plane2, dtype=np_module.uint8), bitorder='big')[:pixel_count]
-        seq = ((plane1_bits << 1) | plane2_bits).astype(np_module.uint8, copy=False)
-        values = seq.reshape(width, height).T[:, ::-1]
-        shades = _get_xtch_shade_lut(np_module)[values]
-        img = Image.frombytes('L', (width, height), shades.tobytes())
-        return _pil_image_to_qimage(img)
-
-    seq = bytearray(pixel_count)
-    bit_index = 0
-    for byte_index in range(plane_size):
-        byte1 = plane1[byte_index]
-        byte2 = plane2[byte_index]
-        for shift in range(7, -1, -1):
-            if bit_index >= pixel_count:
-                break
-            seq[bit_index] = _XTCH_SHADE_MAP[((byte1 >> shift) & 1) << 1 | ((byte2 >> shift) & 1)]
-            bit_index += 1
-
-    pixels = bytearray(pixel_count)
-    seq_offset = 0
-    for rev_x in range(width):
-        x = width - 1 - rev_x
-        row_offset = x
-        column = seq[seq_offset:seq_offset + height]
-        for shade in column:
-            pixels[row_offset] = shade
-            row_offset += width
-        seq_offset += height
-
-    img = Image.frombytes('L', (width, height), bytes(pixels))
-    return _pil_image_to_qimage(img)
-
-
-def xt_page_blob_to_qimage(blob: bytes) -> QImage:
-    mark = blob[:4] if len(blob) >= 4 else b''
-    if mark == b'XTG\x00':
-        return xtg_blob_to_qimage(blob)
-    if mark == b'XTH\x00':
-        return xth_blob_to_qimage(blob)
-    raise RuntimeError('未対応のページ形式です。')
 
 
 # ─────────────────────────────────────────────────────────

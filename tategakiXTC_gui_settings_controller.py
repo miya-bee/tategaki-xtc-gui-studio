@@ -10,37 +10,49 @@ regression-tested.
 from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Any
 
+import tategakiXTC_gui_studio_constants as studio_constants
 import tategakiXTC_gui_studio_logic as studio_logic
 
 
 SettingsValueReader = Callable[[str, object], object]
 
 
+_DEFAULT_RENDER_SETTINGS = studio_constants.DEFAULT_RENDER_SETTINGS
+_DEFAULT_SETTINGS_VALUES = studio_constants.DEFAULT_SETTINGS_VALUES
+
+
+def _default_value(key: str, fallback: object) -> object:
+    return _DEFAULT_SETTINGS_VALUES.get(key, fallback)
+
+
 _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
-    ('profile', 'x4'),
-    ('actual_size', False),
-    ('show_guides', True),
-    ('calibration_pct', 100),
-    ('nav_buttons_reversed', False),
-    ('font_size', 26),
-    ('ruby_size', 12),
-    ('line_spacing', 44),
-    ('margin_t', 12),
-    ('margin_b', 14),
-    ('margin_r', 12),
-    ('margin_l', 12),
-    ('threshold', 128),
-    ('width', 480),
-    ('height', 800),
-    ('dither', False),
-    ('night_mode', False),
-    ('open_folder', True),
-    ('output_conflict', 'rename'),
-    ('output_format', 'xtc'),
-    ('kinsoku_mode', 'standard'),
-    ('target', ''),
-    ('main_view_mode', 'font'),
-    ('bottom_tab_index', 0),
+    ('profile', _default_value('profile', 'x4')),
+    ('actual_size', _default_value('actual_size', False)),
+    ('show_guides', _default_value('show_guides', True)),
+    ('calibration_pct', _default_value('calibration_pct', 100)),
+    ('nav_buttons_reversed', _default_value('nav_buttons_reversed', False)),
+    ('font_size', _default_value('font_size', 26)),
+    ('ruby_size', _default_value('ruby_size', 12)),
+    ('line_spacing', _default_value('line_spacing', 44)),
+    ('margin_t', _default_value('margin_t', 12)),
+    ('margin_b', _default_value('margin_b', 14)),
+    ('margin_r', _default_value('margin_r', 12)),
+    ('margin_l', _default_value('margin_l', 12)),
+    ('threshold', _default_value('threshold', 128)),
+    ('width', _default_value('width', 480)),
+    ('height', _default_value('height', 800)),
+    ('dither', _default_value('dither', False)),
+    ('night_mode', _default_value('night_mode', False)),
+    ('open_folder', _default_value('open_folder', True)),
+    ('output_conflict', _default_value('output_conflict', 'rename')),
+    ('output_format', _default_value('output_format', 'xtc')),
+    ('kinsoku_mode', _default_value('kinsoku_mode', 'standard')),
+    ('punctuation_position_mode', _default_value('punctuation_position_mode', 'standard')),
+    ('ichi_position_mode', _default_value('ichi_position_mode', 'standard')),
+    ('lower_closing_bracket_position_mode', _default_value('lower_closing_bracket_position_mode', 'standard')),
+    ('target', _default_value('target', '')),
+    ('main_view_mode', _default_value('main_view_mode', 'font')),
+    ('bottom_tab_index', _default_value('bottom_tab_index', 0)),
 )
 
 def _coerce_mapping_payload(value: object) -> dict[str, object]:
@@ -88,12 +100,15 @@ def build_settings_restore_payload(
     allowed_view_modes: Collection[str] | Mapping[str, object],
     allowed_profiles: Collection[str] | Mapping[str, object],
     allowed_kinsoku_modes: Collection[str] | Mapping[str, object],
+    allowed_glyph_position_modes: Collection[str] | Mapping[str, object] | None = None,
     allowed_output_formats: Collection[str] | Mapping[str, object],
     allowed_output_conflicts: Collection[str] | Mapping[str, object],
     normalize_font_setting_value: Callable[[object, str], str],
     normalize_target_path_text: Callable[[str], str],
     resolve_profile_dimensions: Callable[[object, object, object], tuple[str, object, int, int]],
 ) -> dict[str, object]:
+    if allowed_glyph_position_modes is None:
+        allowed_glyph_position_modes = studio_constants.GLYPH_POSITION_MODE_LABELS
     raw_payload = build_settings_restore_raw_payload(
         read_default_value=read_default_value,
         default_font_name=default_font_name,
@@ -104,6 +119,7 @@ def build_settings_restore_payload(
         allowed_view_modes=allowed_view_modes,
         allowed_profiles=allowed_profiles,
         allowed_kinsoku_modes=allowed_kinsoku_modes,
+        allowed_glyph_position_modes=allowed_glyph_position_modes,
         allowed_output_formats=allowed_output_formats,
         allowed_output_conflicts=allowed_output_conflicts,
         default_preview_page_limit=default_preview_page_limit,
@@ -142,6 +158,9 @@ def build_settings_ui_apply_defaults(
     output_conflict: object,
     output_format: object,
     kinsoku_mode: object,
+    punctuation_position_mode: object = 'standard',
+    ichi_position_mode: object = 'standard',
+    lower_closing_bracket_position_mode: object = 'standard',
     main_view_mode: object,
 ) -> dict[str, object]:
     return {
@@ -158,12 +177,15 @@ def build_settings_ui_apply_defaults(
         'margin_l': studio_logic._config_int_value(margin_l, 0),
         'threshold': studio_logic._config_int_value(threshold, 0),
         'preview_page_limit': studio_logic._config_int_value(preview_page_limit, 1),
-        'dither': studio_logic._config_bool_value(dither, False),
-        'night_mode': studio_logic._config_bool_value(night_mode, False),
+        'dither': studio_logic._config_bool_value(dither, bool(_DEFAULT_RENDER_SETTINGS['dither'])),
+        'night_mode': studio_logic._config_bool_value(night_mode, bool(_DEFAULT_RENDER_SETTINGS['night_mode'])),
         'open_folder': studio_logic._config_bool_value(open_folder, False),
         'output_conflict': output_conflict,
         'output_format': output_format,
         'kinsoku_mode': kinsoku_mode,
+        'punctuation_position_mode': punctuation_position_mode,
+        'ichi_position_mode': ichi_position_mode,
+        'lower_closing_bracket_position_mode': lower_closing_bracket_position_mode,
         'main_view_mode': str(main_view_mode or 'font'),
     }
 
@@ -174,15 +196,19 @@ def build_settings_ui_apply_plan(
     defaults: Mapping[str, object],
     allowed_view_modes: Collection[str] | Mapping[str, object],
     allowed_kinsoku_modes: Collection[str] | Mapping[str, object],
+    allowed_glyph_position_modes: Collection[str] | Mapping[str, object] | None = None,
     allowed_output_formats: Collection[str] | Mapping[str, object],
     allowed_output_conflicts: Collection[str] | Mapping[str, object],
     bottom_tab_count: int,
 ) -> dict[str, object]:
+    if allowed_glyph_position_modes is None:
+        allowed_glyph_position_modes = studio_constants.GLYPH_POSITION_MODE_LABELS
     return studio_logic.build_settings_ui_apply_payload(
         raw_payload,
         defaults=defaults,
         allowed_view_modes=allowed_view_modes,
         allowed_kinsoku_modes=allowed_kinsoku_modes,
+        allowed_glyph_position_modes=allowed_glyph_position_modes,
         allowed_output_formats=allowed_output_formats,
         allowed_output_conflicts=allowed_output_conflicts,
         bottom_tab_count=bottom_tab_count,
@@ -227,24 +253,31 @@ def build_settings_save_payload(
     allowed_view_modes: Collection[str] | Mapping[str, object],
     allowed_profiles: Collection[str] | Mapping[str, object],
     allowed_kinsoku_modes: Collection[str] | Mapping[str, object],
+    allowed_glyph_position_modes: Collection[str] | Mapping[str, object] | None = None,
     allowed_output_formats: Collection[str] | Mapping[str, object],
     allowed_output_conflicts: Collection[str] | Mapping[str, object],
     default_preview_page_limit: int,
 ) -> dict[str, object]:
+    if allowed_glyph_position_modes is None:
+        allowed_glyph_position_modes = studio_constants.GLYPH_POSITION_MODE_LABELS
     raw_payload = build_settings_save_raw_payload(
         current_settings=current_settings,
         ui_state=ui_state,
         default_preview_page_limit=default_preview_page_limit,
     )
-    return studio_logic.build_settings_save_payload(
+    payload = studio_logic.build_settings_save_payload(
         raw_payload,
         allowed_view_modes=allowed_view_modes,
         allowed_profiles=allowed_profiles,
         allowed_kinsoku_modes=allowed_kinsoku_modes,
+        allowed_glyph_position_modes=allowed_glyph_position_modes,
         allowed_output_formats=allowed_output_formats,
         allowed_output_conflicts=allowed_output_conflicts,
         default_preview_page_limit=default_preview_page_limit,
     )
+    payload['settings_schema_version'] = studio_constants.SETTINGS_SCHEMA_VERSION
+    payload['last_app_version'] = studio_constants.APP_VERSION
+    return payload
 
 def build_current_settings_payload(
     *,
@@ -272,16 +305,16 @@ def build_current_preset_payload(
     render_settings = _coerce_mapping_payload(render_settings_base)
     payload = {
         'profile': str(profile or 'x4'),
-        'width': studio_logic._config_int_value(render_settings.get('width'), 480),
-        'height': studio_logic._config_int_value(render_settings.get('height'), 800),
-        'font_size': studio_logic._config_int_value(render_settings.get('font_size'), 26),
-        'ruby_size': studio_logic._config_int_value(render_settings.get('ruby_size'), 12),
-        'line_spacing': studio_logic._config_int_value(render_settings.get('line_spacing'), 44),
-        'margin_t': studio_logic._config_int_value(render_settings.get('margin_t'), 12),
-        'margin_b': studio_logic._config_int_value(render_settings.get('margin_b'), 14),
-        'margin_r': studio_logic._config_int_value(render_settings.get('margin_r'), 12),
-        'margin_l': studio_logic._config_int_value(render_settings.get('margin_l'), 12),
-        'threshold': studio_logic._config_int_value(render_settings.get('threshold'), 128),
+        'width': studio_logic._config_int_value(render_settings.get('width'), _DEFAULT_RENDER_SETTINGS['width']),
+        'height': studio_logic._config_int_value(render_settings.get('height'), _DEFAULT_RENDER_SETTINGS['height']),
+        'font_size': studio_logic._config_int_value(render_settings.get('font_size'), _DEFAULT_RENDER_SETTINGS['font_size']),
+        'ruby_size': studio_logic._config_int_value(render_settings.get('ruby_size'), _DEFAULT_RENDER_SETTINGS['ruby_size']),
+        'line_spacing': studio_logic._config_int_value(render_settings.get('line_spacing'), _DEFAULT_RENDER_SETTINGS['line_spacing']),
+        'margin_t': studio_logic._config_int_value(render_settings.get('margin_t'), _DEFAULT_RENDER_SETTINGS['margin_t']),
+        'margin_b': studio_logic._config_int_value(render_settings.get('margin_b'), _DEFAULT_RENDER_SETTINGS['margin_b']),
+        'margin_r': studio_logic._config_int_value(render_settings.get('margin_r'), _DEFAULT_RENDER_SETTINGS['margin_r']),
+        'margin_l': studio_logic._config_int_value(render_settings.get('margin_l'), _DEFAULT_RENDER_SETTINGS['margin_l']),
+        'threshold': studio_logic._config_int_value(render_settings.get('threshold'), _DEFAULT_RENDER_SETTINGS['threshold']),
     }
     return normalize_preset_payload(
         payload,
@@ -311,45 +344,69 @@ def build_live_preset_widget_payload(
     dither: object,
     kinsoku_mode: object,
     output_format: object,
-    font_file: object,
+    punctuation_position_mode: object = None,
+    ichi_position_mode: object = None,
+    lower_closing_bracket_position_mode: object = None,
+    font_file: object = None,
     default_font_name: str,
     allowed_profiles: Collection[str] | Mapping[str, object],
     allowed_kinsoku_modes: Collection[str] | Mapping[str, object],
+    allowed_glyph_position_modes: Collection[str] | Mapping[str, object] | None = None,
     allowed_output_formats: Collection[str] | Mapping[str, object],
     normalize_choice_value: Callable[[object, str, Collection[str] | Mapping[str, object]], str],
     normalize_font_setting_value: Callable[[object, str], str],
 ) -> dict[str, object]:
+    if allowed_glyph_position_modes is None:
+        allowed_glyph_position_modes = studio_constants.GLYPH_POSITION_MODE_LABELS
     payload: dict[str, object] = {}
     if profile is not None:
-        payload['profile'] = normalize_choice_value(profile, 'x4', allowed_profiles)
+        payload['profile'] = normalize_choice_value(profile, str(_DEFAULT_RENDER_SETTINGS['profile']), allowed_profiles)
     if width is not None:
-        payload['width'] = studio_logic._config_int_value(width, 480)
+        payload['width'] = studio_logic._config_int_value(width, _DEFAULT_RENDER_SETTINGS['width'])
     if height is not None:
-        payload['height'] = studio_logic._config_int_value(height, 800)
+        payload['height'] = studio_logic._config_int_value(height, _DEFAULT_RENDER_SETTINGS['height'])
     if font_size is not None:
-        payload['font_size'] = studio_logic._config_int_value(font_size, 26)
+        payload['font_size'] = studio_logic._config_int_value(font_size, _DEFAULT_RENDER_SETTINGS['font_size'])
     if ruby_size is not None:
-        payload['ruby_size'] = studio_logic._config_int_value(ruby_size, 12)
+        payload['ruby_size'] = studio_logic._config_int_value(ruby_size, _DEFAULT_RENDER_SETTINGS['ruby_size'])
     if line_spacing is not None:
-        payload['line_spacing'] = studio_logic._config_int_value(line_spacing, 44)
+        payload['line_spacing'] = studio_logic._config_int_value(line_spacing, _DEFAULT_RENDER_SETTINGS['line_spacing'])
     if margin_t is not None:
-        payload['margin_t'] = studio_logic._config_int_value(margin_t, 12)
+        payload['margin_t'] = studio_logic._config_int_value(margin_t, _DEFAULT_RENDER_SETTINGS['margin_t'])
     if margin_b is not None:
-        payload['margin_b'] = studio_logic._config_int_value(margin_b, 14)
+        payload['margin_b'] = studio_logic._config_int_value(margin_b, _DEFAULT_RENDER_SETTINGS['margin_b'])
     if margin_r is not None:
-        payload['margin_r'] = studio_logic._config_int_value(margin_r, 12)
+        payload['margin_r'] = studio_logic._config_int_value(margin_r, _DEFAULT_RENDER_SETTINGS['margin_r'])
     if margin_l is not None:
-        payload['margin_l'] = studio_logic._config_int_value(margin_l, 12)
+        payload['margin_l'] = studio_logic._config_int_value(margin_l, _DEFAULT_RENDER_SETTINGS['margin_l'])
     if threshold is not None:
-        payload['threshold'] = studio_logic._config_int_value(threshold, 128)
+        payload['threshold'] = studio_logic._config_int_value(threshold, _DEFAULT_RENDER_SETTINGS['threshold'])
     if night_mode is not None:
-        payload['night_mode'] = studio_logic._config_bool_value(night_mode, False)
+        payload['night_mode'] = studio_logic._config_bool_value(night_mode, bool(_DEFAULT_RENDER_SETTINGS['night_mode']))
     if dither is not None:
-        payload['dither'] = studio_logic._config_bool_value(dither, False)
+        payload['dither'] = studio_logic._config_bool_value(dither, bool(_DEFAULT_RENDER_SETTINGS['dither']))
     if kinsoku_mode is not None:
-        payload['kinsoku_mode'] = normalize_choice_value(kinsoku_mode, 'standard', allowed_kinsoku_modes)
+        payload['kinsoku_mode'] = normalize_choice_value(kinsoku_mode, str(_DEFAULT_RENDER_SETTINGS['kinsoku_mode']), allowed_kinsoku_modes)
     if output_format is not None:
-        payload['output_format'] = normalize_choice_value(output_format, 'xtc', allowed_output_formats)
+        payload['output_format'] = normalize_choice_value(output_format, str(_DEFAULT_RENDER_SETTINGS['output_format']), allowed_output_formats)
+    if punctuation_position_mode is not None:
+        payload['punctuation_position_mode'] = normalize_choice_value(
+            punctuation_position_mode,
+            str(_DEFAULT_RENDER_SETTINGS['punctuation_position_mode']),
+            allowed_glyph_position_modes,
+        )
+    if ichi_position_mode is not None:
+        payload['ichi_position_mode'] = normalize_choice_value(
+            ichi_position_mode,
+            str(_DEFAULT_RENDER_SETTINGS['ichi_position_mode']),
+            allowed_glyph_position_modes,
+        )
+    if lower_closing_bracket_position_mode is not None:
+        payload['lower_closing_bracket_position_mode'] = normalize_choice_value(
+            lower_closing_bracket_position_mode,
+            str(_DEFAULT_RENDER_SETTINGS['lower_closing_bracket_position_mode']),
+            studio_constants.CLOSING_BRACKET_POSITION_MODE_LABELS,
+        )
     if font_file is not None:
         payload['font_file'] = normalize_font_setting_value(font_file, default_font_name) or default_font_name
     return payload

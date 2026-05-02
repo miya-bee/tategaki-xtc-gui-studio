@@ -8,10 +8,18 @@ MainWindow so they can be tested without a live Qt runtime.
 
 import html
 import ntpath
+import os
 from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 import math
 from typing import Any
+
+
+LOWER_CLOSING_BRACKET_POSITION_MODES: dict[str, str] = {
+    'standard': '標準',
+    'up_weak': '上補正 弱',
+    'up_strong': '上補正 強',
+}
 
 
 def build_top_status_message(target_raw: str, profile_name: str, font_size: int, line_spacing: int) -> str:
@@ -120,7 +128,33 @@ def _coerce_mapping_payload(payload: object) -> dict[str, object]:
 
 def normalize_choice_value(value: object, default: str, allowed_values: Collection[str] | Mapping[str, object]) -> str:
     normalized = str(value if value not in (None, '') else default).strip().lower()
+    compact = normalized.replace(' ', '').replace('　', '').replace('-', '_')
     allowed = {str(item).strip().lower() for item in allowed_values}
+    allowed_compact = {item.replace(' ', '').replace('　', '').replace('-', '_'): item for item in allowed}
+    if normalized in allowed:
+        return normalized
+    if compact in allowed_compact:
+        return allowed_compact[compact]
+    glyph_aliases = {
+        'down_strong': {
+            'down_strong', 'strong_down', 'plus', 'positive', 'adjusted', 'mode2', '+',
+            'プラス', 'プラス補正', '下', '下補正', '下補正強', '下強', '強下', '補正',
+        },
+        'down_weak': {'down_weak', 'weak_down', '下補正弱', '下弱', '弱下'},
+        'up_weak': {'up_weak', 'weak_up', '上補正弱', '上弱', '弱上'},
+        'up_strong': {
+            'up_strong', 'strong_up', 'minus', 'negative', '-',
+            'マイナス', 'マイナス補正', '上', '上補正', '上補正強', '上強', '強上',
+        },
+    }
+    for canonical, aliases in glyph_aliases.items():
+        if compact in aliases:
+            if canonical in allowed:
+                return canonical
+            if canonical == 'down_strong' and 'plus' in allowed:
+                return 'plus'
+            if canonical == 'up_strong' and 'minus' in allowed:
+                return 'minus'
     return normalized if normalized in allowed else str(default).strip().lower()
 
 
@@ -241,11 +275,15 @@ def build_settings_restore_payload(
     allowed_view_modes: Collection[str] | Mapping[str, object],
     allowed_profiles: Collection[str] | Mapping[str, object],
     allowed_kinsoku_modes: Collection[str] | Mapping[str, object],
+    allowed_glyph_position_modes: Collection[str] | Mapping[str, object] | None = None,
     allowed_output_formats: Collection[str] | Mapping[str, object],
     allowed_output_conflicts: Collection[str] | Mapping[str, object],
     default_preview_page_limit: int,
 ) -> dict[str, Any]:
     raw_payload = _coerce_mapping_payload(raw_payload)
+    if allowed_glyph_position_modes is None:
+        allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
+    allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
     payload: dict[str, Any] = {}
     payload['profile'] = normalize_choice_value(raw_payload.get('profile'), 'x4', allowed_profiles)
     for key, default in (
@@ -288,6 +326,21 @@ def build_settings_restore_payload(
         'standard',
         allowed_kinsoku_modes,
     )
+    payload['punctuation_position_mode'] = normalize_choice_value(
+        raw_payload.get('punctuation_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['ichi_position_mode'] = normalize_choice_value(
+        raw_payload.get('ichi_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['lower_closing_bracket_position_mode'] = normalize_choice_value(
+        raw_payload.get('lower_closing_bracket_position_mode'),
+        'standard',
+        allowed_lower_closing_bracket_position_modes,
+    )
     payload['target'] = str(raw_payload.get('target') or '').strip()
     payload['font_file'] = str(raw_payload.get('font_file') or '').strip()
     payload['main_view_mode'] = normalize_choice_value(
@@ -298,17 +351,35 @@ def build_settings_restore_payload(
     return payload
 
 
+
+def build_startup_preview_defaults_payload(payload: Mapping[str, object]) -> dict[str, object]:
+    """Return startup-only preview defaults for restored UI state.
+
+    Saved actual-size/device-view settings are still persisted, but startup uses
+    the normal font preview so the zoom controls near the preview remain
+    immediately usable and less confusing.
+    """
+    normalized = dict(payload or {})
+    normalized['main_view_mode'] = 'font'
+    normalized['actual_size'] = False
+    return normalized
+
+
 def build_settings_ui_apply_payload(
     raw_payload: Mapping[str, object],
     *,
     defaults: Mapping[str, object],
     allowed_view_modes: Collection[str] | Mapping[str, object],
     allowed_kinsoku_modes: Collection[str] | Mapping[str, object],
+    allowed_glyph_position_modes: Collection[str] | Mapping[str, object] | None = None,
     allowed_output_formats: Collection[str] | Mapping[str, object],
     allowed_output_conflicts: Collection[str] | Mapping[str, object],
     bottom_tab_count: int,
 ) -> dict[str, Any]:
     raw_payload = _coerce_mapping_payload(raw_payload)
+    if allowed_glyph_position_modes is None:
+        allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
+    allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
     defaults = _coerce_mapping_payload(defaults)
     plan: dict[str, Any] = {}
 
@@ -368,6 +439,19 @@ def build_settings_ui_apply_payload(
             str(defaults.get('kinsoku_mode') or 'standard'),
             allowed_kinsoku_modes,
         )
+    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode'):
+        if glyph_key in raw_payload:
+            plan[glyph_key] = normalize_choice_value(
+                raw_payload.get(glyph_key),
+                str(defaults.get(glyph_key) or 'standard'),
+                allowed_glyph_position_modes,
+            )
+    if 'lower_closing_bracket_position_mode' in raw_payload:
+        plan['lower_closing_bracket_position_mode'] = normalize_choice_value(
+            raw_payload.get('lower_closing_bracket_position_mode'),
+            str(defaults.get('lower_closing_bracket_position_mode') or 'standard'),
+            allowed_lower_closing_bracket_position_modes,
+        )
     if 'main_view_mode' in raw_payload:
         plan['main_view_mode'] = normalize_choice_value(
             raw_payload.get('main_view_mode'),
@@ -389,11 +473,15 @@ def build_settings_save_payload(
     allowed_view_modes: Collection[str] | Mapping[str, object],
     allowed_profiles: Collection[str] | Mapping[str, object],
     allowed_kinsoku_modes: Collection[str] | Mapping[str, object],
+    allowed_glyph_position_modes: Collection[str] | Mapping[str, object] | None = None,
     allowed_output_formats: Collection[str] | Mapping[str, object],
     allowed_output_conflicts: Collection[str] | Mapping[str, object],
     default_preview_page_limit: int,
 ) -> dict[str, Any]:
     raw_payload = _coerce_mapping_payload(raw_payload)
+    if allowed_glyph_position_modes is None:
+        allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
+    allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
     payload: dict[str, Any] = dict(raw_payload)
     payload['bottom_tab_index'] = max(0, _config_int_value(raw_payload.get('bottom_tab_index'), 0))
     payload['main_view_mode'] = normalize_choice_value(
@@ -443,6 +531,21 @@ def build_settings_save_payload(
         'xtc',
         allowed_output_formats,
     )
+    payload['punctuation_position_mode'] = normalize_choice_value(
+        raw_payload.get('punctuation_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['ichi_position_mode'] = normalize_choice_value(
+        raw_payload.get('ichi_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['lower_closing_bracket_position_mode'] = normalize_choice_value(
+        raw_payload.get('lower_closing_bracket_position_mode'),
+        'standard',
+        allowed_lower_closing_bracket_position_modes,
+    )
     payload['output_conflict'] = normalize_choice_value(
         raw_payload.get('output_conflict'),
         'rename',
@@ -456,6 +559,57 @@ def build_displaying_document_label(display_name: object = None, fallback: str =
     if not text:
         text = str(fallback).strip() or 'なし'
     return f'表示中: {text}'
+
+
+
+def display_context_name_from_label_text(text: object) -> str:
+    normalized = _coerce_message_text(text).strip()
+    prefix = '表示中:'
+    if normalized.startswith(prefix):
+        normalized = normalized[len(prefix):].strip()
+    return normalized
+
+
+def is_preview_render_failure_status_text(text: object) -> bool:
+    normalized = _coerce_message_text(text).strip()
+    return (
+        normalized.startswith('プレビュー表示エラー')
+        or normalized.startswith('プレビュー生成エラー')
+    )
+
+
+def is_device_render_failure_status_text(text: object) -> bool:
+    normalized = _coerce_message_text(text).strip()
+    return normalized.startswith('ページ表示エラー')
+
+
+def is_render_failure_status_text(text: object) -> bool:
+    return (
+        is_device_render_failure_status_text(text)
+        or is_preview_render_failure_status_text(text)
+    )
+
+
+def render_failure_preserved_display_name(text: object) -> str:
+    normalized = _coerce_message_text(text).strip()
+    marker = '（表示は '
+    suffix = ' のまま）'
+    start = normalized.find(marker)
+    if start < 0:
+        return ''
+    start += len(marker)
+    end = normalized.find(suffix, start)
+    if end < 0:
+        return ''
+    return normalized[start:end].strip()
+
+
+def render_failure_matches_display_context(status_text: object, visible_display_name: object) -> bool:
+    preserved_display_name = render_failure_preserved_display_name(status_text)
+    visible_name = _coerce_message_text(visible_display_name).strip()
+    if visible_name and preserved_display_name:
+        return preserved_display_name == visible_name
+    return True
 
 
 def build_preview_status_message(
@@ -502,6 +656,350 @@ def build_preview_progress_message(
     if total_value > 0:
         return f'プレビューを更新しています… ({current_value}/{total_value})'
     return build_preview_status_message('running', preview_limit=preview_limit)
+
+
+def build_preview_success_status_state(
+    *,
+    page_count: object,
+    requested_limit: object,
+    truncated: object = False,
+) -> dict[str, Any]:
+    """Return the normalized status payload for a completed preview render."""
+    generated_pages = max(0, _config_int_value(page_count, 0))
+    preview_limit = max(generated_pages, _config_int_value(requested_limit, 0))
+    is_truncated = bool(truncated)
+    return {
+        'generated_pages': generated_pages,
+        'preview_limit': preview_limit,
+        'truncated': is_truncated,
+        'status_message': build_preview_status_message(
+            'complete',
+            preview_limit=preview_limit,
+            generated_pages=generated_pages,
+            truncated=is_truncated,
+        ),
+    }
+
+
+def build_preview_render_status_message(
+    *,
+    page_count: object,
+    requested_limit: object,
+    truncated: object = False,
+    running: object = False,
+    dirty: object = False,
+    widget_limit: object = 0,
+) -> str:
+    """Return the preview status message visible for the current render state."""
+    success_state = build_preview_success_status_state(
+        page_count=page_count,
+        requested_limit=requested_limit,
+        truncated=truncated,
+    )
+    preview_limit = _config_int_value(success_state.get('preview_limit'), 0)
+    if preview_limit <= 0:
+        fallback_limit = _config_int_value(widget_limit, 0)
+        if fallback_limit > 0:
+            preview_limit = max(1, fallback_limit)
+    if bool(running):
+        return build_preview_status_message('running', preview_limit=max(1, preview_limit or 1))
+    if bool(dirty):
+        return build_preview_status_message('dirty')
+    return str(success_state.get('status_message', ''))
+
+
+def build_successful_preview_render_status_refresh_state(
+    *,
+    preview_replacement: object,
+    view_mode: object,
+    visible_font_preview_active: object = False,
+    preview_status_text: object = '',
+    progress_status_text: object = '',
+    status_bar_text: object = '',
+    current_label_text: object = '',
+) -> dict[str, Any]:
+    """Return which shared status surfaces should be refreshed after success."""
+    replacement = _coerce_message_text(preview_replacement).strip()
+    normalized_mode = normalize_choice_value(view_mode, 'font', {'font', 'device'})
+    font_view_visible = normalized_mode == 'font'
+    device_view_visible = normalized_mode == 'device'
+    preview_status = _coerce_message_text(preview_status_text).strip()
+    progress_status = _coerce_message_text(progress_status_text).strip()
+    status_bar_status = _coerce_message_text(status_bar_text).strip()
+    visible_font_preview = bool(visible_font_preview_active)
+
+    stale_preview_status = (
+        is_render_failure_status_text(preview_status)
+        or preview_status == 'プレビューを生成できませんでした'
+    )
+
+    progress_replacement = replacement
+    if device_view_visible:
+        label_text = _coerce_message_text(current_label_text).strip()
+        progress_replacement = label_text or replacement
+
+    stale_progress_status = is_preview_render_failure_status_text(progress_status)
+    if not stale_progress_status and visible_font_preview:
+        stale_progress_status = is_device_render_failure_status_text(progress_status)
+
+    stale_status_bar = is_preview_render_failure_status_text(status_bar_status)
+    if not stale_status_bar and visible_font_preview:
+        stale_status_bar = is_device_render_failure_status_text(status_bar_status)
+
+    should_notify_status_bar = (
+        stale_progress_status
+        or stale_status_bar
+        or (stale_preview_status and font_view_visible)
+    )
+
+    return {
+        'preview_replacement': replacement,
+        'progress_replacement': progress_replacement,
+        'font_view_visible': font_view_visible,
+        'device_view_visible': device_view_visible,
+        'stale_preview_status': stale_preview_status,
+        'stale_progress_status': stale_progress_status,
+        'stale_status_bar': stale_status_bar,
+        'should_notify_status_bar': should_notify_status_bar,
+    }
+
+def build_successful_device_render_status_refresh_state(
+    *,
+    view_mode: object,
+    current_label_text: object = '',
+    preview_replacement: object = '',
+    has_font_preview_pages: object = False,
+    progress_status_text: object = '',
+    status_bar_text: object = '',
+) -> dict[str, Any]:
+    """Return shared status refresh decisions after a device page render succeeds."""
+    normalized_mode = normalize_choice_value(view_mode, 'font', {'font', 'device'})
+    device_view_visible = normalized_mode == 'device'
+    font_view_visible = normalized_mode == 'font'
+    font_preview_visible = font_view_visible and bool(has_font_preview_pages)
+
+    if device_view_visible:
+        replacement = _coerce_message_text(current_label_text).strip()
+    elif font_preview_visible:
+        replacement = _coerce_message_text(preview_replacement).strip()
+    else:
+        replacement = ''
+
+    progress_status = _coerce_message_text(progress_status_text).strip()
+    status_bar_status = _coerce_message_text(status_bar_text).strip()
+    if device_view_visible:
+        stale_progress_status = is_render_failure_status_text(progress_status)
+        stale_status_bar = is_render_failure_status_text(status_bar_status)
+    else:
+        stale_progress_status = is_device_render_failure_status_text(progress_status)
+        stale_status_bar = is_device_render_failure_status_text(status_bar_status)
+
+    should_notify_status_bar = stale_progress_status or stale_status_bar
+    return {
+        'replacement': replacement,
+        'font_view_visible': font_view_visible,
+        'device_view_visible': device_view_visible,
+        'font_preview_visible': font_preview_visible,
+        'stale_progress_status': stale_progress_status,
+        'stale_status_bar': stale_status_bar,
+        'should_notify_status_bar': should_notify_status_bar,
+    }
+
+
+def build_preview_button_state(
+    context: Mapping[str, object] | None,
+    *,
+    default_text: str = 'プレビュー更新',
+) -> dict[str, Any]:
+    """Return normalized button state for preview refresh controls."""
+    payload = _coerce_mapping_payload(context)
+    return {
+        'button_enabled': _config_bool_value(payload.get('button_enabled'), True),
+        'button_text': str(payload.get('button_text', default_text)),
+    }
+
+
+def build_preview_progress_context_state(
+    context: Mapping[str, object] | None,
+) -> dict[str, str]:
+    """Return normalized preview-progress status text from a worker context."""
+    payload = _coerce_mapping_payload(context)
+    return {
+        'status_message': str(payload.get('status_message', '')),
+    }
+
+
+def _coerce_message_text(value: object, default: str = '') -> str:
+    if value is None:
+        text = ''
+    else:
+        if isinstance(value, os.PathLike):
+            try:
+                value = os.fspath(value)
+            except Exception:
+                pass
+        if isinstance(value, (bytes, bytearray)):
+            try:
+                text = os.fsdecode(bytes(value))
+            except Exception:
+                text = str(value)
+        else:
+            text = str(value)
+    return text if text.strip() else default
+
+
+def _progress_number_value(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return int(value) if math.isfinite(value) else int(default)
+    if isinstance(value, os.PathLike):
+        try:
+            value = os.fspath(value)
+        except Exception:
+            return int(default)
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            value = os.fsdecode(bytes(value))
+        except Exception:
+            return int(default)
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            return int(default)
+        try:
+            return int(normalized, 10)
+        except (TypeError, ValueError, OverflowError):
+            try:
+                parsed = float(normalized)
+            except (TypeError, ValueError, OverflowError):
+                return int(default)
+            return int(parsed) if math.isfinite(parsed) else int(default)
+    return int(default)
+
+
+
+def merge_unique_message_values(existing_messages: Sequence[object], new_messages: Sequence[object]) -> list[str]:
+    merged: list[str] = []
+    for raw_message in [*existing_messages, *new_messages]:
+        message = _coerce_message_text(raw_message).strip()
+        if message and message not in merged:
+            merged.append(message)
+    return merged
+
+
+def build_progress_status_text(current: object, total: object, message: object) -> str:
+    total_value = max(1, _progress_number_value(total, 1))
+    current_value = max(0, min(_progress_number_value(current, 0), total_value))
+    detail = _coerce_message_text(message).strip()
+    base = detail or '変換中…'
+    percent = int(round((current_value / total_value) * 100.0)) if total_value > 0 else 0
+    return f'{base} ({current_value}/{total_value}, {percent}%)'
+
+
+def build_conversion_failure_summary_text(prefix: object, message: object) -> str:
+    prefix_text = _coerce_message_text(prefix).strip()
+    message_text = _coerce_message_text(message, '不明なエラー').strip() or '不明なエラー'
+    if not prefix_text:
+        return message_text
+    return f'{prefix_text}: {message_text}'
+
+
+
+
+
+def build_render_failure_status_message(title: object, detail: object = '', preserved_display_name: object = '') -> str:
+    title_text = _coerce_message_text(title).strip() or '表示エラー'
+    detail_text = _coerce_message_text(detail).strip()
+    if detail_text == 'Non-base64 digit found':
+        detail_text = 'Only base64 data is allowed'
+    preserved_text = _coerce_message_text(preserved_display_name).strip()
+    message = title_text
+    if preserved_text:
+        message += f'（表示は {preserved_text} のまま）'
+    if detail_text:
+        message += f': {detail_text}'
+    return message
+
+def build_xtc_load_failure_status_message(target: object, detail: object = '', preserved_display_name: object = '') -> str:
+    target_text = _coerce_message_text(target).strip() or '指定ファイル'
+    detail_text = _coerce_message_text(detail).strip()
+    if detail_text == 'Non-base64 digit found':
+        detail_text = 'Only base64 data is allowed'
+    preserved_text = _coerce_message_text(preserved_display_name).strip()
+    message = f'XTC/XTCH読込失敗: {target_text}'
+    if preserved_text:
+        message += f'（表示は {preserved_text} のまま）'
+    if detail_text:
+        message += f' / {detail_text}'
+    return message
+
+
+def build_xtc_load_failure_preserved_display_name(
+    *,
+    preview_active: object = False,
+    remembered_display_name: object = '',
+    remembered_path_display_name: object = '',
+    current_label_text: object = '',
+) -> str:
+    if bool(preview_active):
+        return 'プレビュー'
+
+    remembered = _coerce_message_text(remembered_display_name).strip()
+    if remembered and remembered != 'なし':
+        return remembered
+
+    remembered_path = _coerce_message_text(remembered_path_display_name).strip()
+    if remembered_path and remembered_path != 'なし':
+        return remembered_path
+
+    normalized_label = display_context_name_from_label_text(current_label_text).strip()
+    if normalized_label and normalized_label != 'なし':
+        return normalized_label
+    return ''
+
+
+def normalize_xtc_bytes(data: object) -> bytes:
+    if isinstance(data, bytes):
+        return data
+    if isinstance(data, bytearray):
+        return bytes(data)
+    if isinstance(data, memoryview):
+        return data.tobytes()
+    raise TypeError('XTCデータは bytes 系である必要があります。')
+
+
+def build_xtc_document_payload_from_pages(data: object, pages: Sequence[object]) -> dict[str, object]:
+    page_list = list(pages)
+    if not page_list:
+        raise RuntimeError('XTC内にページがありません。')
+    return {
+        'data': data,
+        'pages': page_list,
+        'total': len(page_list),
+        'current_index': 0,
+        'current_page': 1,
+    }
+
+
+def build_xtc_page_state_payload(pages: Sequence[object], current_index: object = 0) -> dict[str, object]:
+    page_list = list(pages)
+    total = len(page_list)
+    normalized_index = _config_int_value(current_index, 0)
+    if total > 0:
+        normalized_index = max(0, min(total - 1, normalized_index))
+        page = page_list[normalized_index]
+    else:
+        normalized_index = 0
+        page = None
+    return {
+        'total': total,
+        'current_index': normalized_index,
+        'current_page': normalized_index + 1 if total > 0 else 0,
+        'page': page,
+    }
 
 
 def build_preview_refresh_state(
@@ -561,6 +1059,144 @@ def _clamp_navigation_index(total: int, current_index: int) -> tuple[int, int]:
     else:
         index = 0
     return total_pages, index
+
+
+def normalize_navigation_index(total: object, current_index: object = 0) -> int:
+    """Return a zero-based page index clamped to the available page count."""
+    _, index = _clamp_navigation_index(
+        _config_int_value(total, 0),
+        _config_int_value(current_index, 0),
+    )
+    return index
+
+
+def normalize_preview_page_cache_tokens(tokens: object, *, expected_len: int) -> list[int] | None:
+    """Return integer cache tokens only when the payload matches the page count."""
+    if not isinstance(tokens, (list, tuple)) or len(tokens) != expected_len:
+        return None
+    normalized: list[int] = []
+    for value in tokens:
+        try:
+            normalized.append(int(value))
+        except Exception:
+            return None
+    return normalized
+
+
+def build_preview_page_cache_tokens_state(
+    context: Mapping[str, object] | None,
+    *,
+    preview_page_count: object,
+    device_preview_page_count: object,
+) -> dict[str, Any]:
+    """Return normalized preview-cache tokens or a rebuild request."""
+    payload = _coerce_mapping_payload(context)
+    preview_count = max(0, _config_int_value(preview_page_count, 0))
+    device_count = max(0, _config_int_value(device_preview_page_count, 0))
+    preview_tokens = normalize_preview_page_cache_tokens(
+        payload.get('preview_page_cache_tokens'),
+        expected_len=preview_count,
+    )
+    device_tokens = normalize_preview_page_cache_tokens(
+        payload.get('device_preview_page_cache_tokens'),
+        expected_len=device_count,
+    )
+    should_rebuild = preview_tokens is None or device_tokens is None
+    return {
+        'should_rebuild': should_rebuild,
+        'preview_page_cache_tokens': [] if preview_tokens is None else list(preview_tokens),
+        'device_preview_page_cache_tokens': [] if device_tokens is None else list(device_tokens),
+    }
+
+
+def normalize_device_view_source_value(value: object, *, default: str = 'xtc') -> str:
+    """Normalize the source selector used by the device-view runtime."""
+    if value is None:
+        text = ''
+    elif isinstance(value, os.PathLike):
+        text = os.fspath(value)
+    elif isinstance(value, (bytes, bytearray)):
+        try:
+            text = os.fsdecode(bytes(value))
+        except Exception:
+            text = ''
+    else:
+        text = str(value)
+    normalized = text.strip()
+    if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {'\"', "'"}:
+        quoted = normalized[1:-1].strip()
+        if quoted:
+            normalized = quoted
+    normalized = normalized.lower()
+    if normalized in {'preview', 'xtc'}:
+        return normalized
+    return default
+
+
+def resolve_effective_device_view_source(source: object, *, has_preview_pages: object) -> str:
+    """Return the device-view source that can actually be displayed now."""
+    normalized = normalize_device_view_source_value(source, default='xtc')
+    if normalized == 'preview' and bool(has_preview_pages):
+        return 'preview'
+    return 'xtc'
+
+
+def is_preview_display_active(
+    view_mode: object,
+    *,
+    has_font_preview_pages: object,
+    effective_device_view_source: object,
+) -> bool:
+    """Return whether the currently visible page source is a generated preview."""
+    normalized_mode = normalize_choice_value(view_mode, 'font', {'font', 'device'})
+    if normalized_mode == 'font':
+        return bool(has_font_preview_pages)
+    return normalize_device_view_source_value(effective_device_view_source, default='xtc') == 'preview'
+
+
+def build_preview_view_page_sync_state(
+    *,
+    mode: object,
+    effective_device_view_source: object,
+    preview_page_count: object,
+    device_preview_page_count: object,
+    current_preview_index: object,
+    current_device_preview_index: object,
+) -> dict[str, Any]:
+    """Return the page-index sync plan when switching between preview views."""
+    normalized_mode = normalize_choice_value(mode, 'font', {'font', 'device'})
+    source = normalize_device_view_source_value(effective_device_view_source, default='xtc')
+    if source != 'preview':
+        return {
+            'should_sync': False,
+            'target': '',
+            'target_index': 0,
+        }
+    if normalized_mode == 'font':
+        total = max(0, _config_int_value(preview_page_count, 0))
+        if total <= 0:
+            return {
+                'should_sync': False,
+                'target': 'font',
+                'target_index': 0,
+            }
+        return {
+            'should_sync': True,
+            'target': 'font',
+            'target_index': normalize_navigation_index(total, current_device_preview_index),
+        }
+    total = max(0, _config_int_value(device_preview_page_count, 0))
+    if total <= 0:
+        return {
+            'should_sync': False,
+            'target': 'device',
+            'target_index': 0,
+        }
+    return {
+        'should_sync': True,
+        'target': 'device',
+        'target_index': normalize_navigation_index(total, current_preview_index),
+    }
 
 
 def build_navigation_target_state(
@@ -671,12 +1307,483 @@ def build_navigation_display_state(
     }
 
 
+
+
+def build_device_navigation_payload(
+    *,
+    view_mode: object,
+    total: object,
+    current_index: object,
+    current_page: object | None = None,
+    is_preview: object = False,
+    truncated: object = False,
+) -> dict[str, Any]:
+    total_pages = max(0, _config_int_value(total, 0))
+    index = _config_int_value(current_index, 0)
+    preview_source = bool(is_preview)
+    payload = build_navigation_display_state(
+        view_mode='device',
+        total=total_pages,
+        current_index=index,
+        truncated=bool(preview_source and truncated),
+    )
+    normalized_view_mode = str(view_mode or 'font').strip().lower()
+    payload['active'] = bool(normalized_view_mode == 'device' and payload.get('active'))
+    if current_page is not None:
+        payload['current_page'] = max(0, _config_int_value(current_page, payload.get('current_page', 0)))
+    return payload
+
+def build_navigation_apply_state(
+    payload: Mapping[str, object],
+    nav_state: Mapping[str, object],
+    *,
+    total_label_format: object = '/ {total}',
+    nav_buttons_reversed: object = False,
+) -> dict[str, Any]:
+    total = max(0, _config_int_value(payload.get('total'), 0))
+    nav_active = _config_bool_value(nav_state.get('active'), False)
+    active = total > 0 and _config_bool_value(payload.get('active'), nav_active) and nav_active
+    current_page = _config_int_value(nav_state.get('current_page'), 0) if total > 0 else 0
+    can_go_prev = active and _config_bool_value(nav_state.get('can_go_prev'), False)
+    can_go_next = active and _config_bool_value(nav_state.get('can_go_next'), False)
+
+    format_text = str(total_label_format or '/ {total}')
+    try:
+        total_label_fallback = format_text.format(total=total)
+    except Exception:
+        total_label_fallback = f'/ {total}'
+    total_label = str(payload.get('total_label', total_label_fallback))
+    if bool(nav_buttons_reversed):
+        prev_enabled = can_go_next
+        next_enabled = can_go_prev
+    else:
+        prev_enabled = can_go_prev
+        next_enabled = can_go_next
+
+    return {
+        'active': active,
+        'current_page': current_page,
+        'can_go_prev': can_go_prev,
+        'can_go_next': can_go_next,
+        'prev_enabled': prev_enabled,
+        'next_enabled': next_enabled,
+        'total_label': total_label,
+    }
+
+
+def build_nav_button_text_state(
+    nav_bar_plan: Mapping[str, object] | None = None,
+    *,
+    nav_buttons_reversed: object = False,
+) -> dict[str, str]:
+    """Return display texts for the previous/next navigation buttons.
+
+    ``MainWindow`` keeps ownership of the actual buttons and signal wiring;
+    this helper only resolves the layout-plan labels and reversed-button
+    presentation rule.
+    """
+
+    plan = dict(nav_bar_plan or {})
+    prev_text = str(plan.get('prev_button_text', '前'))
+    next_text = str(plan.get('next_button_text', '次'))
+    if _config_bool_value(nav_buttons_reversed, False):
+        return {'prev_button_text': next_text, 'next_button_text': prev_text}
+    return {'prev_button_text': prev_text, 'next_button_text': next_text}
+
+
+def build_preview_zoom_control_state(
+    view_toggle_bar_plan: Mapping[str, object] | None = None,
+    *,
+    actual_size: object = False,
+    label_key: object = None,
+    tooltip_key: object = None,
+) -> dict[str, str]:
+    """Return label/tooltip text for the right-pane preview zoom controls.
+
+    ``MainWindow`` owns the Qt widgets; this helper keeps the mode-dependent
+    text resolution testable without constructing the GUI.
+    """
+
+    plan = dict(view_toggle_bar_plan or {})
+    actual = _config_bool_value(actual_size, False)
+    resolved_label_key = str(
+        label_key
+        or ('preview_zoom_actual_size_label_text' if actual else 'preview_zoom_label_text')
+    )
+    resolved_tooltip_key = str(
+        tooltip_key
+        or ('preview_zoom_actual_size_tooltip' if actual else 'preview_zoom_normal_tooltip')
+    )
+    label_fallback = '実寸補正' if actual else '表示倍率'
+    tooltip_fallback = (
+        '実寸近似ON: 実機サイズに合わせる補正倍率です。'
+        if actual
+        else 'フォントビュー（実寸近似OFF）と実機ビューの表示倍率です。'
+    )
+    return {
+        'label_text': str(plan.get(resolved_label_key, label_fallback)),
+        'tooltip': str(plan.get(resolved_tooltip_key, tooltip_fallback)),
+    }
+
+
+
+def build_loaded_xtc_view_mode_state(
+    mode: object,
+    *,
+    safe: object = False,
+    can_apply_full_view_mode: object = False,
+) -> dict[str, Any]:
+    """Return how a loaded XTC view-mode request should be applied.
+
+    The GUI keeps ownership of Qt widgets and ``set_main_view_mode``.  This
+    helper only normalizes the requested mode and decides whether safe mode
+    should use the full UI path or direct state assignment.
+    """
+    mode_text = _coerce_message_text(mode).strip()
+    if not mode_text:
+        return {
+            'has_mode': False,
+            'mode': '',
+            'apply_full_view_mode': False,
+            'assign_main_view_mode': False,
+        }
+    safe_mode = _config_bool_value(safe, False)
+    apply_full = (not safe_mode) or _config_bool_value(can_apply_full_view_mode, False)
+    return {
+        'has_mode': True,
+        'mode': mode_text,
+        'apply_full_view_mode': apply_full,
+        'assign_main_view_mode': not apply_full,
+    }
+
+def build_page_input_apply_state(
+    *,
+    total_pages: object,
+    current_page: object = 0,
+    empty_minimum: object = 0,
+    empty_maximum: object = 0,
+    active_minimum: object = 1,
+) -> dict[str, int | bool]:
+    """Return the range/value state for the shared page input widget."""
+    empty_min = _config_int_value(empty_minimum, 0)
+    empty_max = _config_int_value(empty_maximum, 0)
+    active_min = _config_int_value(active_minimum, 1)
+    total = max(0, _config_int_value(total_pages, 0))
+    value = max(0, _config_int_value(current_page, 0))
+    if total <= 0:
+        return {
+            'active': False,
+            'minimum': empty_min,
+            'maximum': empty_max,
+            'value': empty_min,
+        }
+    return {
+        'active': True,
+        'minimum': active_min,
+        'maximum': total,
+        'value': max(active_min, min(value or active_min, total)),
+    }
+
+
+
+
+def read_image_dimensions(image: object) -> tuple[int, int]:
+    """Return safe ``(width, height)`` values from a Qt/Pillow-like image object."""
+    if image is None:
+        return 0, 0
+
+    def _read_dimension(name: str) -> int:
+        candidate = getattr(image, name, None)
+        try:
+            value = candidate() if callable(candidate) else candidate
+        except Exception:
+            value = 0
+        try:
+            return max(0, int(value))
+        except Exception:
+            return 0
+
+    return _read_dimension('width'), _read_dimension('height')
+
+
+
+
+def normalize_preview_zoom_pct(
+    value: object,
+    *,
+    default: int = 100,
+    minimum: int = 50,
+    maximum: int = 300,
+) -> int:
+    """Return a safe preview zoom percentage for UI/runtime calculations."""
+    parsed = payload_optional_int_value({'preview_zoom_pct': value}, 'preview_zoom_pct')
+    normalized = int(default) if parsed is None else int(parsed)
+    lower = min(int(minimum), int(maximum))
+    upper = max(int(minimum), int(maximum))
+    return max(lower, min(normalized, upper))
+
+
+def build_actual_size_calibration_factor(
+    *,
+    uses_preview_zoom: object,
+    preview_zoom_pct: object,
+    calibration_pct: object,
+    min_factor: float = 0.5,
+    max_factor: float = 3.0,
+) -> float:
+    """Return the effective scale factor for actual-size preview rendering."""
+    if _config_bool_value(uses_preview_zoom, False):
+        return normalize_preview_zoom_pct(preview_zoom_pct) / 100.0
+    try:
+        value = float(calibration_pct) / 100.0
+    except Exception:
+        value = 1.0
+    if not math.isfinite(value):
+        value = 1.0
+    lower = min(float(min_factor), float(max_factor))
+    upper = max(float(min_factor), float(max_factor))
+    return max(lower, min(value, upper))
+
+
+
+
+def build_font_preview_target_size(
+    *,
+    actual_size: object,
+    screen_w_mm: object,
+    screen_h_mm: object,
+    px_per_mm: object,
+    viewport_width: object = 0,
+    viewport_height: object = 0,
+    zoom_factor: object = 1.0,
+    fallback: tuple[int, int] = (480, 720),
+) -> tuple[int, int]:
+    """Return the target font-preview size as a plain ``(width, height)`` pair."""
+
+    def _float_value(value: object, default: float = 0.0) -> float:
+        try:
+            parsed = float(value)
+        except Exception:
+            return float(default)
+        return parsed if math.isfinite(parsed) else float(default)
+
+    if _config_bool_value(actual_size, False):
+        width_mm = max(0.0, _float_value(screen_w_mm, 0.0))
+        height_mm = max(0.0, _float_value(screen_h_mm, 0.0))
+        px = max(0.0, _float_value(px_per_mm, 0.0))
+        return max(180, int(width_mm * px)), max(240, int(height_mm * px))
+
+    viewport_w = _config_int_value(viewport_width, 0)
+    viewport_h = _config_int_value(viewport_height, 0)
+    if viewport_w >= 10 and viewport_h >= 10:
+        zoom = _float_value(zoom_factor, 1.0)
+        if abs(zoom - 1.0) < 0.001:
+            return viewport_w, viewport_h
+        return max(10, int(round(viewport_w * zoom))), max(10, int(round(viewport_h * zoom)))
+
+    try:
+        fallback_w, fallback_h = fallback
+    except Exception:
+        fallback_w, fallback_h = 480, 720
+    return _config_int_value(fallback_w, 480), _config_int_value(fallback_h, 720)
+
+
+
+def build_viewer_profile_resolution_state(
+    width: object,
+    height: object,
+    *,
+    current_width: object = 0,
+    current_height: object = 0,
+    profile_dimensions: Mapping[str, Sequence[object]] | None = None,
+    preferred_profile_keys: Sequence[str] = ('x4', 'x3'),
+) -> dict[str, object]:
+    """Return how the GUI should resolve a viewer profile for page dimensions.
+
+    The GUI layer still owns ``DeviceProfile`` instances. This helper only
+    decides whether the requested pixel size maps to the current profile, a
+    known preset profile, a custom profile, or an invalid fallback.
+    """
+
+    width_px = max(0, _config_int_value(width, 0))
+    height_px = max(0, _config_int_value(height, 0))
+    if width_px <= 0 or height_px <= 0:
+        return {
+            'kind': 'current',
+            'profile_key': '',
+            'width_px': width_px,
+            'height_px': height_px,
+        }
+
+    current_w = max(0, _config_int_value(current_width, 0))
+    current_h = max(0, _config_int_value(current_height, 0))
+    if current_w == width_px and current_h == height_px:
+        return {
+            'kind': 'current',
+            'profile_key': '',
+            'width_px': width_px,
+            'height_px': height_px,
+        }
+
+    dimensions = dict(profile_dimensions or {})
+    for raw_key in preferred_profile_keys:
+        key = str(raw_key).strip()
+        if not key:
+            continue
+        raw_size = dimensions.get(key)
+        if not isinstance(raw_size, Sequence) or isinstance(raw_size, (str, bytes, bytearray)):
+            continue
+        size_values = list(raw_size)
+        if len(size_values) < 2:
+            continue
+        preset_w = max(0, _config_int_value(size_values[0], 0))
+        preset_h = max(0, _config_int_value(size_values[1], 0))
+        if preset_w == width_px and preset_h == height_px:
+            return {
+                'kind': 'profile',
+                'profile_key': key,
+                'width_px': width_px,
+                'height_px': height_px,
+            }
+
+    return {
+        'kind': 'custom',
+        'profile_key': 'custom',
+        'width_px': width_px,
+        'height_px': height_px,
+    }
+
+
+def build_custom_viewer_profile_metrics(
+    *,
+    width_px: object,
+    height_px: object,
+    ppi: object,
+    screen_w_mm: object,
+    screen_h_mm: object,
+    body_w_mm: object,
+    body_h_mm: object,
+) -> dict[str, float | int]:
+    """Return dimensions for a custom viewer profile derived from pixels.
+
+    The GUI layer owns the concrete ``DeviceProfile`` object; this helper only
+    normalizes the arithmetic so the mm conversion and body-area ratios can be
+    regression tested without Qt.
+    """
+
+    def _float_value(value: object, default: float) -> float:
+        try:
+            parsed = float(value)
+        except Exception:
+            return float(default)
+        return parsed if math.isfinite(parsed) else float(default)
+
+    def _int_value(value: object, default: int) -> int:
+        try:
+            return int(value)
+        except Exception:
+            return int(default)
+
+    width_value = max(1, _int_value(width_px, 1))
+    height_value = max(1, _int_value(height_px, 1))
+    ppi_value = max(1e-6, _float_value(ppi, 300.0))
+    px_per_mm = max(1e-6, ppi_value / 25.4)
+    source_screen_w_mm = max(1e-6, _float_value(screen_w_mm, 1.0))
+    source_screen_h_mm = max(1e-6, _float_value(screen_h_mm, 1.0))
+    source_body_w_mm = max(0.0, _float_value(body_w_mm, source_screen_w_mm))
+    source_body_h_mm = max(0.0, _float_value(body_h_mm, source_screen_h_mm))
+    body_w_ratio = source_body_w_mm / source_screen_w_mm
+    body_h_ratio = source_body_h_mm / source_screen_h_mm
+    resolved_screen_w_mm = float(width_value) / px_per_mm
+    resolved_screen_h_mm = float(height_value) / px_per_mm
+    return {
+        'width_px': int(width_value),
+        'height_px': int(height_value),
+        'screen_w_mm': resolved_screen_w_mm,
+        'screen_h_mm': resolved_screen_h_mm,
+        'body_w_mm': resolved_screen_w_mm * body_w_ratio,
+        'body_h_mm': resolved_screen_h_mm * body_h_ratio,
+    }
+
+
+def build_safe_preview_layout_size(
+    size: object,
+    *,
+    fallback: tuple[int, int] = (480, 720),
+    minimum: int = 10,
+    maximum: int = 4096,
+) -> tuple[int, int]:
+    """Return a clamped ``(width, height)`` pair from a Qt-like size object."""
+    try:
+        fallback_w, fallback_h = fallback
+    except Exception:
+        fallback_w, fallback_h = 480, 720
+
+    def _dimension_value(name: str, fallback_value: int) -> int:
+        candidate = getattr(size, name, None)
+        try:
+            raw_value = candidate() if callable(candidate) else candidate
+        except Exception:
+            raw_value = fallback_value
+        try:
+            return int(raw_value)
+        except Exception:
+            return int(fallback_value)
+
+    lower = min(int(minimum), int(maximum))
+    upper = max(int(minimum), int(maximum))
+    width = _dimension_value('width', int(fallback_w))
+    height = _dimension_value('height', int(fallback_h))
+    return max(lower, min(width, upper)), max(lower, min(height, upper))
+
+
+def build_viewer_minimum_size(
+    size_hint: object,
+    *,
+    fallback: tuple[int, int] = (660, 860),
+    min_width: int = 360,
+    min_height: int = 600,
+    maximum: int = 4096,
+) -> tuple[int, int]:
+    """Return a clamped minimum size for the device preview widget."""
+    try:
+        fallback_w, fallback_h = fallback
+    except Exception:
+        fallback_w, fallback_h = 660, 860
+
+    def _dimension_value(name: str, fallback_value: int) -> int:
+        candidate = getattr(size_hint, name, None)
+        try:
+            raw_value = candidate() if callable(candidate) else candidate
+        except Exception:
+            raw_value = fallback_value
+        try:
+            return int(raw_value)
+        except Exception:
+            return int(fallback_value)
+
+    upper = max(1, int(maximum))
+    width = _dimension_value('width', int(fallback_w))
+    height = _dimension_value('height', int(fallback_h))
+    return (
+        max(int(min_width), min(width, upper)),
+        max(int(min_height), min(height, upper)),
+    )
+
 def build_preset_display_name(preset: Mapping[str, object]) -> str:
     button_text = str(preset.get('button_text') or '').strip()
     name = str(preset.get('name') or '').strip()
     if button_text and name:
         return button_text if button_text == name else f'{button_text} / {name}'
     return button_text or name or 'プリセット'
+
+
+def compact_multiline_label_text(text: object) -> str:
+    """Return text without trailing blank lines for compact QLabel display."""
+    lines = [line.rstrip() for line in str(text or '').splitlines()]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return '\n'.join(lines)
 
 
 def _build_preset_summary_lines(
@@ -727,6 +1834,7 @@ def build_preset_summary_text(
     kinsoku_mode_labels: Mapping[str, str],
     output_format_labels: Mapping[str, str],
     summary_tag: str = '',
+    include_name_line: bool = True,
 ) -> str:
     name_line, line1, line2, line3 = _build_preset_summary_lines(
         preset,
@@ -735,10 +1843,13 @@ def build_preset_summary_text(
         kinsoku_mode_labels=kinsoku_mode_labels,
         output_format_labels=output_format_labels,
     )
-    tag_text = str(summary_tag or '').strip()
-    if tag_text:
-        name_line = f'{name_line} {tag_text}'
-    return '\n'.join((name_line, line1, line2, line3))
+    lines = [line1, line2, line3]
+    if include_name_line:
+        tag_text = str(summary_tag or '').strip()
+        if tag_text:
+            name_line = f'{name_line} {tag_text}'
+        lines.insert(0, name_line)
+    return compact_multiline_label_text('\n'.join(line for line in lines if str(line).strip()))
 
 
 
@@ -750,6 +1861,7 @@ def build_preset_summary_html(
     kinsoku_mode_labels: Mapping[str, str],
     output_format_labels: Mapping[str, str],
     summary_tag: str = '',
+    include_name_line: bool = True,
 ) -> str:
     name_line, line1, line2, line3 = _build_preset_summary_lines(
         preset,
@@ -758,21 +1870,25 @@ def build_preset_summary_html(
         kinsoku_mode_labels=kinsoku_mode_labels,
         output_format_labels=output_format_labels,
     )
-    tag_text = str(summary_tag or '').strip()
-    escaped_preset_name = html.escape(name_line)
-    escaped_font_line = html.escape(line3)
-    escaped_tag_text = html.escape(tag_text)
-    rendered_name_line = (
-        escaped_preset_name
-        if not escaped_tag_text
-        else f'{escaped_preset_name} <span style="color:#6B7C90;">{escaped_tag_text}</span>'
+    rendered_lines = [html.escape(line1), html.escape(line2), html.escape(line3)]
+    if include_name_line:
+        tag_text = str(summary_tag or '').strip()
+        escaped_preset_name = html.escape(name_line)
+        escaped_tag_text = html.escape(tag_text)
+        rendered_name_line = (
+            escaped_preset_name
+            if not escaped_tag_text
+            else f'{escaped_preset_name} <span style="color:#6B7C90;">{escaped_tag_text}</span>'
+        )
+        rendered_lines.insert(0, rendered_name_line)
+    line_markup = ''.join(
+        f'<div style="margin:0; padding:0;">{line}</div>'
+        for line in rendered_lines
+        if str(line).strip()
     )
     return (
         '<div style="line-height:1.12; text-align:left; margin:0; padding:0;">'
-        f'<div style="margin:0; padding:0;">{rendered_name_line}</div>'
-        f'<div style="margin:0; padding:0;">{html.escape(line1)}</div>'
-        f'<div style="margin:0; padding:0;">{html.escape(line2)}</div>'
-        f'<div style="margin:0; padding:0;">{escaped_font_line}</div>'
+        f'{line_markup}'
         '</div>'
     )
 
@@ -835,6 +1951,32 @@ def build_result_display_name(path_text: object) -> str:
     if '\\' in raw or (len(raw) >= 2 and raw[1] == ':'):
         return ntpath.basename(raw) or raw
     return Path(raw).name or raw
+
+
+def build_xtc_display_name(path_text: object) -> str:
+    return build_result_display_name(path_text)
+
+
+def build_xtc_source_payload(path_text: object, display_name: object = None) -> dict[str, str]:
+    normalized_path = str(path_text or '').strip()
+    resolved_display_name = (
+        str(display_name).strip()
+        if display_name is not None
+        else build_xtc_display_name(normalized_path)
+    )
+    return {
+        'path_text': normalized_path,
+        'display_name': resolved_display_name,
+    }
+
+
+def build_xtc_source_document_payload(
+    source_payload: Mapping[str, object],
+    document_payload: Mapping[str, object],
+) -> dict[str, object]:
+    payload: dict[str, object] = dict(source_payload)
+    payload.update(dict(document_payload))
+    return payload
 
 
 def build_results_summary_message(summary_lines: Sequence[str], entry_count: int, fallback: str = '') -> str:

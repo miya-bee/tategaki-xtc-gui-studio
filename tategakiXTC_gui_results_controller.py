@@ -62,7 +62,7 @@ def _normalize_summary_line_item(item: object) -> list[str]:
             lines.extend(_normalize_summary_line_item(value))
         return lines
     if isinstance(item, (list, tuple, set, frozenset)):
-        lines: list[str] = []
+        lines = []
         for nested in item:
             lines.extend(_normalize_summary_line_item(nested))
         return lines
@@ -260,6 +260,29 @@ def build_results_load_context(
         'has_path': bool(path_text),
         'should_warn_no_selection': preferred_index is None,
         'should_warn_missing_path': preferred_index is not None and not path_text,
+    }
+
+
+def build_fallback_loaded_result_load_context(
+    loaded_path: object,
+    item_paths: Sequence[object],
+) -> dict[str, Any]:
+    """Return a best-effort result-load context for the currently loaded XTC path."""
+    loaded_path_text = worker_logic._normalized_path_text(loaded_path).strip()
+    if not loaded_path_text:
+        return {}
+    item_path_list = list(item_paths)
+    matched_index = find_matching_loaded_path_index(loaded_path_text, item_path_list)
+    if matched_index is None:
+        return {}
+    resolved_path = None
+    if 0 <= matched_index < len(item_path_list):
+        resolved_path = item_path_list[matched_index]
+    path_text = worker_logic._normalized_path_text(resolved_path).strip()
+    return {
+        'preferred_index': matched_index,
+        'resolved_path': resolved_path,
+        'has_path': bool(path_text),
     }
 
 
