@@ -37,4 +37,3 @@ jobs:
           python build_release_zip.py
           $zipName = python -c "from tategakiXTC_release_metadata import RELEASE_ZIP_FILE_NAME; print(RELEASE_ZIP_FILE_NAME)"
           python build_release_zip.py --verify "dist\$zipName"
-ｚ
