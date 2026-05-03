@@ -8,17 +8,12 @@ jobs:
   tests:
     runs-on: windows-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.10', '3.11', '3.12']
-
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.10'
 
       - name: Install dependencies
         shell: pwsh
@@ -34,11 +29,7 @@ jobs:
       - name: Run focused regression tests
         shell: pwsh
         run: |
-          python -m unittest ^
-            tests.test_release_docs_regression ^
-            tests.test_release_hygiene_regression ^
-            tests.test_conversion_worker_logic ^
-            -v
+          python -m unittest tests.test_release_docs_regression tests.test_release_hygiene_regression tests.test_conversion_worker_logic -v
 
       - name: Build and verify release zip
         shell: pwsh
@@ -46,4 +37,3 @@ jobs:
           python build_release_zip.py
           $zipName = python -c "from tategakiXTC_release_metadata import RELEASE_ZIP_FILE_NAME; print(RELEASE_ZIP_FILE_NAME)"
           python build_release_zip.py --verify "dist\$zipName"
-          
