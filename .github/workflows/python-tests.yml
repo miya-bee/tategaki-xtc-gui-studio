@@ -34,10 +34,10 @@ jobs:
       - name: Run focused regression tests
         shell: pwsh
         run: |
-          python -m unittest ^
-            tests.test_release_docs_regression ^
-            tests.test_release_hygiene_regression ^
-            tests.test_conversion_worker_logic ^
+          python -m unittest `
+            tests.test_release_docs_regression `
+            tests.test_release_hygiene_regression `
+            tests.test_conversion_worker_logic `
             -v
 
       - name: Build and verify release zip
@@ -46,4 +46,3 @@ jobs:
           python build_release_zip.py
           $zipName = python -c "from tategakiXTC_release_metadata import RELEASE_ZIP_FILE_NAME; print(RELEASE_ZIP_FILE_NAME)"
           python build_release_zip.py --verify "dist\$zipName"
-          
