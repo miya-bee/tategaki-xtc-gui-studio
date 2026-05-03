@@ -10,7 +10,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
     def test_build_preview_payload_uses_render_settings_and_clamps_limit(self):
         payload = preview_controller.build_preview_payload(
             render_settings_base={
-                'target': 'book.epub',
+                'target': '',
                 'font_file': 'font.ttf',
                 'font_size': 28,
                 'ruby_size': 12,
@@ -46,6 +46,68 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['punctuation_position_mode'], 'down_weak')
         self.assertEqual(payload['ichi_position_mode'], 'up_weak')
         self.assertEqual(payload['lower_closing_bracket_position_mode'], 'up_strong')
+
+    def test_build_preview_payload_forces_text_mode_for_text_target_after_stale_image_mode(self):
+        payload = preview_controller.build_preview_payload(
+            render_settings_base={
+                'target': 'sample.txt',
+                'font_file': 'font.ttf',
+                'font_size': 28,
+                'ruby_size': 12,
+                'line_spacing': 44,
+                'margin_t': 10,
+                'margin_b': 12,
+                'margin_r': 14,
+                'margin_l': 16,
+                'dither': False,
+                'threshold': 128,
+                'night_mode': False,
+                'kinsoku_mode': 'standard',
+                'output_format': 'xtc',
+                'width': 528,
+                'height': 792,
+            },
+            current_preview_mode='image',
+            selected_profile_key='x3',
+            preview_image_data_url='data:image/png;base64,STALE',
+            preview_page_limit=5,
+            default_preview_page_limit=10,
+        )
+
+        self.assertEqual(payload['mode'], 'text')
+        self.assertEqual(payload['file_b64'], '')
+        self.assertEqual(payload['target_path'], 'sample.txt')
+
+    def test_build_preview_payload_uses_target_path_for_image_file_targets_too(self):
+        payload = preview_controller.build_preview_payload(
+            render_settings_base={
+                'target': 'cover.png',
+                'font_file': 'font.ttf',
+                'font_size': 28,
+                'ruby_size': 12,
+                'line_spacing': 44,
+                'margin_t': 10,
+                'margin_b': 12,
+                'margin_r': 14,
+                'margin_l': 16,
+                'dither': False,
+                'threshold': 128,
+                'night_mode': False,
+                'kinsoku_mode': 'standard',
+                'output_format': 'xtc',
+                'width': 528,
+                'height': 792,
+            },
+            current_preview_mode='image',
+            selected_profile_key='x3',
+            preview_image_data_url='data:image/png;base64,STALE',
+            preview_page_limit=5,
+            default_preview_page_limit=10,
+        )
+
+        self.assertEqual(payload['mode'], 'text')
+        self.assertEqual(payload['file_b64'], '')
+        self.assertEqual(payload['target_path'], 'cover.png')
 
 
     def test_build_preview_payload_normalizes_string_bool_values(self):

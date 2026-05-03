@@ -58,20 +58,18 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
         changelog = Path('CHANGELOG.md').read_text(encoding='utf-8')
         self.assertTrue(changelog.startswith('# CHANGELOG\n'))
         self.assertEqual(changelog.count('# CHANGELOG'), 1)
-        self.assertIn('## v1.2.0', changelog)
-        self.assertIn('v1.2.0 は、v1.1.0 公開後に積み重ねた v1.1.1 系の改修をまとめた', changelog)
+        self.assertIn('## v1.2.1', changelog)
+        self.assertIn('v1.2.1 は、v1.2.0 を基準にした TXT / Markdown プレビューの小修正版です。', changelog)
         self.assertIn('## v1.1.0', changelog)
         self.assertIn('v1.0.2 の次の正式版 v1.1.0', changelog)
 
     def test_release_notes_exist_for_current_public_version(self) -> None:
-        notes = Path('RELEASE_NOTES_v1_2_0.md').read_text(encoding='utf-8')
-        self.assertIn('v1.2.0', notes)
-        self.assertIn('安定版', notes)
-        self.assertIn('プリセット', notes)
-        self.assertIn('QLabel', notes)
-        self.assertIn('setMaximumHeight(0)', notes)
-        self.assertIn('source-only', notes)
-        self.assertIn('ini の保存キー', notes)
+        notes = Path('RELEASE_NOTES_v1_2_1.md').read_text(encoding='utf-8')
+        self.assertIn('v1.2.1', notes)
+        self.assertIn('小修正版', notes)
+        self.assertIn('TXT / Markdown', notes)
+        self.assertIn('target_path', notes)
+        self.assertIn('file_b64', notes)
 
 
     def test_docs_treat_v1_1_0_as_next_after_v1_0_2(self) -> None:
@@ -89,7 +87,7 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
         metadata = Path('tategakiXTC_release_metadata.py').read_text(encoding='utf-8')
         self.assertIn('APP_VERSION,', studio)
         self.assertIn('from tategakiXTC_release_metadata import', constants)
-        self.assertIn("APP_VERSION = '1.2.0'", metadata)
+        self.assertIn("APP_VERSION = '1.2.1'", metadata)
 
     def test_readme_github_release_block_matches_release_metadata(self) -> None:
         import tategakiXTC_release_metadata as release_metadata
