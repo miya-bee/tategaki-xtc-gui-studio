@@ -14,6 +14,11 @@ import codecs
 import re
 
 import tategakiXTC_gui_core as _core
+from tategakiXTC_gui_core_cache import (
+    _get_cached_input_document,
+    _source_document_cache_key,
+    _store_cached_input_document,
+)
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
 
 

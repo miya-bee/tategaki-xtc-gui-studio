@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.2.1
+
+v1.2.1 は、v1.2.0 を基準にした TXT / Markdown プレビューの小修正版です。
+
+- `tategakiXTC_gui_core_text.py` で、分割後のテキスト入力キャッシュ helper を直接参照できるようにし、TXT / Markdown 読み込み時のプレビュー生成エラーを修正しました。
+- `tategakiXTC_gui_preview_controller.py` で、対象パスが選択されている場合は古い画像プレビュー状態を引きずらず、`target_path` からプレビュー生成するようにしました。
+- テキスト対象選択後の preview payload を確認する回帰テストを追加しました。
+
 ## v1.2.0
 
 v1.2.0 は、v1.1.0 公開後に積み重ねた v1.1.1 系の改修をまとめた公開向け安定版です。

@@ -7,6 +7,7 @@ widgets so MainWindow can stay thinner while behavior remains regression-tested.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 import zlib
@@ -17,6 +18,40 @@ import tategakiXTC_gui_studio_logic as studio_logic
 DEFAULT_OUTPUT_FORMAT = 'xtc'
 ALLOWED_OUTPUT_FORMATS = {'xtc', 'xtch'}
 ALLOWED_DEVICE_VIEW_SOURCES = {'preview', 'xtc'}
+
+
+TARGET_PATH_PREVIEW_SUFFIXES = {
+    '.txt',
+    '.md',
+    '.markdown',
+    '.epub',
+    '.zip',
+    '.rar',
+    '.cbz',
+    '.cbr',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.webp',
+}
+
+
+def _preview_mode_for_target(current_preview_mode: object, target_path: object) -> str:
+    """Return the safe preview mode for the current target selection.
+
+    When a file or folder is selected in the normal target field, the preview
+    core must render from ``target_path``.  A stale image-preview mode would
+    otherwise make the core ignore the target and decode old ``file_b64`` data,
+    which breaks TXT / Markdown previews after an image-oriented state.
+    """
+    mode = str(current_preview_mode or 'text').strip() or 'text'
+    target_text = str(target_path or '').strip()
+    if not target_text:
+        return mode
+    suffix = Path(target_text).suffix.lower()
+    if suffix in TARGET_PATH_PREVIEW_SUFFIXES or not suffix:
+        return 'text'
+    return mode
 
 
 def _iter_preview_page_items(value: object) -> Iterable[object]:
@@ -146,11 +181,14 @@ def build_preview_payload(
 ) -> dict[str, object]:
     """Build the current preview payload from GUI state."""
     preview_limit = max(1, studio_logic._config_int_value(preview_page_limit, default_preview_page_limit))
+    target_path = render_settings_base['target']
+    mode = _preview_mode_for_target(current_preview_mode, target_path)
+    file_b64 = _coerce_preview_data_url(preview_image_data_url) if mode == 'image' else ''
     return {
-        'mode': str(current_preview_mode or 'text'),
+        'mode': mode,
         'profile': str(selected_profile_key or ''),
-        'file_b64': _coerce_preview_data_url(preview_image_data_url),
-        'target_path': render_settings_base['target'],
+        'file_b64': file_b64,
+        'target_path': target_path,
         'font_file': render_settings_base['font_file'],
         'font_size': render_settings_base['font_size'],
         'ruby_size': render_settings_base['ruby_size'],

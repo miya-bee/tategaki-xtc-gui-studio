@@ -347,7 +347,7 @@ REQUIRED_UTF8_TEXT_FILES = tuple(
 )
 REQUIRED_APP_CONTENT_MARKERS = {
     'tategakiXTC_release_metadata.py': (
-        "APP_VERSION = '1.2.0'",
+        "APP_VERSION = '1.2.1'",
         'RELEASE_NOTES_FILE',
         'RELEASE_ZIP_FILE_NAME',
     ),

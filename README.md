@@ -7,15 +7,21 @@
 
 ## バージョン
 
-現在の公開版は **v1.2.0** です。
+現在の公開版は **v1.2.1** です。
 
+v1.2.1 は、v1.2.0 を基準に TXT / Markdown などのテキスト入力プレビューを修正した小修正版です。
 v1.2.0 は、v1.1.0 公開後に積み重ねた v1.1.1 系の改修をまとめた **安定版**として扱います。
 v1.1.0 は、GitHub で公開済みの **v1.0.2 の次の公開版**です。
 
-- 前回公開版: `v1.1.0`
-- 今回公開版: `v1.2.0`
-- GitHub Release tag: `v1.2.0`
-- GitHub Release title: `v1.2.0`
+- 前回公開版: `v1.2.0`
+- 今回公開版: `v1.2.1`
+- GitHub Release tag: `v1.2.1`
+- GitHub Release title: `v1.2.1`
+
+## v1.2.1 の主な更新
+
+- TXT / Markdown などのテキストファイルを読み込んだとき、プレビュー生成でテキスト入力キャッシュ helper を参照できずエラーになる問題を修正しました。
+- 対象パスが選択されているプレビューでは、古い画像プレビュー用 `file_b64` を引きずらず、`target_path` から安全にプレビューするようにしました。
 
 ## v1.2.0 の主な更新
 
@@ -45,6 +51,7 @@ v1.1.0 では、GUI の整理、プレビュー周辺、描画・変換処理、
 詳細は以下も参照してください。
 
 - `CHANGELOG.md`
+- `RELEASE_NOTES_v1_2_1.md`
 - `RELEASE_NOTES_v1_2_0.md`
 - `RELEASE_NOTES_v1_1_0.md`（v1.1.0 の基準版メモ）
 
@@ -205,7 +212,7 @@ release zip は以下で作成できます。
     .venv\Scripts\python.exe -B ^
       build_release_zip.py ^
       --verify ^
-      dist\tategaki-xtc-gui-studio_v1.2.0-release.zip
+      dist\tategaki-xtc-gui-studio_v1.2.1-release.zip
 
 release zip の作成は、環境に応じて以下でも実行できます。
 
@@ -217,26 +224,26 @@ release zip の作成は、環境に応じて以下でも実行できます。
 
     python build_release_zip.py --verify <zipパス>
 
-    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.2.0-release.zip
+    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.2.1-release.zip
 
-v1.2.0 のこちらで作成する release zip は source-only 構成です。`Font/` を同梱して再配布する場合は、対応するフォント本体と `LICENSE_OFL.txt` を同じ release zip に含めてください。
+v1.2.1 のこちらで作成する release zip は source-only 構成です。`Font/` を同梱して再配布する場合は、対応するフォント本体と `LICENSE_OFL.txt` を同じ release zip に含めてください。
 
 ## GitHub Release での公開方針
 
-v1.2.0 は、GitHub 上では以下の扱いで公開します。
+v1.2.1 は、GitHub 上では以下の扱いで公開します。
 
-- Release tag: `v1.2.0`
-- Release title: `v1.2.0`
-- Previous tag: `v1.1.1.37`
-- 添付ファイル: `tategaki-xtc-gui-studio_v1.2.0-release.zip`
+- Release tag: `v1.2.1`
+- Release title: `v1.2.1`
+- Previous tag: `v1.2.0`
+- 添付ファイル: `tategaki-xtc-gui-studio_v1.2.1-release.zip`
 
-Release 本文には `RELEASE_NOTES_v1_2_0.md` の内容を使用します。
+Release 本文には `RELEASE_NOTES_v1_2_1.md` の内容を使用します。
 
 開発用の `.venv/` や `node_modules/` は release 対象外です。
 
 ## 公開対象について
 
-v1.2.0 の公開対象は **Python GUI版のみ**です。
+v1.2.1 の公開対象は **Python GUI版のみ**です。
 
 以下の旧ローカル Web 試作版関連ファイルは、公開用 payload / release 検査の対象外です。
 
