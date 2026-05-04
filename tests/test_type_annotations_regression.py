@@ -238,7 +238,8 @@ class TypeAnnotationRegressionTests(unittest.TestCase):
                 'margin_t', 'margin_b', 'margin_r', 'margin_l', 'dither',
                 'threshold', 'night_mode', 'kinsoku_mode',
                 'punctuation_position_mode', 'ichi_position_mode',
-                'lower_closing_bracket_position_mode', 'output_format',
+                'lower_closing_bracket_position_mode', 'wave_dash_drawing_mode',
+                'wave_dash_position_mode', 'output_format',
                 'output_conflict', 'output_name', 'open_folder', 'width', 'height',
             },
         )

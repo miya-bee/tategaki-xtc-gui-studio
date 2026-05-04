@@ -57,8 +57,8 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
     def test_changelog_exists_and_mentions_current_release(self):
         content = Path('CHANGELOG.md').read_text(encoding='utf-8')
-        self.assertIn('## v1.2.1', content)
-        self.assertIn('v1.2.1 は、v1.2.0 を基準にした TXT / Markdown プレビューの小修正版です。', content)
+        self.assertIn('## v1.2.2', content)
+        self.assertIn('v1.2.2 は、v1.2.1 を基準に、波ダッシュ・チルダ類の縦書き表示調整を追加した安定版です。', content)
         self.assertIn('## v1.1.0', content)
         self.assertIn('v1.0.2 の次の正式版 v1.1.0', content)
         self.assertIn('tategakiXTC_gui_studio_logic.py', content)
@@ -66,10 +66,10 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
 
     def test_release_notes_file_matches_public_version(self):
-        self.assertTrue(Path('RELEASE_NOTES_v1_2_1.md').exists())
+        self.assertTrue(Path('RELEASE_NOTES_v1_2_2.md').exists())
         self.assertFalse(Path('RELEASE_NOTES_v1_1_69.md').exists())
-        notes = Path('RELEASE_NOTES_v1_2_1.md').read_text(encoding='utf-8')
-        self.assertIn('v1.2.1', notes)
+        notes = Path('RELEASE_NOTES_v1_2_2.md').read_text(encoding='utf-8')
+        self.assertIn('v1.2.2', notes)
         self.assertNotIn('1.1.69', notes)
         self.assertNotIn('bugfix', notes.casefold())
 
@@ -127,7 +127,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
     def test_public_docs_do_not_expose_internal_work_numbers(self):
         readme = Path('README.md').read_text(encoding='utf-8')
         changelog = Path('CHANGELOG.md').read_text(encoding='utf-8')
-        notes = Path('RELEASE_NOTES_v1_2_1.md').read_text(encoding='utf-8')
+        notes = Path('RELEASE_NOTES_v1_2_2.md').read_text(encoding='utf-8')
         for content in (readme, changelog, notes):
             self.assertNotIn('bugfix171', content)
             self.assertNotIn('1.1.69', content)
@@ -340,8 +340,8 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
     def test_readme_verify_command_examples_include_zip_path_argument(self):
         content = Path('README.md').read_text(encoding='utf-8')
-        self.assertIn('build_release_zip.py ^\n      --verify ^\n      dist\\tategaki-xtc-gui-studio_v1.2.1-release.zip', content)
-        self.assertIn('python build_release_zip.py --verify dist\\tategaki-xtc-gui-studio_v1.2.1-release.zip', content)
+        self.assertIn('build_release_zip.py ^\n      --verify ^\n      dist\\tategaki-xtc-gui-studio_v1.2.2-release.zip', content)
+        self.assertIn('python build_release_zip.py --verify dist\\tategaki-xtc-gui-studio_v1.2.2-release.zip', content)
         self.assertNotIn('dist\\sweep471_smoke-release.zip', content)
 
 
@@ -375,8 +375,8 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         ):
             self.assertIn(expected, builder)
         self.assertIn('install_requirements.bat', readme)
-        self.assertIn('tategaki-xtc-gui-studio_v1.2.1-release.zip', readme)
-        self.assertIn('RELEASE_NOTES_v1_2_1.md', readme)
+        self.assertIn('tategaki-xtc-gui-studio_v1.2.2-release.zip', readme)
+        self.assertIn('RELEASE_NOTES_v1_2_2.md', readme)
 
 
     def test_run_tests_verifies_created_release_zip_with_explicit_path(self):
@@ -525,6 +525,19 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         self.assertIn('def draw_vertical_dot_leader', content)
         self.assertIn('draw.ellipse', content)
         self.assertIn('if char in VERTICAL_DOT_LEADER_CHARS:', content)
+
+    def test_vertical_wave_dash_mode_select_keeps_rotate_and_separate_paths(self):
+        content = (Path('tategakiXTC_gui_core.py').read_text(encoding='utf-8') + '\n' + Path('tategakiXTC_gui_core_renderer.py').read_text(encoding='utf-8'))
+        self.assertIn('VERTICAL_WAVE_DASH_CHARS', content)
+        for wave_char in ('～', '〜', '〰', '~', '∼', '∽', '∿'):
+            self.assertIn(wave_char, content)
+        self.assertIn('def draw_vertical_wave_dash', content)
+        self.assertIn('_vertical_wave_dash_rotation_degrees', content)
+        self.assertIn('_build_vertical_wave_dash_image', content)
+        self.assertIn('_wave_dash_drawing_mode', content)
+        self.assertIn("'rotate'", content)
+        self.assertIn("'separate'", content)
+        self.assertIn('if char in VERTICAL_WAVE_DASH_CHARS:', content)
 
     def test_widgets_import_qrect_for_device_preview_paint_info_rect(self):
         content = Path('tategakiXTC_gui_studio_widgets.py').read_text(encoding='utf-8')

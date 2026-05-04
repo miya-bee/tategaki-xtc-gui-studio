@@ -264,6 +264,7 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertFalse(plan['threshold_enabled'])
         self.assertEqual(plan['threshold_help_spacing'], 6)
         self.assertEqual(plan['glyph_position_row_spacing'], 6)
+        self.assertEqual(plan['wave_dash_row_spacing'], 6)
         self.assertIn('白と黒を入れ替えて出力', plan['help_text'])
         self.assertTrue(plan['trailing_stretch'])
 

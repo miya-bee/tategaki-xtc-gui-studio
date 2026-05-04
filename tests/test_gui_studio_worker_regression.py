@@ -13519,8 +13519,11 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         payload = window._current_preview_payload()
 
-        self.assertEqual(payload['mode'], 'image')
-        self.assertEqual(payload['file_b64'], 'data:image/png;base64,QUJD')
+        # A normal target path should take priority over stale image-preview state.
+        # This keeps EPUB/TXT/Markdown previews rendered from the selected target
+        # instead of accidentally reusing the previous image data URL.
+        self.assertEqual(payload['mode'], 'text')
+        self.assertEqual(payload['file_b64'], '')
         self.assertEqual(payload['target_path'], 'book.epub')
         self.assertEqual(payload['font_file'], 'font.ttf')
         self.assertEqual(payload['output_format'], 'xtch')
@@ -15399,6 +15402,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('Font Label', summary)
         self.assertIn('出力形式: XTCH', summary)
         self.assertIn('白黒反転: ON', summary)
+        self.assertNotIn('波線描画:', summary)
+        self.assertNotIn('波線位置:', summary)
         with mock.patch.object(self.studio.core, 'describe_font_value', return_value='Font Label'):
             summary_false = window._preset_summary_text({
                 'button_text': 'プリセット1', 'name': '名前', 'font_file': 'font.ttf', 'night_mode': 'false',
@@ -15408,6 +15413,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             })
         self.assertIn('白黒反転: OFF', summary_false)
         self.assertIn('ディザ: OFF', summary_false)
+        self.assertNotIn('波線描画:', summary_false)
+        self.assertNotIn('波線位置:', summary_false)
         with mock.patch.object(self.studio.core, 'describe_font_value', return_value='Font Label'):
             summary_broken = window._preset_summary_text({
                 'button_text': 'プリセット1', 'name': '名前', 'font_file': 'font.ttf', 'night_mode': 'false',
@@ -15418,6 +15425,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('機種: X4', summary_broken)
         self.assertIn('本文: 26', summary_broken)
         self.assertIn('ルビ: 12', summary_broken)
+        self.assertNotIn('波線描画:', summary_broken)
+        self.assertNotIn('波線位置:', summary_broken)
 
 
     def test_preset_summary_plain_text_omits_html_tags(self):
@@ -15431,6 +15440,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             })
         self.assertIn('Font Label', summary)
         self.assertIn('出力形式: XTCH', summary)
+        self.assertNotIn('波線描画:', summary)
+        self.assertNotIn('波線位置:', summary)
         self.assertNotIn('<div', summary)
         self.assertEqual(summary.count('\n'), 3)
 
@@ -15446,6 +15457,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(summary_lines[0].startswith('機種: X4 / 出力形式: XTC'))
         self.assertIn('本文: 28', summary_lines[0])
         self.assertIn('フォント: font.ttf', window.preset_summary_label.text())
+        self.assertNotIn('波線描画:', window.preset_summary_label.text())
+        self.assertNotIn('波線位置:', window.preset_summary_label.text())
         self.assertNotIn('\n\n', window.preset_summary_label.text())
         self.assertNotIn('<div', window.preset_summary_label.text())
         self.assertNotIn('<span', window.preset_summary_label.text())
@@ -18047,6 +18060,13 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn("image_glyph_position_row.addWidget(self._dim_label('漢数字「一」'))", image_source)
         self.assertIn("image_glyph_position_row.addWidget(self.ichi_position_combo)", image_source)
         self.assertIn("lay.addLayout(image_glyph_position_row)", image_source)
+        self.assertIn("image_wave_dash_row = self._make_hbox_layout_from_plan(", image_source)
+        self.assertIn("gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))", image_source)
+        self.assertIn("image_wave_dash_row.addWidget(self._dim_label('波線描画'))", image_source)
+        self.assertIn("image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)", image_source)
+        self.assertIn("image_wave_dash_row.addWidget(self._dim_label('波線位置'))", image_source)
+        self.assertIn("image_wave_dash_row.addWidget(self.wave_dash_position_combo)", image_source)
+        self.assertIn("lay.addLayout(image_wave_dash_row)", image_source)
 
 
     def test_request_preview_refresh_updates_summary_only_when_refresh_succeeds(self):
@@ -18451,6 +18471,57 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.preset_definitions['preset_1']['output_format'], 'xtch')
         self.assertEqual(window.settings_store.values['presets/preset_1/output_format'], 'xtch')
         self.assertIn('出力形式: XTCH', window.preset_summary_label.text())
+
+    def test_current_wave_dash_modes_normalize_combo_label_variants(self):
+        window = self.make_window()
+        window.wave_dash_drawing_combo = _ComboStub([('別描画方式', '別描画方式')], current_index=0)
+        window.wave_dash_position_combo = _ComboStub([('下補正 強', '下補正 強')], current_index=0)
+
+        self.assertEqual(window.current_wave_dash_drawing_mode(), 'separate')
+        self.assertEqual(window.current_wave_dash_position_mode(), 'down_strong')
+
+    def test_current_wave_dash_modes_fall_back_for_unknown_combo_data(self):
+        window = self.make_window()
+        window.wave_dash_drawing_combo = _ComboStub([('unknown', 'unknown')], current_index=0)
+        window.wave_dash_position_combo = _ComboStub([('上補正 強', '上補正 強')], current_index=0)
+
+        self.assertEqual(window.current_wave_dash_drawing_mode(), 'rotate')
+        self.assertEqual(window.current_wave_dash_position_mode(), 'standard')
+
+    def test_save_preset_prefers_live_wave_dash_combo_values_and_persists_ini_keys(self):
+        window = self.make_window()
+        window.preset_definitions = {
+            'preset_1': {
+                'button_text': 'プリセット1', 'name': 'プリセット1', 'profile': 'x4', 'font_file': 'font.ttf',
+                'font_size': 26, 'ruby_size': 12, 'line_spacing': 44, 'margin_t': 12, 'margin_b': 14,
+                'margin_r': 12, 'margin_l': 12, 'night_mode': False, 'dither': False,
+                'kinsoku_mode': 'standard', 'output_format': 'xtc',
+                'wave_dash_drawing_mode': 'rotate', 'wave_dash_position_mode': 'standard',
+            }
+        }
+        window.preset_combo = _ComboStub([('プリセット1', 'preset_1')], current_index=0)
+        window.preset_summary_label = _LabelStub()
+        window.settings_store = _SettingsStoreStub()
+        status = _StatusBarStub()
+        window.statusBar = lambda: status
+        window.wave_dash_drawing_combo = _ComboStub([('回転グリフ', 'rotate'), ('別描画', 'separate')], current_index=1)
+        window.wave_dash_position_combo = _ComboStub([('標準', 'standard'), ('下補正弱', 'down_weak'), ('下補正強', 'down_strong')], current_index=2)
+        window.current_preset_payload = lambda: {
+            'profile': 'x4', 'font_file': 'font.ttf', 'font_size': 32, 'ruby_size': 14, 'line_spacing': 48,
+            'margin_t': 10, 'margin_b': 11, 'margin_r': 12, 'margin_l': 13, 'night_mode': True,
+            'dither': False, 'kinsoku_mode': 'standard', 'output_format': 'xtc',
+            'wave_dash_drawing_mode': 'rotate', 'wave_dash_position_mode': 'standard',
+        }
+
+        with mock.patch.object(self.studio, 'QMessageBox', types.SimpleNamespace(question=lambda *args, **kwargs: 1, Yes=1, No=0)):
+            window.save_preset('preset_1')
+
+        self.assertEqual(window.preset_definitions['preset_1']['wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(window.preset_definitions['preset_1']['wave_dash_position_mode'], 'down_strong')
+        self.assertEqual(window.settings_store.values['presets/preset_1/wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(window.settings_store.values['presets/preset_1/wave_dash_position_mode'], 'down_strong')
+        self.assertNotIn('波線描画:', window.preset_summary_label.text())
+        self.assertNotIn('波線位置:', window.preset_summary_label.text())
 
     def test_save_preset_prefers_live_font_combo_value(self):
         window = self.make_window()

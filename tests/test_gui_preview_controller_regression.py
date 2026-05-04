@@ -26,6 +26,8 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'punctuation_position_mode': 'down_weak',
                 'ichi_position_mode': 'up_weak',
                 'lower_closing_bracket_position_mode': 'up_strong',
+                'wave_dash_drawing_mode': 'separate',
+                'wave_dash_position_mode': 'down_weak',
                 'output_format': 'xtc',
                 'width': 528,
                 'height': 792,
@@ -46,6 +48,41 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['punctuation_position_mode'], 'down_weak')
         self.assertEqual(payload['ichi_position_mode'], 'up_weak')
         self.assertEqual(payload['lower_closing_bracket_position_mode'], 'up_strong')
+        self.assertEqual(payload['wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(payload['wave_dash_position_mode'], 'down_weak')
+
+
+    def test_build_preview_payload_normalizes_wave_dash_label_variants(self):
+        payload = preview_controller.build_preview_payload(
+            render_settings_base={
+                'target': '',
+                'font_file': 'font.ttf',
+                'font_size': 28,
+                'ruby_size': 12,
+                'line_spacing': 44,
+                'margin_t': 10,
+                'margin_b': 12,
+                'margin_r': 14,
+                'margin_l': 16,
+                'dither': False,
+                'threshold': 128,
+                'night_mode': False,
+                'kinsoku_mode': 'standard',
+                'wave_dash_drawing_mode': '回転グリフ方式',
+                'wave_dash_position_mode': '下補正 強',
+                'output_format': 'xtc',
+                'width': 528,
+                'height': 792,
+            },
+            current_preview_mode='text',
+            selected_profile_key='x3',
+            preview_image_data_url='',
+            preview_page_limit=5,
+            default_preview_page_limit=10,
+        )
+
+        self.assertEqual(payload['wave_dash_drawing_mode'], 'rotate')
+        self.assertEqual(payload['wave_dash_position_mode'], 'down_strong')
 
     def test_build_preview_payload_forces_text_mode_for_text_target_after_stale_image_mode(self):
         payload = preview_controller.build_preview_payload(

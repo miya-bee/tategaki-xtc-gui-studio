@@ -125,6 +125,27 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertEqual(core._glyph_position_mode('下補正 弱'), 'down_weak')
         self.assertEqual(core._glyph_position_mode('unknown'), 'standard')
 
+    def test_glyph_and_wave_mode_normalizers_handle_unhashable_values(self):
+        class _UnhashableModeValue:
+            __hash__ = None
+
+            def __init__(self, text):
+                self.text = text
+
+            def __str__(self):
+                return self.text
+
+        self.assertEqual(core._glyph_position_mode(_UnhashableModeValue('上補正 強')), 'up_strong')
+        self.assertEqual(core._wave_dash_drawing_mode(_UnhashableModeValue('別描画')), 'separate')
+        self.assertEqual(core._wave_dash_position_mode(_UnhashableModeValue('下補正弱')), 'down_weak')
+        self.assertEqual(core._wave_dash_position_mode(_UnhashableModeValue('上補正 強')), 'standard')
+
+    def test_wave_dash_drawing_mode_accepts_manual_ini_label_variants(self):
+        self.assertEqual(core._wave_dash_drawing_mode('回転グリフ方式'), 'rotate')
+        self.assertEqual(core._wave_dash_drawing_mode('rotated glyph'), 'rotate')
+        self.assertEqual(core._wave_dash_drawing_mode('別描画方式'), 'separate')
+        self.assertEqual(core._wave_dash_drawing_mode('アプリ側描画'), 'separate')
+
     def test_parse_and_build_font_spec_cover_index_variants(self):
         self.assertEqual(core.parse_font_spec(''), ('', 0))
         self.assertEqual(
@@ -1251,9 +1272,66 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertIn('ｰ', core.PROLONGED_SOUND_MARK_CHARS)
         self.assertIn('ｰ', core.LINE_HEAD_FORBIDDEN_CHARS)
 
-    def test_tate_replace_covers_em_dash_and_hyphen(self):
+    def test_tate_replace_covers_em_dash_hyphen_and_wave_dash_family(self):
         self.assertEqual(core.TATE_REPLACE.get('—'), '丨')
         self.assertEqual(core.TATE_REPLACE.get('‐'), '丨')
+        for char in ('～', '〜', '〰', '~', '∼', '∽', '∿'):
+            self.assertEqual(core.TATE_REPLACE.get(char), '≀')
+            self.assertIn(char, core.VERTICAL_WAVE_DASH_CHARS)
+        self.assertIn('≀', core.VERTICAL_WAVE_DASH_CHARS)
+
+    def test_draw_vertical_wave_dash_uses_rotated_font_glyph_path(self):
+        img = Image.new('L', (64, 64), 255)
+        draw = core.create_image_draw(img)
+        with mock.patch.object(core, '_render_text_glyph_and_mask_shared', wraps=core._render_text_glyph_and_mask_shared) as mocked_bundle:
+            core.draw_char_tate(draw, '～', (20, 10), self.font, 24, is_bold=True)
+        self.assertEqual(mocked_bundle.call_count, 1)
+        _args, kwargs = mocked_bundle.call_args
+        self.assertEqual(kwargs.get('rotate_degrees'), 90)
+        self.assertTrue(kwargs.get('is_bold'))
+        self.assertIsNotNone(ImageOps.invert(img.crop((20, 10, 44, 34))).getbbox())
+
+    def test_vertical_wave_dash_does_not_rotate_vertical_wave_glyph(self):
+        self.assertEqual(core._vertical_wave_dash_rotation_degrees('≀'), 0)
+        self.assertEqual(core._vertical_wave_dash_rotation_degrees('～'), 90)
+
+    def test_draw_vertical_wave_dash_can_use_separate_drawing_mode(self):
+        img = Image.new('L', (64, 64), 255)
+        draw = core.create_image_draw(img)
+        setattr(draw, '_tategaki_wave_dash_drawing_mode', 'separate')
+        with mock.patch.object(core, '_render_text_glyph_and_mask_shared', wraps=core._render_text_glyph_and_mask_shared) as mocked_bundle:
+            core.draw_char_tate(draw, '～', (20, 10), self.font, 24, is_bold=True)
+        self.assertEqual(mocked_bundle.call_count, 0)
+        bbox = ImageOps.invert(img.crop((20, 10, 44, 34))).getbbox()
+        self.assertIsNotNone(bbox)
+        self.assertGreaterEqual(bbox[3] - bbox[1], 17)
+
+    def test_draw_vertical_wave_dash_falls_back_to_separate_drawing_when_rotate_fails(self):
+        img = Image.new('L', (64, 64), 255)
+        draw = core.create_image_draw(img)
+        setattr(draw, '_tategaki_wave_dash_drawing_mode', 'rotate')
+        with mock.patch.object(core, '_render_text_glyph_and_mask_shared', side_effect=RuntimeError('glyph failed')):
+            core.draw_char_tate(draw, '～', (20, 10), self.font, 24, is_bold=True)
+        self.assertIsNotNone(ImageOps.invert(img.crop((20, 10, 44, 34))).getbbox())
+
+    def test_wave_dash_position_mode_moves_dash_down_only(self):
+        def bbox_for(mode):
+            img = Image.new('L', (64, 64), 255)
+            draw = core.create_image_draw(img)
+            setattr(draw, '_tategaki_wave_dash_drawing_mode', 'separate')
+            setattr(draw, '_tategaki_wave_dash_position_mode', mode)
+            core.draw_char_tate(draw, '～', (20, 10), self.font, 24)
+            return ImageOps.invert(img).getbbox()
+
+        standard = bbox_for('standard')
+        weak = bbox_for('down_weak')
+        strong = bbox_for('down_strong')
+        self.assertIsNotNone(standard)
+        self.assertIsNotNone(weak)
+        self.assertIsNotNone(strong)
+        self.assertGreater(weak[1], standard[1])
+        self.assertGreater(strong[1], weak[1])
+        self.assertEqual(core._wave_dash_position_mode('up_strong'), 'standard')
 
 
     def test_draw_centered_glyph_nonrotated_nonitalic_uses_direct_text_path(self):

@@ -154,6 +154,33 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertEqual(logic.normalize_choice_value(' XTCH ', 'xtc', {'xtc', 'xtch'}), 'xtch')
         self.assertEqual(logic.normalize_choice_value('broken', 'xtc', {'xtc', 'xtch'}), 'xtc')
 
+    def test_normalize_choice_value_accepts_wave_dash_label_variants(self):
+        self.assertEqual(
+            logic.normalize_choice_value('回転グリフ方式', 'rotate', {'rotate', 'separate'}),
+            'rotate',
+        )
+        self.assertEqual(
+            logic.normalize_choice_value('rotated glyph', 'rotate', {'rotate', 'separate'}),
+            'rotate',
+        )
+        self.assertEqual(
+            logic.normalize_choice_value('別描画方式', 'rotate', {'rotate', 'separate'}),
+            'separate',
+        )
+        self.assertEqual(
+            logic.normalize_choice_value('アプリ側描画', 'rotate', {'rotate', 'separate'}),
+            'separate',
+        )
+
+    def test_wave_dash_normalizers_accept_position_label_variants(self):
+        self.assertEqual(logic.normalize_wave_dash_drawing_mode('グリフ回転方式'), 'rotate')
+        self.assertEqual(logic.normalize_wave_dash_drawing_mode('separate drawing'), 'separate')
+        self.assertEqual(logic.normalize_wave_dash_drawing_mode(None, 'unknown-mode'), 'rotate')
+        self.assertEqual(logic.normalize_wave_dash_position_mode('下補正 弱'), 'down_weak')
+        self.assertEqual(logic.normalize_wave_dash_position_mode('下補正 強'), 'down_strong')
+        self.assertEqual(logic.normalize_wave_dash_position_mode('上補正 強'), 'standard')
+        self.assertEqual(logic.normalize_wave_dash_position_mode(None, '下補正 強'), 'down_strong')
+
     def test_payload_optional_int_value_handles_legacy_strings_and_invalid_values(self):
         self.assertEqual(logic.payload_optional_int_value({'value': ' 42 '}, 'value'), 42)
         self.assertEqual(logic.payload_optional_int_value({'value': '7.9'}, 'value'), 7)
@@ -532,6 +559,8 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
             'dither': '1',
             'kinsoku_mode': 'weird',
             'output_format': 'xtch',
+            'wave_dash_drawing_mode': 'separate',
+            'wave_dash_position_mode': 'down_strong',
         }
         self.assertEqual(logic.build_preset_display_name(preset), 'プリセット4 / 標準')
         summary = logic.build_preset_summary_html(
@@ -546,6 +575,8 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertIn('（現在の設定）', summary)
         self.assertIn('機種: X4', summary)
         self.assertIn('フォント: Noto Serif', summary)
+        self.assertNotIn('波線描画:', summary)
+        self.assertNotIn('波線位置:', summary)
         self.assertIn('出力形式: XTCH', summary)
         self.assertIn('白黒反転: OFF', summary)
         self.assertIn('ディザ: ON', summary)
@@ -568,7 +599,28 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertNotIn('（現在の設定）', compact_summary)
         self.assertIn('機種: X4', compact_summary)
         self.assertIn('フォント: Noto Serif', compact_summary)
+        self.assertNotIn('波線描画:', compact_summary)
+        self.assertNotIn('波線位置:', compact_summary)
         self.assertEqual(compact_summary.count('<div style="margin:0; padding:0;">'), 3)
+
+    def test_build_preset_summary_html_omits_wave_dash_tuning_settings(self):
+        preset = {
+            'button_text': 'プリセット4',
+            'name': '標準',
+            'profile': 'x4',
+            'output_format': 'xtc',
+            'wave_dash_drawing_mode': '別描画方式',
+            'wave_dash_position_mode': '下補正 強',
+        }
+        summary = logic.build_preset_summary_html(
+            preset,
+            font_text='Noto Serif',
+            device_profile_keys=['x4', 'x3', 'custom'],
+            kinsoku_mode_labels={'standard': '標準'},
+            output_format_labels={'xtc': 'XTC', 'xtch': 'XTCH'},
+        )
+        self.assertNotIn('波線描画:', summary)
+        self.assertNotIn('波線位置:', summary)
 
     def test_build_preset_summary_text_for_dialog(self):
         preset = {
@@ -587,6 +639,8 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
             'threshold': 128,
             'kinsoku_mode': 'standard',
             'output_format': 'xtch',
+            'wave_dash_drawing_mode': 'separate',
+            'wave_dash_position_mode': 'down_strong',
         }
         summary = logic.build_preset_summary_text(
             preset,
@@ -599,6 +653,8 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertIn('機種: X4 / 出力形式: XTCH / 本文: 26 / ルビ: 12 / 行間: 41', summary)
         self.assertIn('余白: 上 12 下 14 右 12 左 12 / 白黒反転: OFF / ディザ: OFF / しきい値: 128 / 禁則: 標準', summary)
         self.assertIn('フォント: NotoSerifJP-Medium.ttf', summary)
+        self.assertNotIn('波線描画:', summary)
+        self.assertNotIn('波線位置:', summary)
         self.assertNotIn('<div', summary)
         self.assertEqual(summary.count('\n'), 3)
         compact_summary = logic.build_preset_summary_text(
@@ -612,6 +668,8 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertNotIn('プリセット4 / 標準', compact_summary)
         self.assertTrue(compact_summary.startswith('機種: X4 / 出力形式: XTCH'))
         self.assertIn('フォント: NotoSerifJP-Medium.ttf', compact_summary)
+        self.assertNotIn('波線描画:', compact_summary)
+        self.assertNotIn('波線位置:', compact_summary)
         self.assertEqual(compact_summary.count('\n'), 2)
         self.assertNotIn('\n\n', compact_summary)
         self.assertFalse(compact_summary.endswith('\n'))

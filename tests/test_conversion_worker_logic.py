@@ -26,6 +26,8 @@ class ConversionWorkerLogicTests(unittest.TestCase):
         self.assertEqual(args.punctuation_position_mode, 'standard')
         self.assertEqual(args.ichi_position_mode, 'standard')
         self.assertEqual(args.lower_closing_bracket_position_mode, 'standard')
+        self.assertEqual(args.wave_dash_drawing_mode, 'rotate')
+        self.assertEqual(args.wave_dash_position_mode, 'standard')
 
     def test_build_conversion_args_preserves_glyph_position_modes(self):
         args = worker_logic.build_conversion_args({
@@ -33,11 +35,25 @@ class ConversionWorkerLogicTests(unittest.TestCase):
             'punctuation_position_mode': 'down_weak',
             'ichi_position_mode': 'up_strong',
             'lower_closing_bracket_position_mode': 'up_weak',
+            'wave_dash_drawing_mode': 'separate',
+            'wave_dash_position_mode': 'down_strong',
         })
 
         self.assertEqual(args.punctuation_position_mode, 'down_weak')
         self.assertEqual(args.ichi_position_mode, 'up_strong')
         self.assertEqual(args.lower_closing_bracket_position_mode, 'up_weak')
+        self.assertEqual(args.wave_dash_drawing_mode, 'separate')
+        self.assertEqual(args.wave_dash_position_mode, 'down_strong')
+
+
+    def test_build_conversion_args_normalizes_wave_dash_label_variants(self):
+        args = worker_logic.build_conversion_args({
+            'wave_dash_drawing_mode': '別描画方式',
+            'wave_dash_position_mode': '下補正 強',
+        })
+
+        self.assertEqual(args.wave_dash_drawing_mode, 'separate')
+        self.assertEqual(args.wave_dash_position_mode, 'down_strong')
 
     def test_resolve_supported_conversion_targets_filters_outputs(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -44,6 +44,23 @@ class SettingsControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['output_conflict'], 'rename')
         self.assertTrue(payload['open_folder'])
 
+    def test_build_current_settings_payload_normalizes_wave_dash_label_variants(self):
+        payload = controller.build_current_settings_payload(
+            render_settings_base={
+                'target': 'sample.epub',
+                'wave_dash_drawing_mode': '別描画方式',
+                'wave_dash_position_mode': '下補正 強',
+            },
+            output_conflict='rename',
+            open_folder=False,
+        )
+
+        self.assertEqual(payload['target'], 'sample.epub')
+        self.assertEqual(payload['wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(payload['wave_dash_position_mode'], 'down_strong')
+        self.assertEqual(payload['output_conflict'], 'rename')
+        self.assertFalse(payload['open_folder'])
+
     def test_build_settings_save_raw_payload_combines_ui_and_render_state(self):
         payload = controller.build_settings_save_raw_payload(
             current_settings={
@@ -54,6 +71,8 @@ class SettingsControllerRegressionTests(unittest.TestCase):
                 'punctuation_position_mode': 'down_strong',
                 'ichi_position_mode': 'down_strong',
                 'lower_closing_bracket_position_mode': 'up_weak',
+                'wave_dash_drawing_mode': 'separate',
+                'wave_dash_position_mode': 'down_weak',
             },
             ui_state={
                 'bottom_tab_index': 2,
@@ -86,6 +105,8 @@ class SettingsControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['calibration_pct'], 110)
         self.assertTrue(payload['nav_buttons_reversed'])
         self.assertEqual(payload['preview_page_limit'], 6)
+        self.assertEqual(payload['wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(payload['wave_dash_position_mode'], 'down_weak')
 
 
     def test_build_settings_restore_payload_normalizes_profile_target_and_font(self):
@@ -99,6 +120,8 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             'punctuation_position_mode': 'down_strong',
             'ichi_position_mode': 'unknown',
             'lower_closing_bracket_position_mode': '上補正弱',
+            'wave_dash_drawing_mode': '別描画',
+            'wave_dash_position_mode': '下補正弱',
         }
 
         def reader(key: str, default: object) -> object:
@@ -128,6 +151,8 @@ class SettingsControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['punctuation_position_mode'], 'down_strong')
         self.assertEqual(payload['ichi_position_mode'], 'standard')
         self.assertEqual(payload['lower_closing_bracket_position_mode'], 'up_weak')
+        self.assertEqual(payload['wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(payload['wave_dash_position_mode'], 'down_weak')
 
     def test_build_settings_restore_payload_maps_legacy_adjusted_to_down_strong(self):
         values = {
@@ -154,6 +179,8 @@ class SettingsControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['punctuation_position_mode'], 'down_strong')
         self.assertEqual(payload['ichi_position_mode'], 'down_strong')
         self.assertEqual(payload['lower_closing_bracket_position_mode'], 'up_strong')
+        self.assertEqual(payload['wave_dash_drawing_mode'], 'rotate')
+        self.assertEqual(payload['wave_dash_position_mode'], 'standard')
 
     def test_build_settings_ui_apply_defaults_and_plan_keep_latest_modes(self):
         defaults = controller.build_settings_ui_apply_defaults(
@@ -179,10 +206,12 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             punctuation_position_mode='down_strong',
             ichi_position_mode='down_strong',
             lower_closing_bracket_position_mode='up_weak',
+            wave_dash_drawing_mode='separate',
+            wave_dash_position_mode='down_weak',
             main_view_mode='device',
         )
         plan = controller.build_settings_ui_apply_plan(
-            raw_payload={'output_format': 'xtch', 'main_view_mode': 'device', 'preview_page_limit': '7', 'punctuation_position_mode': 'down_strong', 'ichi_position_mode': 'standard', 'lower_closing_bracket_position_mode': 'up_strong'},
+            raw_payload={'output_format': 'xtch', 'main_view_mode': 'device', 'preview_page_limit': '7', 'punctuation_position_mode': 'down_strong', 'ichi_position_mode': 'standard', 'lower_closing_bracket_position_mode': 'up_strong', 'wave_dash_drawing_mode': 'separate', 'wave_dash_position_mode': 'down_strong'},
             defaults=defaults,
             allowed_view_modes={'font', 'device'},
             allowed_kinsoku_modes={'standard': '標準', 'strict': '強め'},
@@ -198,6 +227,38 @@ class SettingsControllerRegressionTests(unittest.TestCase):
         self.assertEqual(plan['punctuation_position_mode'], 'down_strong')
         self.assertEqual(plan['ichi_position_mode'], 'standard')
         self.assertEqual(plan['lower_closing_bracket_position_mode'], 'up_strong')
+        self.assertEqual(plan['wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(plan['wave_dash_position_mode'], 'down_strong')
+
+        alias_defaults = controller.build_settings_ui_apply_defaults(
+            actual_size=False,
+            show_guides=True,
+            calibration_pct=100,
+            nav_buttons_reversed=False,
+            font_size=26,
+            ruby_size=12,
+            line_spacing=44,
+            margin_t=12,
+            margin_b=14,
+            margin_r=12,
+            margin_l=12,
+            threshold=128,
+            preview_page_limit=5,
+            dither=False,
+            night_mode=False,
+            open_folder=True,
+            output_conflict='rename',
+            output_format='xtc',
+            kinsoku_mode='standard',
+            punctuation_position_mode='standard',
+            ichi_position_mode='standard',
+            lower_closing_bracket_position_mode='standard',
+            wave_dash_drawing_mode='別描画方式',
+            wave_dash_position_mode='下補正 強',
+            main_view_mode='font',
+        )
+        self.assertEqual(alias_defaults['wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(alias_defaults['wave_dash_position_mode'], 'down_strong')
 
     def test_build_settings_save_payload_normalizes_and_preserves_xtch(self):
         ui_state = controller.build_settings_save_ui_state(
@@ -224,6 +285,8 @@ class SettingsControllerRegressionTests(unittest.TestCase):
                 'punctuation_position_mode': 'down_strong',
                 'ichi_position_mode': 'down_strong',
                 'lower_closing_bracket_position_mode': 'up_strong',
+                'wave_dash_drawing_mode': 'separate',
+                'wave_dash_position_mode': 'down_strong',
             },
             ui_state=ui_state,
             allowed_view_modes={'font', 'device'},
@@ -342,6 +405,8 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             punctuation_position_mode=' down_weak ',
             ichi_position_mode='invalid',
             lower_closing_bracket_position_mode=' up_strong ',
+            wave_dash_drawing_mode='別描画方式',
+            wave_dash_position_mode='下補正 強',
             font_file='',
             default_font_name='fallback.ttf',
             allowed_profiles={'x3': object(), 'x4': object()},
@@ -364,6 +429,8 @@ class SettingsControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['punctuation_position_mode'], 'down_weak')
         self.assertEqual(payload['ichi_position_mode'], 'standard')
         self.assertEqual(payload['lower_closing_bracket_position_mode'], 'up_strong')
+        self.assertEqual(payload['wave_dash_drawing_mode'], 'separate')
+        self.assertEqual(payload['wave_dash_position_mode'], 'down_strong')
         self.assertEqual(payload['font_file'], 'fallback.ttf')
 
     def test_build_preset_save_and_summary_payload_merge_latest_values(self):
