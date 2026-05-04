@@ -194,7 +194,7 @@ SUPPORTED_INPUT_SUFFIXES = frozenset(EPUB_INPUT_SUFFIXES + ARCHIVE_INPUT_SUFFIXE
 TATE_REPLACE = {
     # --- 括弧・句読点 ---
     "…": "︙", "‥": "︰", "⋯": "︙", "︙": "︙", "︰": "︰", "─": "丨", "―": "丨", "—": "丨", "‐": "丨", "-": "丨",
-    "～": "≀", "〜": "≀", "〰": "≀",
+    "～": "≀", "〜": "≀", "〰": "≀", "~": "≀", "∼": "≀", "∽": "≀", "∿": "≀",
     "「": "﹁", "」": "﹂", "『": "﹃", "』": "﹄",
     "（": "︵", "）": "︶", "(": "︵", ")": "︶",
     "【": "︻", "】": "︼", "〔": "︹", "〕": "︺",
@@ -223,6 +223,11 @@ TATE_REPLACE = {
 VERTICAL_DOT_LEADER_THREE_CHARS = frozenset({'…', '⋯', '︙'})
 VERTICAL_DOT_LEADER_TWO_CHARS = frozenset({'‥', '︰'})
 VERTICAL_DOT_LEADER_CHARS = VERTICAL_DOT_LEADER_THREE_CHARS | VERTICAL_DOT_LEADER_TWO_CHARS
+
+# 波ダッシュ / 全角チルダ系は、比較実験のため、
+# 元フォントのグリフを画像化して90度回転する方式で描画する。
+# U+2240（≀）は縦波線字形として扱い、回転しない。
+VERTICAL_WAVE_DASH_CHARS = frozenset({'～', '〜', '〰', '~', '∼', '∽', '∿', '≀'})
 
 KUTOTEN_OFFSET_X, KUTOTEN_OFFSET_Y = 18, -8
 SMALL_KANA_CHARS = set("ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶ")
@@ -287,6 +292,8 @@ class ConversionArgs:
     punctuation_position_mode: str = "standard"
     ichi_position_mode: str = "standard"
     lower_closing_bracket_position_mode: str = "standard"
+    wave_dash_drawing_mode: str = "rotate"
+    wave_dash_position_mode: str = "standard"
     output_format: str = "xtc"
 
     def __post_init__(self: ConversionArgs) -> None:
@@ -313,6 +320,8 @@ class ConversionArgs:
         self.punctuation_position_mode = str(self.punctuation_position_mode or 'standard')
         self.ichi_position_mode = str(self.ichi_position_mode or 'standard')
         self.lower_closing_bracket_position_mode = str(getattr(self, 'lower_closing_bracket_position_mode', 'standard') or 'standard')
+        self.wave_dash_drawing_mode = str(getattr(self, 'wave_dash_drawing_mode', 'rotate') or 'rotate')
+        self.wave_dash_position_mode = str(getattr(self, 'wave_dash_position_mode', 'standard') or 'standard')
         self.output_format = _normalize_output_format(getattr(self, 'output_format', 'xtc'))
 
 
@@ -1012,6 +1021,13 @@ from tategakiXTC_gui_core_renderer import (
     _draw_tate_punctuation_glyph,
     _vertical_dot_leader_count,
     draw_vertical_dot_leader,
+    _vertical_wave_dash_canvas_spec,
+    _build_vertical_wave_dash_image,
+    _vertical_wave_dash_rotation_degrees,
+    _wave_dash_drawing_mode,
+    _wave_dash_position_mode,
+    _wave_dash_extra_y_for_mode,
+    draw_vertical_wave_dash,
     draw_hanging_punctuation,
     draw_char_tate,
     _build_default_preview_blocks,

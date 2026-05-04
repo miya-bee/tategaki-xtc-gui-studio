@@ -229,6 +229,7 @@ def build_image_section_plan() -> dict[str, Any]:
         'threshold_enabled': False,
         'threshold_help_spacing': 6,
         'glyph_position_row_spacing': 6,
+        'wave_dash_row_spacing': 6,
         'help_text': '白黒反転（出力）: 白と黒を入れ替えて出力します。プレビューにも反映されます。しきい値: 白と黒の分かれ目を調整します。ディザリング: 粒状感と引き換えに濃淡感を残します。',
         'trailing_stretch': True,
     }

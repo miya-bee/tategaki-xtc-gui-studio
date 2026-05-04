@@ -20,6 +20,15 @@ LOWER_CLOSING_BRACKET_POSITION_MODES: dict[str, str] = {
     'up_weak': '上補正 弱',
     'up_strong': '上補正 強',
 }
+WAVE_DASH_DRAWING_MODES: dict[str, str] = {
+    'rotate': '回転グリフ',
+    'separate': '別描画',
+}
+WAVE_DASH_POSITION_MODES: dict[str, str] = {
+    'standard': '標準',
+    'down_weak': '下補正弱',
+    'down_strong': '下補正強',
+}
 
 
 def build_top_status_message(target_raw: str, profile_name: str, font_size: int, line_spacing: int) -> str:
@@ -128,9 +137,9 @@ def _coerce_mapping_payload(payload: object) -> dict[str, object]:
 
 def normalize_choice_value(value: object, default: str, allowed_values: Collection[str] | Mapping[str, object]) -> str:
     normalized = str(value if value not in (None, '') else default).strip().lower()
-    compact = normalized.replace(' ', '').replace('　', '').replace('-', '_')
+    compact = _compact_choice_key(normalized)
     allowed = {str(item).strip().lower() for item in allowed_values}
-    allowed_compact = {item.replace(' ', '').replace('　', '').replace('-', '_'): item for item in allowed}
+    allowed_compact = {_compact_choice_key(item): item for item in allowed}
     if normalized in allowed:
         return normalized
     if compact in allowed_compact:
@@ -155,7 +164,36 @@ def normalize_choice_value(value: object, default: str, allowed_values: Collecti
                 return 'plus'
             if canonical == 'up_strong' and 'minus' in allowed:
                 return 'minus'
+    choice_aliases = {
+        'rotate': {
+            'rotate', 'rotated', 'rotated_glyph', 'rotatedglyph', 'glyph_rotate', 'glyphrotate',
+            'font', 'font_rotate', 'fontrotate', '回転', '回転グリフ', '回転グリフ方式',
+            'グリフ回転', 'グリフ回転方式',
+        },
+        'separate': {
+            'separate', 'draw', 'custom', 'app', 'line', 'font_independent', 'fontindependent',
+            'separate_drawing', 'separatedrawing', '別描画', '別描画方式', '専用描画',
+            'アプリ側描画', '独自描画',
+        },
+    }
+    for canonical, aliases in choice_aliases.items():
+        if compact in aliases and canonical in allowed:
+            return canonical
     return normalized if normalized in allowed else str(default).strip().lower()
+
+
+def _compact_choice_key(value: object) -> str:
+    return str(value or '').strip().lower().replace(' ', '').replace('　', '').replace('-', '_')
+
+
+def normalize_wave_dash_drawing_mode(value: object, default: str = 'rotate') -> str:
+    normalized = normalize_choice_value(value, default, WAVE_DASH_DRAWING_MODES)
+    return normalized if normalized in WAVE_DASH_DRAWING_MODES else 'rotate'
+
+
+def normalize_wave_dash_position_mode(value: object, default: str = 'standard') -> str:
+    normalized = normalize_choice_value(value, default, WAVE_DASH_POSITION_MODES)
+    return normalized if normalized in WAVE_DASH_POSITION_MODES else 'standard'
 
 
 def payload_optional_int_value(payload: Mapping[str, object], key: str) -> int | None:
@@ -284,6 +322,8 @@ def build_settings_restore_payload(
     if allowed_glyph_position_modes is None:
         allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
     allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
+    allowed_wave_dash_drawing_modes = WAVE_DASH_DRAWING_MODES
+    allowed_wave_dash_position_modes = WAVE_DASH_POSITION_MODES
     payload: dict[str, Any] = {}
     payload['profile'] = normalize_choice_value(raw_payload.get('profile'), 'x4', allowed_profiles)
     for key, default in (
@@ -341,6 +381,12 @@ def build_settings_restore_payload(
         'standard',
         allowed_lower_closing_bracket_position_modes,
     )
+    payload['wave_dash_drawing_mode'] = normalize_wave_dash_drawing_mode(
+        raw_payload.get('wave_dash_drawing_mode'),
+    )
+    payload['wave_dash_position_mode'] = normalize_wave_dash_position_mode(
+        raw_payload.get('wave_dash_position_mode'),
+    )
     payload['target'] = str(raw_payload.get('target') or '').strip()
     payload['font_file'] = str(raw_payload.get('font_file') or '').strip()
     payload['main_view_mode'] = normalize_choice_value(
@@ -380,6 +426,8 @@ def build_settings_ui_apply_payload(
     if allowed_glyph_position_modes is None:
         allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
     allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
+    allowed_wave_dash_drawing_modes = WAVE_DASH_DRAWING_MODES
+    allowed_wave_dash_position_modes = WAVE_DASH_POSITION_MODES
     defaults = _coerce_mapping_payload(defaults)
     plan: dict[str, Any] = {}
 
@@ -452,6 +500,16 @@ def build_settings_ui_apply_payload(
             str(defaults.get('lower_closing_bracket_position_mode') or 'standard'),
             allowed_lower_closing_bracket_position_modes,
         )
+    if 'wave_dash_drawing_mode' in raw_payload:
+        plan['wave_dash_drawing_mode'] = normalize_wave_dash_drawing_mode(
+            raw_payload.get('wave_dash_drawing_mode'),
+            str(defaults.get('wave_dash_drawing_mode') or 'rotate'),
+        )
+    if 'wave_dash_position_mode' in raw_payload:
+        plan['wave_dash_position_mode'] = normalize_wave_dash_position_mode(
+            raw_payload.get('wave_dash_position_mode'),
+            str(defaults.get('wave_dash_position_mode') or 'standard'),
+        )
     if 'main_view_mode' in raw_payload:
         plan['main_view_mode'] = normalize_choice_value(
             raw_payload.get('main_view_mode'),
@@ -482,6 +540,8 @@ def build_settings_save_payload(
     if allowed_glyph_position_modes is None:
         allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
     allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
+    allowed_wave_dash_drawing_modes = WAVE_DASH_DRAWING_MODES
+    allowed_wave_dash_position_modes = WAVE_DASH_POSITION_MODES
     payload: dict[str, Any] = dict(raw_payload)
     payload['bottom_tab_index'] = max(0, _config_int_value(raw_payload.get('bottom_tab_index'), 0))
     payload['main_view_mode'] = normalize_choice_value(
@@ -545,6 +605,12 @@ def build_settings_save_payload(
         raw_payload.get('lower_closing_bracket_position_mode'),
         'standard',
         allowed_lower_closing_bracket_position_modes,
+    )
+    payload['wave_dash_drawing_mode'] = normalize_wave_dash_drawing_mode(
+        raw_payload.get('wave_dash_drawing_mode'),
+    )
+    payload['wave_dash_position_mode'] = normalize_wave_dash_position_mode(
+        raw_payload.get('wave_dash_position_mode'),
     )
     payload['output_conflict'] = normalize_choice_value(
         raw_payload.get('output_conflict'),
@@ -1823,7 +1889,6 @@ def _build_preset_summary_lines(
     line2 = f'余白: 上 {margin_t} 下 {margin_b} 右 {margin_r} 左 {margin_l} / 白黒反転: {night_text} / ディザ: {dither_text} / しきい値: {threshold} / 禁則: {kinsoku_text}'
     line3 = f'フォント: {font_text}'
     return name_line, line1, line2, line3
-
 
 
 def build_preset_summary_text(

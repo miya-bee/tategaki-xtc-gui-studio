@@ -7,16 +7,26 @@
 
 ## バージョン
 
-現在の公開版は **v1.2.1** です。
+現在の公開版は **v1.2.2** です。
 
+v1.2.2 は、v1.2.1 を基準に、波ダッシュ・チルダ類の縦書き表示調整を追加した安定版です。
 v1.2.1 は、v1.2.0 を基準に TXT / Markdown などのテキスト入力プレビューを修正した小修正版です。
 v1.2.0 は、v1.1.0 公開後に積み重ねた v1.1.1 系の改修をまとめた **安定版**として扱います。
 v1.1.0 は、GitHub で公開済みの **v1.0.2 の次の公開版**です。
 
-- 前回公開版: `v1.2.0`
-- 今回公開版: `v1.2.1`
-- GitHub Release tag: `v1.2.1`
-- GitHub Release title: `v1.2.1`
+- 前回公開版: `v1.2.1`
+- 今回公開版: `v1.2.2`
+- GitHub Release tag: `v1.2.2`
+- GitHub Release title: `v1.2.2`
+
+## v1.2.2 の主な更新
+
+- 波ダッシュ・チルダ類 `～ 〜 〰 ~ ∼ ∽ ∿ ≀` の縦書き表示を調整しやすくしました。
+- 波線描画方式として `回転グリフ` / `別描画` を追加しました。
+- 波線位置として `標準` / `下補正弱` / `下補正強` を追加しました。
+- 波線設定を GUI 変更時の即時プレビュー、ini 保存・読み込み、preview payload、conversion args に反映しました。
+- 左ペイン上部のプリセット仕様表示は基本仕様に絞り、フォント依存のチューニング項目である波線描画・波線位置は表示対象から外しました。
+- 横書き前提文書における半角コンマ・半角ピリオドなどの見え方を既知の注意点として整理しました。
 
 ## v1.2.1 の主な更新
 
@@ -51,9 +61,29 @@ v1.1.0 では、GUI の整理、プレビュー周辺、描画・変換処理、
 詳細は以下も参照してください。
 
 - `CHANGELOG.md`
+- `RELEASE_NOTES_v1_2_2.md`
 - `RELEASE_NOTES_v1_2_1.md`
 - `RELEASE_NOTES_v1_2_0.md`
 - `RELEASE_NOTES_v1_1_0.md`（v1.1.0 の基準版メモ）
+
+
+## 関連ドキュメント
+
+- `WINDOWS_SETUP.md` — Windowsでの導入・起動手順
+- `FAQ.md` — よくある質問
+- `KNOWN_LIMITATIONS.md` — 既知の注意点・仕様
+- `RELEASE_NOTES_v1_2_2.md` — v1.2.2 の更新内容
+- `CHANGELOG.md` — 更新履歴
+
+## 得意な文書
+
+このアプリは、青空文庫系の小説本文、古い小説、随筆、読み物系テキスト、プレーンテキストなど、本文中心の文書を主な対象にしています。
+
+## 苦手な文書・注意が必要な文書
+
+Markdown記法が多い文書、README のような横書き前提の技術文書、URL、ファイル名、バージョン番号、英数字や半角記号が多い文書、表、コードブロック、箇条書き中心の文書は、縦書き化したときに見た目が不自然になる場合があります。
+
+半角コンマ `,` や半角ピリオド `.` は、フォントによって縦書き上で左下寄りに見えることがあります。青空文庫系の小説本文では大きな問題になりにくいため、v1.2.2 では仕様として扱っています。
 
 ## 必要環境
 
@@ -159,6 +189,10 @@ v1.1.0 では、以下のような用途で使用します。
 フォントを追加・差し替えして再配布する場合は、必ず対象フォントのライセンスを確認してください。  
 フォントを release zip に含める場合は、対応するライセンス文書も含める必要があります。
 
+## 補正設定について
+
+縦書き表示では、フォントによって記号の位置や形が大きく変わることがあります。v1.2.2 では、句読点、漢数字一、下鍵括弧、波線描画、波線位置をGUIから調整できます。迷った場合は、まず標準設定のまま使い、気になる記号だけ補正してください。
+
 ## 出力ファイル名の衝突設定
 
 同名出力の扱いは、右上の歯車メニュー内「その他オプション > 同名出力」から変更できます。
@@ -212,7 +246,7 @@ release zip は以下で作成できます。
     .venv\Scripts\python.exe -B ^
       build_release_zip.py ^
       --verify ^
-      dist\tategaki-xtc-gui-studio_v1.2.1-release.zip
+      dist\tategaki-xtc-gui-studio_v1.2.2-release.zip
 
 release zip の作成は、環境に応じて以下でも実行できます。
 
@@ -224,26 +258,26 @@ release zip の作成は、環境に応じて以下でも実行できます。
 
     python build_release_zip.py --verify <zipパス>
 
-    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.2.1-release.zip
+    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.2.2-release.zip
 
-v1.2.1 のこちらで作成する release zip は source-only 構成です。`Font/` を同梱して再配布する場合は、対応するフォント本体と `LICENSE_OFL.txt` を同じ release zip に含めてください。
+v1.2.2 の release zip は Python GUI版の source 構成に加えて `Font/` を同梱できます。Font フォルダが同梱されている release zip では、別コピー手順は不要です。source-only 配布に切り替える場合は、対応するフォント本体と `LICENSE_OFL.txt` の扱いを合わせてください。
 
 ## GitHub Release での公開方針
 
-v1.2.1 は、GitHub 上では以下の扱いで公開します。
+v1.2.2 は、GitHub 上では以下の扱いで公開します。
 
-- Release tag: `v1.2.1`
-- Release title: `v1.2.1`
-- Previous tag: `v1.2.0`
-- 添付ファイル: `tategaki-xtc-gui-studio_v1.2.1-release.zip`
+- Release tag: `v1.2.2`
+- Release title: `v1.2.2`
+- Previous tag: `v1.2.1`
+- 添付ファイル: `tategaki-xtc-gui-studio_v1.2.2-release.zip`
 
-Release 本文には `RELEASE_NOTES_v1_2_1.md` の内容を使用します。
+Release 本文には `RELEASE_NOTES_v1_2_2.md` の内容を使用します。
 
 開発用の `.venv/` や `node_modules/` は release 対象外です。
 
 ## 公開対象について
 
-v1.2.1 の公開対象は **Python GUI版のみ**です。
+v1.2.2 の公開対象は **Python GUI版のみ**です。
 
 以下の旧ローカル Web 試作版関連ファイルは、公開用 payload / release 検査の対象外です。
 

@@ -204,6 +204,12 @@ def build_preview_payload(
         'punctuation_position_mode': render_settings_base.get('punctuation_position_mode', 'standard'),
         'ichi_position_mode': render_settings_base.get('ichi_position_mode', 'standard'),
         'lower_closing_bracket_position_mode': render_settings_base.get('lower_closing_bracket_position_mode', 'standard'),
+        'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(
+            render_settings_base.get('wave_dash_drawing_mode', 'rotate')
+        ),
+        'wave_dash_position_mode': studio_logic.normalize_wave_dash_position_mode(
+            render_settings_base.get('wave_dash_position_mode', 'standard')
+        ),
         'output_format': render_settings_base['output_format'],
         'width': render_settings_base['width'],
         'height': render_settings_base['height'],

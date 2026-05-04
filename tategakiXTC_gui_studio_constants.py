@@ -65,6 +65,8 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'punctuation_position_mode': 'standard',
     'ichi_position_mode': 'standard',
     'lower_closing_bracket_position_mode': 'standard',
+    'wave_dash_drawing_mode': 'rotate',
+    'wave_dash_position_mode': 'standard',
     'output_format': 'xtc',
 }
 
@@ -157,7 +159,8 @@ PRESET_FIELDS = [
     'font_size', 'ruby_size', 'line_spacing',
     'margin_t', 'margin_b', 'margin_r', 'margin_l',
     'night_mode', 'dither', 'threshold', 'kinsoku_mode',
-    'punctuation_position_mode', 'ichi_position_mode', 'lower_closing_bracket_position_mode', 'output_format',
+    'punctuation_position_mode', 'ichi_position_mode', 'lower_closing_bracket_position_mode',
+    'wave_dash_drawing_mode', 'wave_dash_position_mode', 'output_format',
 ]
 
 KINSOKU_MODE_OPTIONS = [
@@ -180,6 +183,17 @@ CLOSING_BRACKET_POSITION_MODE_OPTIONS = [
     ('standard', '標準'),
 ]
 CLOSING_BRACKET_POSITION_MODE_LABELS = {key: label for key, label in CLOSING_BRACKET_POSITION_MODE_OPTIONS}
+WAVE_DASH_DRAWING_MODE_OPTIONS = [
+    ('rotate', '回転グリフ'),
+    ('separate', '別描画'),
+]
+WAVE_DASH_DRAWING_MODE_LABELS = {key: label for key, label in WAVE_DASH_DRAWING_MODE_OPTIONS}
+WAVE_DASH_POSITION_MODE_OPTIONS = [
+    ('standard', '標準'),
+    ('down_weak', '下補正弱'),
+    ('down_strong', '下補正強'),
+]
+WAVE_DASH_POSITION_MODE_LABELS = {key: label for key, label in WAVE_DASH_POSITION_MODE_OPTIONS}
 
 OUTPUT_FORMAT_OPTIONS = [
     ('xtc', 'XTC'),
@@ -238,6 +252,10 @@ __all__ = [
     'GLYPH_POSITION_MODE_LABELS',
     'CLOSING_BRACKET_POSITION_MODE_OPTIONS',
     'CLOSING_BRACKET_POSITION_MODE_LABELS',
+    'WAVE_DASH_DRAWING_MODE_OPTIONS',
+    'WAVE_DASH_DRAWING_MODE_LABELS',
+    'WAVE_DASH_POSITION_MODE_OPTIONS',
+    'WAVE_DASH_POSITION_MODE_LABELS',
     'OUTPUT_FORMAT_OPTIONS',
     'OUTPUT_FORMAT_LABELS',
     'OUTPUT_CONFLICT_OPTIONS',

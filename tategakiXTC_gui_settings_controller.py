@@ -50,6 +50,8 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('punctuation_position_mode', _default_value('punctuation_position_mode', 'standard')),
     ('ichi_position_mode', _default_value('ichi_position_mode', 'standard')),
     ('lower_closing_bracket_position_mode', _default_value('lower_closing_bracket_position_mode', 'standard')),
+    ('wave_dash_drawing_mode', _default_value('wave_dash_drawing_mode', 'rotate')),
+    ('wave_dash_position_mode', _default_value('wave_dash_position_mode', 'standard')),
     ('target', _default_value('target', '')),
     ('main_view_mode', _default_value('main_view_mode', 'font')),
     ('bottom_tab_index', _default_value('bottom_tab_index', 0)),
@@ -161,6 +163,8 @@ def build_settings_ui_apply_defaults(
     punctuation_position_mode: object = 'standard',
     ichi_position_mode: object = 'standard',
     lower_closing_bracket_position_mode: object = 'standard',
+    wave_dash_drawing_mode: object = 'rotate',
+    wave_dash_position_mode: object = 'standard',
     main_view_mode: object,
 ) -> dict[str, object]:
     return {
@@ -186,6 +190,8 @@ def build_settings_ui_apply_defaults(
         'punctuation_position_mode': punctuation_position_mode,
         'ichi_position_mode': ichi_position_mode,
         'lower_closing_bracket_position_mode': lower_closing_bracket_position_mode,
+        'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(wave_dash_drawing_mode),
+        'wave_dash_position_mode': studio_logic.normalize_wave_dash_position_mode(wave_dash_position_mode),
         'main_view_mode': str(main_view_mode or 'font'),
     }
 
@@ -286,6 +292,14 @@ def build_current_settings_payload(
     open_folder: object,
 ) -> dict[str, object]:
     payload: dict[str, object] = _coerce_mapping_payload(render_settings_base)
+    if 'wave_dash_drawing_mode' in payload:
+        payload['wave_dash_drawing_mode'] = studio_logic.normalize_wave_dash_drawing_mode(
+            payload.get('wave_dash_drawing_mode'),
+        )
+    if 'wave_dash_position_mode' in payload:
+        payload['wave_dash_position_mode'] = studio_logic.normalize_wave_dash_position_mode(
+            payload.get('wave_dash_position_mode'),
+        )
     payload['output_conflict'] = output_conflict
     payload['open_folder'] = open_folder
     return payload
@@ -301,6 +315,8 @@ def build_current_preset_payload(
     fallback_kinsoku_mode: str,
     fallback_output_format: str,
     normalize_preset_payload: Callable[..., dict[str, object]],
+    fallback_wave_dash_drawing_mode: str = 'rotate',
+    fallback_wave_dash_position_mode: str = 'standard',
 ) -> dict[str, object]:
     render_settings = _coerce_mapping_payload(render_settings_base)
     payload = {
@@ -315,6 +331,15 @@ def build_current_preset_payload(
         'margin_r': studio_logic._config_int_value(render_settings.get('margin_r'), _DEFAULT_RENDER_SETTINGS['margin_r']),
         'margin_l': studio_logic._config_int_value(render_settings.get('margin_l'), _DEFAULT_RENDER_SETTINGS['margin_l']),
         'threshold': studio_logic._config_int_value(render_settings.get('threshold'), _DEFAULT_RENDER_SETTINGS['threshold']),
+        'night_mode': studio_logic._config_bool_value(render_settings.get('night_mode'), bool(_DEFAULT_RENDER_SETTINGS['night_mode'])),
+        'dither': studio_logic._config_bool_value(render_settings.get('dither'), bool(_DEFAULT_RENDER_SETTINGS['dither'])),
+        'kinsoku_mode': str(render_settings.get('kinsoku_mode') or fallback_kinsoku_mode),
+        'output_format': str(render_settings.get('output_format') or fallback_output_format),
+        'punctuation_position_mode': str(render_settings.get('punctuation_position_mode') or _DEFAULT_RENDER_SETTINGS['punctuation_position_mode']),
+        'ichi_position_mode': str(render_settings.get('ichi_position_mode') or _DEFAULT_RENDER_SETTINGS['ichi_position_mode']),
+        'lower_closing_bracket_position_mode': str(render_settings.get('lower_closing_bracket_position_mode') or _DEFAULT_RENDER_SETTINGS['lower_closing_bracket_position_mode']),
+        'wave_dash_drawing_mode': str(render_settings.get('wave_dash_drawing_mode') or fallback_wave_dash_drawing_mode),
+        'wave_dash_position_mode': str(render_settings.get('wave_dash_position_mode') or fallback_wave_dash_position_mode),
     }
     return normalize_preset_payload(
         payload,
@@ -323,6 +348,8 @@ def build_current_preset_payload(
         fallback_dither=fallback_dither,
         fallback_kinsoku_mode=fallback_kinsoku_mode,
         fallback_output_format=fallback_output_format,
+        fallback_wave_dash_drawing_mode=fallback_wave_dash_drawing_mode,
+        fallback_wave_dash_position_mode=fallback_wave_dash_position_mode,
     )
 
 
@@ -347,6 +374,8 @@ def build_live_preset_widget_payload(
     punctuation_position_mode: object = None,
     ichi_position_mode: object = None,
     lower_closing_bracket_position_mode: object = None,
+    wave_dash_drawing_mode: object = None,
+    wave_dash_position_mode: object = None,
     font_file: object = None,
     default_font_name: str,
     allowed_profiles: Collection[str] | Mapping[str, object],
@@ -406,6 +435,16 @@ def build_live_preset_widget_payload(
             lower_closing_bracket_position_mode,
             str(_DEFAULT_RENDER_SETTINGS['lower_closing_bracket_position_mode']),
             studio_constants.CLOSING_BRACKET_POSITION_MODE_LABELS,
+        )
+    if wave_dash_drawing_mode is not None:
+        payload['wave_dash_drawing_mode'] = studio_logic.normalize_wave_dash_drawing_mode(
+            wave_dash_drawing_mode,
+            str(_DEFAULT_RENDER_SETTINGS['wave_dash_drawing_mode']),
+        )
+    if wave_dash_position_mode is not None:
+        payload['wave_dash_position_mode'] = studio_logic.normalize_wave_dash_position_mode(
+            wave_dash_position_mode,
+            str(_DEFAULT_RENDER_SETTINGS['wave_dash_position_mode']),
         )
     if font_file is not None:
         payload['font_file'] = normalize_font_setting_value(font_file, default_font_name) or default_font_name

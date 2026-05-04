@@ -272,6 +272,10 @@ from tategakiXTC_gui_studio_constants import (
     GLYPH_POSITION_MODE_LABELS,
     CLOSING_BRACKET_POSITION_MODE_OPTIONS,
     CLOSING_BRACKET_POSITION_MODE_LABELS,
+    WAVE_DASH_DRAWING_MODE_OPTIONS,
+    WAVE_DASH_DRAWING_MODE_LABELS,
+    WAVE_DASH_POSITION_MODE_OPTIONS,
+    WAVE_DASH_POSITION_MODE_LABELS,
     OUTPUT_FORMAT_OPTIONS,
     OUTPUT_FORMAT_LABELS,
     OUTPUT_CONFLICT_OPTIONS,
@@ -862,7 +866,7 @@ class MainWindow(QMainWindow):
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
             'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'dither_check', 'night_check',
             'open_folder_check', 'output_conflict_combo', 'output_format_combo',
-            'kinsoku_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'lower_closing_bracket_position_combo', 'target_edit', 'preset_combo',
+            'kinsoku_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
         )
 
     def _preset_apply_widgets(self: MainWindow) -> tuple[object, ...]:
@@ -870,7 +874,7 @@ class MainWindow(QMainWindow):
             'profile_combo', 'width_spin', 'height_spin', 'font_combo',
             'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'night_check', 'dither_check', 'kinsoku_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'lower_closing_bracket_position_combo', 'output_format_combo',
+            'night_check', 'dither_check', 'kinsoku_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
         )
 
     def _apply_profile_dimensions_to_ui(
@@ -921,6 +925,8 @@ class MainWindow(QMainWindow):
             punctuation_position_mode=self._safe_combo_data('punctuation_position_combo', 'standard'),
             ichi_position_mode=self._safe_combo_data('ichi_position_combo', 'standard'),
             lower_closing_bracket_position_mode=self._safe_combo_data('lower_closing_bracket_position_combo', 'standard'),
+            wave_dash_drawing_mode=self._safe_combo_data('wave_dash_drawing_combo', 'rotate'),
+            wave_dash_position_mode=self._safe_combo_data('wave_dash_position_combo', 'standard'),
             main_view_mode=getattr(self, 'main_view_mode', 'font'),
         )
         apply_plan = settings_controller.build_settings_ui_apply_plan(
@@ -1018,6 +1024,10 @@ class MainWindow(QMainWindow):
             getattr(self, 'ichi_position_combo', None) is not None and self._set_combo_to_data(self.ichi_position_combo, str(apply_plan['ichi_position_mode']))
         if 'lower_closing_bracket_position_mode' in apply_plan:
             getattr(self, 'lower_closing_bracket_position_combo', None) is not None and self._set_combo_to_data(self.lower_closing_bracket_position_combo, str(apply_plan['lower_closing_bracket_position_mode']))
+        if 'wave_dash_drawing_mode' in apply_plan:
+            getattr(self, 'wave_dash_drawing_combo', None) is not None and self._set_combo_to_data(self.wave_dash_drawing_combo, str(apply_plan['wave_dash_drawing_mode']))
+        if 'wave_dash_position_mode' in apply_plan:
+            getattr(self, 'wave_dash_position_combo', None) is not None and self._set_combo_to_data(self.wave_dash_position_combo, str(apply_plan['wave_dash_position_mode']))
 
         if 'target' in apply_plan:
             getattr(self, 'target_edit', None) is not None and self.target_edit.setText(str(apply_plan.get('target') or '').strip())
@@ -1991,6 +2001,19 @@ class MainWindow(QMainWindow):
         image_glyph_position_row.addWidget(self._help_icon_button('閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみ対象です。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
         image_glyph_position_row.addStretch(1)
         lay.addLayout(image_glyph_position_row)
+
+        image_wave_dash_row = self._make_hbox_layout_from_plan(
+            gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))
+        )
+        image_wave_dash_row.addWidget(self._dim_label('波線描画'))
+        image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)
+        image_wave_dash_row.addWidget(self._help_icon_button('波線系記号（～/〜/〰/~ など）の描画方式です。回転グリフ: フォントの質感を保って90度回転します。別描画: アプリ側で縦波線を描きます。回転グリフに失敗した場合は別描画へ自動フォールバックします。'))
+        image_wave_dash_row.addSpacing(10)
+        image_wave_dash_row.addWidget(self._dim_label('波線位置'))
+        image_wave_dash_row.addWidget(self.wave_dash_position_combo)
+        image_wave_dash_row.addWidget(self._help_icon_button('波線系記号の縦位置だけを下方向へ補正します。標準: これまでの位置、下補正弱/強: 標準より下へ寄せます。'))
+        image_wave_dash_row.addStretch(1)
+        lay.addLayout(image_wave_dash_row)
         return box
 
     # ── 設定セクション：プリセット ────────────────────────
@@ -2089,6 +2112,16 @@ class MainWindow(QMainWindow):
         for key, label in CLOSING_BRACKET_POSITION_MODE_OPTIONS:
             self.lower_closing_bracket_position_combo.addItem(label, key)
         self.lower_closing_bracket_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
+
+        self.wave_dash_drawing_combo = QComboBox()
+        for key, label in WAVE_DASH_DRAWING_MODE_OPTIONS:
+            self.wave_dash_drawing_combo.addItem(label, key)
+        self.wave_dash_drawing_combo.currentIndexChanged.connect(self._on_wave_dash_mode_changed)
+
+        self.wave_dash_position_combo = QComboBox()
+        for key, label in WAVE_DASH_POSITION_MODE_OPTIONS:
+            self.wave_dash_position_combo.addItem(label, key)
+        self.wave_dash_position_combo.currentIndexChanged.connect(self._on_wave_dash_mode_changed)
 
         self.output_conflict_combo = QComboBox()
         for key, label in OUTPUT_CONFLICT_OPTIONS:
@@ -6009,6 +6042,26 @@ class MainWindow(QMainWindow):
             CLOSING_BRACKET_POSITION_MODE_LABELS,
         )
 
+    def _on_wave_dash_mode_changed(self: MainWindow) -> None:
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
+
+    def current_wave_dash_drawing_mode(self: MainWindow) -> str:
+        combo = self.__dict__.get('wave_dash_drawing_combo')
+        if combo is None:
+            return 'rotate'
+        current_data = getattr(combo, 'currentData', None)
+        raw_value = current_data() if callable(current_data) else None
+        return studio_logic.normalize_wave_dash_drawing_mode(raw_value, 'rotate')
+
+    def current_wave_dash_position_mode(self: MainWindow) -> str:
+        combo = self.__dict__.get('wave_dash_position_combo')
+        if combo is None:
+            return 'standard'
+        current_data = getattr(combo, 'currentData', None)
+        raw_value = current_data() if callable(current_data) else None
+        return studio_logic.normalize_wave_dash_position_mode(raw_value, 'standard')
+
     def current_output_format(self: MainWindow) -> str:
         combo = self.__dict__.get('output_format_combo')
         if combo is None:
@@ -6185,6 +6238,8 @@ class MainWindow(QMainWindow):
             punctuation_position_mode=self.current_punctuation_position_mode() if self.__dict__.get('punctuation_position_combo') is not None else None,
             ichi_position_mode=self.current_ichi_position_mode() if self.__dict__.get('ichi_position_combo') is not None else None,
             lower_closing_bracket_position_mode=self.current_lower_closing_bracket_position_mode() if self.__dict__.get('lower_closing_bracket_position_combo') is not None else None,
+            wave_dash_drawing_mode=self.current_wave_dash_drawing_mode() if self.__dict__.get('wave_dash_drawing_combo') is not None else None,
+            wave_dash_position_mode=self.current_wave_dash_position_mode() if self.__dict__.get('wave_dash_position_combo') is not None else None,
             font_file=font_value,
             default_font_name=self._default_font_name(),
             allowed_profiles=DEVICE_PROFILES,
@@ -6210,6 +6265,8 @@ class MainWindow(QMainWindow):
         fallback_punctuation_position_mode: str = 'standard',
         fallback_ichi_position_mode: str = 'standard',
         fallback_lower_closing_bracket_position_mode: str = 'standard',
+        fallback_wave_dash_drawing_mode: str = 'rotate',
+        fallback_wave_dash_position_mode: str = 'standard',
         fallback_output_format: str = 'xtc',
     ) -> PresetDefinition:
         source = payload if isinstance(payload, dict) else {}
@@ -6283,6 +6340,14 @@ class MainWindow(QMainWindow):
             'standard',
             CLOSING_BRACKET_POSITION_MODE_LABELS,
         )
+        normalized['wave_dash_drawing_mode'] = studio_logic.normalize_wave_dash_drawing_mode(
+            source.get('wave_dash_drawing_mode', fallback_payload.get('wave_dash_drawing_mode', fallback_wave_dash_drawing_mode)),
+            'rotate',
+        )
+        normalized['wave_dash_position_mode'] = studio_logic.normalize_wave_dash_position_mode(
+            source.get('wave_dash_position_mode', fallback_payload.get('wave_dash_position_mode', fallback_wave_dash_position_mode)),
+            'standard',
+        )
 
         candidate_width = worker_logic._int_config_value(source, 'width', int(normalized['width']))
         candidate_height = worker_logic._int_config_value(source, 'height', int(normalized['height']))
@@ -6330,6 +6395,8 @@ class MainWindow(QMainWindow):
                 fallback_night_mode=bool(stored_night),
                 fallback_dither=bool(stored_dither),
                 fallback_kinsoku_mode=stored_kinsoku_mode,
+                fallback_wave_dash_drawing_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_drawing_mode', 'rotate')),
+                fallback_wave_dash_position_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_position_mode', 'standard')),
                 fallback_output_format=stored_output_format,
             )
         return presets
@@ -6654,6 +6721,8 @@ class MainWindow(QMainWindow):
             fallback_kinsoku_mode=self.current_kinsoku_mode(),
             fallback_output_format=self.current_output_format(),
             normalize_preset_payload=self._normalize_preset_payload,
+            fallback_wave_dash_drawing_mode=self.current_wave_dash_drawing_mode(),
+            fallback_wave_dash_position_mode=self.current_wave_dash_position_mode(),
         )
 
     def _request_preview_refresh_after_preset_apply(self: MainWindow) -> bool:
@@ -7058,6 +7127,8 @@ class MainWindow(QMainWindow):
             'punctuation_position_mode': self.current_punctuation_position_mode() if hasattr(self, 'current_punctuation_position_mode') else str(defaults['punctuation_position_mode']),
             'ichi_position_mode': self.current_ichi_position_mode() if hasattr(self, 'current_ichi_position_mode') else str(defaults['ichi_position_mode']),
             'lower_closing_bracket_position_mode': self.current_lower_closing_bracket_position_mode() if hasattr(self, 'current_lower_closing_bracket_position_mode') else str(defaults['lower_closing_bracket_position_mode']),
+            'wave_dash_drawing_mode': self.current_wave_dash_drawing_mode() if hasattr(self, 'current_wave_dash_drawing_mode') else str(defaults['wave_dash_drawing_mode']),
+            'wave_dash_position_mode': self.current_wave_dash_position_mode() if hasattr(self, 'current_wave_dash_position_mode') else str(defaults['wave_dash_position_mode']),
             'output_format': self.current_output_format() if hasattr(self, 'current_output_format') else str(defaults['output_format']),
             'width': width,
             'height': height,

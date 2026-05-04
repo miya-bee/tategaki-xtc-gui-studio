@@ -7,6 +7,7 @@ tategakiXTC_gui_core_renderer.py — 縦書きレンダリング / プレビュ�
 from __future__ import annotations
 
 from typing import Any
+import math
 
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
@@ -51,9 +52,16 @@ def _scaled_kutoten_offset(f_size: int) -> tuple[int, int]:
 
 
 
+def _mode_cache_key(value: object, default: str) -> str:
+    try:
+        raw = value if value not in (None, '') else default
+    except Exception:
+        raw = default
+    return str(raw).strip().lower()
+
+
 @lru_cache(maxsize=64)
-def _glyph_position_mode(value: object) -> str:
-    normalized = str(value or 'standard').strip().lower()
+def _cached_glyph_position_mode(normalized: str) -> str:
     compact = normalized.replace(' ', '').replace('　', '').replace('-', '_')
     if compact in {
         'down_strong', 'strong_down', 'plus', 'positive', 'adjusted', 'mode2', '+',
@@ -76,6 +84,10 @@ def _glyph_position_mode(value: object) -> str:
     return 'standard'
 
 
+def _glyph_position_mode(value: object) -> str:
+    return _cached_glyph_position_mode(_mode_cache_key(value, 'standard'))
+
+
 def _draw_glyph_position_mode(draw: Any, attr_name: str) -> str:
     return _glyph_position_mode(getattr(draw, attr_name, 'standard'))
 
@@ -85,6 +97,8 @@ def _apply_draw_glyph_position_modes(draw: Any, args: Any) -> Any:
         setattr(draw, '_tategaki_punctuation_position_mode', _glyph_position_mode(getattr(args, 'punctuation_position_mode', 'standard')))
         setattr(draw, '_tategaki_ichi_position_mode', _glyph_position_mode(getattr(args, 'ichi_position_mode', 'standard')))
         setattr(draw, '_tategaki_lower_closing_bracket_position_mode', _glyph_position_mode(getattr(args, 'lower_closing_bracket_position_mode', 'standard')))
+        setattr(draw, '_tategaki_wave_dash_drawing_mode', _wave_dash_drawing_mode(getattr(args, 'wave_dash_drawing_mode', 'rotate')))
+        setattr(draw, '_tategaki_wave_dash_position_mode', _wave_dash_position_mode(getattr(args, 'wave_dash_position_mode', 'standard')))
     except Exception:
         pass
     return draw
@@ -2502,6 +2516,199 @@ def draw_vertical_dot_leader(draw: Any, char: str, pos_tuple: tuple[int, int], f
         draw.ellipse((left, top, right, bottom), fill=0)
 
 
+def _image_resampling_lanczos() -> Any:
+    resampling = getattr(Image, 'Resampling', None)
+    return getattr(resampling, 'LANCZOS', getattr(Image, 'LANCZOS', 1))
+
+
+@lru_cache(maxsize=64)
+def _vertical_wave_dash_canvas_spec(f_size: int, is_bold: bool = False) -> tuple[int, int, int, int, float, float]:
+    f_size = max(1, int(f_size or 1))
+    scale = 3
+    stroke_width = max(2, int(round(f_size * (0.115 if is_bold else 0.095))))
+    amplitude = max(2, int(round(f_size * 0.145)))
+    top = max(1, int(round(f_size * 0.08)))
+    bottom = min(f_size - 1, int(round(f_size * 0.92)))
+    cycles = 1.18
+    phase = -0.25
+    return scale, stroke_width, amplitude, top, cycles, phase
+
+
+@lru_cache(maxsize=64)
+def _build_vertical_wave_dash_image(f_size: int, *, is_bold: bool = False) -> tuple[Image.Image, Image.Image]:
+    """Return a font-independent vertical wavy dash cell and its paste mask."""
+    f_size = max(1, int(f_size or 1))
+    scale, stroke_width, amplitude, top, cycles, phase = _vertical_wave_dash_canvas_spec(f_size, bool(is_bold))
+    canvas_size = max(scale, f_size * scale)
+    image = Image.new('L', (canvas_size, canvas_size), 255)
+    wave_draw = ImageDraw.Draw(image)
+
+    scaled_stroke = max(1, stroke_width * scale)
+    center_x = (f_size * scale) / 2.0
+    amp = amplitude * scale
+    top_y = top * scale
+    bottom_y = max(top_y + 1, int(round(f_size * 0.92)) * scale)
+    point_count = max(18, int(round(f_size * 1.4)))
+    points: list[tuple[int, int]] = []
+    for idx in range(point_count):
+        t = idx / max(1, point_count - 1)
+        y = top_y + ((bottom_y - top_y) * t)
+        x = center_x + (amp * math.sin((2.0 * math.pi * cycles * t) + phase))
+        points.append((int(round(x)), int(round(y))))
+
+    if len(points) >= 2:
+        wave_draw.line(points, fill=0, width=scaled_stroke, joint='curve')
+        cap_radius = max(1, scaled_stroke // 2)
+        for x, y in (points[0], points[-1]):
+            wave_draw.ellipse((x - cap_radius, y - cap_radius, x + cap_radius, y + cap_radius), fill=0)
+
+    if scale != 1:
+        image = image.resize((f_size, f_size), _image_resampling_lanczos())
+    mask = ImageOps.invert(image)
+    return image, mask
+
+
+@lru_cache(maxsize=128)
+def _vertical_wave_dash_rotation_degrees(char: str) -> int:
+    """Return the rotation angle for wave-dash family glyphs."""
+    return 0 if str(char) == '≀' else 90
+
+
+@lru_cache(maxsize=32)
+def _cached_wave_dash_drawing_mode(normalized: str) -> str:
+    compact = normalized.replace(' ', '').replace('　', '').replace('-', '_')
+    if compact in {
+        'separate', 'draw', 'custom', 'app', 'line', 'font_independent', 'fontindependent',
+        'separate_drawing', 'separatedrawing', '別描画', '別描画方式', '専用描画',
+        'アプリ側描画', '独自描画',
+    }:
+        return 'separate'
+    if compact in {
+        'rotate', 'rotated', 'rotated_glyph', 'rotatedglyph', 'glyph_rotate', 'glyphrotate',
+        'font', 'font_rotate', 'fontrotate', '回転', '回転グリフ', '回転グリフ方式',
+        'グリフ回転', 'グリフ回転方式',
+    }:
+        return 'rotate'
+    return 'rotate'
+
+
+def _wave_dash_drawing_mode(value: object) -> str:
+    return _cached_wave_dash_drawing_mode(_mode_cache_key(value, 'rotate'))
+
+
+def _wave_dash_position_mode(value: object) -> str:
+    mode = _glyph_position_mode(value)
+    return mode if mode in {'standard', 'down_weak', 'down_strong'} else 'standard'
+
+
+@lru_cache(maxsize=64)
+def _wave_dash_adjusted_drop(f_size: int, *, weak: bool = False) -> int:
+    factor = 0.12 if weak else 0.24
+    return max(2 if weak else 3, int(round(f_size * factor)))
+
+
+@lru_cache(maxsize=64)
+def _wave_dash_extra_y_for_mode(f_size: int, position_mode: str) -> int:
+    mode = _wave_dash_position_mode(position_mode)
+    if mode == 'down_strong':
+        return _wave_dash_adjusted_drop(f_size)
+    if mode == 'down_weak':
+        return _wave_dash_adjusted_drop(f_size, weak=True)
+    return 0
+
+
+def _draw_vertical_wave_dash_separate(
+    draw: Any,
+    pos_tuple: tuple[int, int],
+    f_size: int,
+    *,
+    is_bold: bool = False,
+    extra_y: int = 0,
+) -> None:
+    curr_x, curr_y = pos_tuple
+    wave_img, wave_mask = _build_vertical_wave_dash_image(f_size, is_bold=is_bold)
+    _paste_glyph_image(draw, wave_img, (curr_x, curr_y + int(extra_y)), wave_mask)
+
+
+def _draw_vertical_wave_dash_rotated_glyph(
+    draw: Any,
+    char: str,
+    pos_tuple: tuple[int, int],
+    font: Any,
+    f_size: int,
+    *,
+    is_bold: bool = False,
+    is_italic: bool = False,
+    extra_y: int = 0,
+) -> bool:
+    curr_x, curr_y = pos_tuple
+    try:
+        rotate_degrees = _vertical_wave_dash_rotation_degrees(char)
+        glyph_img, glyph_mask = _render_text_glyph_and_mask_shared(
+            char,
+            font,
+            is_bold=is_bold,
+            rotate_degrees=rotate_degrees,
+            canvas_size=f_size * 4,
+            is_italic=is_italic,
+        )
+        if glyph_mask is not None and glyph_mask.getbbox() is None:
+            return False
+        gw, gh = glyph_img.size
+        off_x, off_y = _centered_glyph_image_offsets(
+            f_size,
+            gw,
+            gh,
+            False,
+            0,
+            0,
+            int(extra_y),
+        )
+        _paste_glyph_image(draw, glyph_img, (curr_x + off_x, curr_y + off_y), glyph_mask)
+        return True
+    except Exception:
+        return False
+
+
+def draw_vertical_wave_dash(
+    draw: Any,
+    char: str,
+    pos_tuple: tuple[int, int],
+    font: Any,
+    f_size: int,
+    *,
+    is_bold: bool = False,
+    is_italic: bool = False,
+) -> None:
+    """波ダッシュ/全角チルダ系を選択された方式で縦表示する。
+
+    既定は回転グリフ方式。回転グリフの画像化に失敗した場合は、
+    フォント非依存の別描画方式へ自動フォールバックする。
+    """
+    _refresh_core_globals()
+    if char not in VERTICAL_WAVE_DASH_CHARS:
+        return
+    f_size = max(1, int(f_size or 1))
+    position_mode = _wave_dash_position_mode(getattr(draw, '_tategaki_wave_dash_position_mode', 'standard'))
+    extra_y = _wave_dash_extra_y_for_mode(f_size, position_mode)
+    drawing_mode = _wave_dash_drawing_mode(getattr(draw, '_tategaki_wave_dash_drawing_mode', 'rotate'))
+
+    if drawing_mode == 'rotate':
+        if _draw_vertical_wave_dash_rotated_glyph(
+            draw,
+            char,
+            pos_tuple,
+            font,
+            f_size,
+            is_bold=is_bold,
+            is_italic=is_italic,
+            extra_y=extra_y,
+        ):
+            return
+
+    _draw_vertical_wave_dash_separate(draw, pos_tuple, f_size, is_bold=is_bold, extra_y=extra_y)
+
+
 def draw_hanging_punctuation(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, f_size: int, canvas_height: int, is_bold: bool = False, ruby_mode: bool = False, is_italic: bool = False) -> None:
     _refresh_core_globals()
     if _is_render_spacing_char(char):
@@ -2566,6 +2773,10 @@ def draw_char_tate(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, 
 
     if char in VERTICAL_DOT_LEADER_CHARS:
         draw_vertical_dot_leader(draw, char, (curr_x, curr_y), f_size, is_bold=is_bold)
+        return
+
+    if char in VERTICAL_WAVE_DASH_CHARS:
+        draw_vertical_wave_dash(draw, char, (curr_x, curr_y), font, f_size, is_bold=is_bold, is_italic=is_italic)
         return
 
     if _is_tatechuyoko_token(char):
@@ -3126,6 +3337,8 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
         _glyph_position_mode(args.get('punctuation_position_mode', 'standard')),
         _glyph_position_mode(args.get('ichi_position_mode', 'standard')),
         _glyph_position_mode(args.get('lower_closing_bracket_position_mode', 'standard')),
+        _wave_dash_drawing_mode(args.get('wave_dash_drawing_mode', 'rotate')),
+        _wave_dash_position_mode(args.get('wave_dash_position_mode', 'standard')),
     )
     source_paths = list(preview_sources) if preview_sources is not None else _resolve_preview_source_paths(target_path)
     source_signature = tuple(_preview_path_signature(path) for path in source_paths[:max_pages])
@@ -3281,6 +3494,8 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
                 punctuation_position_mode=_glyph_position_mode(_args.get('punctuation_position_mode', 'standard')),
                 ichi_position_mode=_glyph_position_mode(_args.get('ichi_position_mode', 'standard')),
                 lower_closing_bracket_position_mode=_glyph_position_mode(_args.get('lower_closing_bracket_position_mode', 'standard')),
+                wave_dash_drawing_mode=_wave_dash_drawing_mode(_args.get('wave_dash_drawing_mode', 'rotate')),
+                wave_dash_position_mode=_wave_dash_position_mode(_args.get('wave_dash_position_mode', 'standard')),
                 output_format=output_format,
             )
             if _preview_target_requires_font(target_path, preview_sources=preview_sources):

@@ -119,6 +119,10 @@ REQUIRED_PUBLIC_DOC_FILES = (
     'LICENSE.txt',
     'CHANGELOG.md',
     'RELEASE_CHECKLIST.md',
+    'WINDOWS_SETUP.md',
+    'FAQ.md',
+    'KNOWN_LIMITATIONS.md',
+    'PUBLISH_CHECKLIST_v1_2_2.md',
     RELEASE_NOTES_FILE,
 )
 REQUIRED_PROJECT_APP_MODULE_FILES = (
@@ -347,7 +351,7 @@ REQUIRED_UTF8_TEXT_FILES = tuple(
 )
 REQUIRED_APP_CONTENT_MARKERS = {
     'tategakiXTC_release_metadata.py': (
-        "APP_VERSION = '1.2.1'",
+        "APP_VERSION = '1.2.2'",
         'RELEASE_NOTES_FILE',
         'RELEASE_ZIP_FILE_NAME',
     ),
