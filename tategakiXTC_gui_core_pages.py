@@ -160,7 +160,11 @@ def _write_page_entries_to_xtc(page_entries: Sequence[PageEntryLike], source_pat
 
 def _render_text_blocks_to_xtc(blocks: Sequence[dict[str, Any]], source_path: PathLike, font_path: PathLike, args: ConversionArgs, output_path: PathLike | None = None, should_cancel: Callable[[], bool] | None = None, progress_cb: Callable[[int, int, str], None] | None = None) -> Path:
     _refresh_core_globals()
-    page_entries = _render_text_blocks_to_page_entries(
+    render_text_blocks_to_page_entries = globals().get('_render_text_blocks_to_page_entries')
+    if not callable(render_text_blocks_to_page_entries):
+        from tategakiXTC_gui_core_renderer import _render_text_blocks_to_page_entries as render_text_blocks_to_page_entries
+        globals()['_render_text_blocks_to_page_entries'] = render_text_blocks_to_page_entries
+    page_entries = render_text_blocks_to_page_entries(
         blocks,
         font_path,
         args,

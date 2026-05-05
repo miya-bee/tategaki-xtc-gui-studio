@@ -104,10 +104,21 @@ def _process_single_image_file(
 ) -> Path:
     if progress_cb is not None:
         progress_cb(0, 1, '画像を読み込み中…')
-    blob = core.process_image_data(path, args, should_cancel=should_cancel)
-    if blob is None:
+    page_blob = core.process_image_data(path, args, should_cancel=should_cancel)
+    if page_blob is None:
         raise RuntimeError('変換データがありません。')
-    _write_output_bytes_atomic(output_path, blob)
+    # ``process_image_data`` returns one XTC-family page blob (XTG/XTH), not
+    # a readable XTC/XTCH container.  Single-file image conversion therefore
+    # has to wrap the page blob with the normal container writer before saving.
+    core.build_xtc(
+        [bytes(page_blob)],
+        output_path,
+        int(getattr(args, 'width')),
+        int(getattr(args, 'height')),
+        str(getattr(args, 'output_format', 'xtc')),
+        should_cancel=should_cancel,
+        progress_cb=progress_cb,
+    )
     if progress_cb is not None:
         progress_cb(1, 1, '画像変換が完了しました。')
     return output_path

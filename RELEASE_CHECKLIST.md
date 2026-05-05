@@ -1,13 +1,13 @@
-# RELEASE CHECKLIST / v1.2.2 公開前チェックリスト
+# RELEASE CHECKLIST / v1.3.0 公開前チェックリスト
 
 ## 1. バージョン表記
 
 - [ ] `APP_VERSION` が `1.2.2` になっている
-- [ ] README の現在公開版が `v1.2.2` になっている
-- [ ] CHANGELOG に `v1.2.2` が追記されている
-- [ ] `RELEASE_NOTES_v1_2_2.md` が存在する
-- [ ] GitHub Release tag を `v1.2.2` にする
-- [ ] GitHub Release title を `v1.2.2` にする
+- [ ] README の現在公開版が `v1.3.0` になっている
+- [ ] CHANGELOG に `v1.3.0` が追記されている
+- [ ] `RELEASE_NOTES_v1_3_0.md` が存在する
+- [ ] GitHub Release tag を `v1.3.0` にする
+- [ ] GitHub Release title を `v1.3.0` にする
 
 ## 2. 公開対象
 
@@ -25,11 +25,11 @@
 
 ## 4. ドキュメント
 
-- [ ] `README.md` を v1.2.2 向けに更新した
+- [ ] `README.md` を v1.3.0 向けに更新した
 - [ ] `WINDOWS_SETUP.md` を追加または更新した
 - [ ] `FAQ.md` を追加または更新した
 - [ ] `KNOWN_LIMITATIONS.md` を追加または更新した
-- [ ] `RELEASE_NOTES_v1_2_2.md` を追加した
+- [ ] `RELEASE_NOTES_v1_3_0.md` を追加した
 - [ ] README から関連ドキュメントへリンクしている
 
 ## 5. 実機確認
@@ -61,16 +61,16 @@ python -B -m pytest tests -q
 
 python -B build_release_zip.py
 
-python -B build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.2.2-release.zip
+python -B build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.3.0-release.zip
 
-tar -tf dist\tategaki-xtc-gui-studio_v1.2.2-release.zip > nul
+tar -tf dist\tategaki-xtc-gui-studio_v1.3.0-release.zip > nul
 ```
 
 ## 7. GitHub Release
 
-- [ ] Release tag: `v1.2.2`
-- [ ] Release title: `v1.2.2`
-- [ ] Previous tag: `v1.2.1`
-- [ ] 添付ファイル名: `tategaki-xtc-gui-studio_v1.2.2-release.zip`
-- [ ] Release 本文に `RELEASE_NOTES_v1_2_2.md` の内容を使う
+- [ ] Release tag: `v1.3.0`
+- [ ] Release title: `v1.3.0`
+- [ ] Previous tag: `v1.2.2`
+- [ ] 添付ファイル名: `tategaki-xtc-gui-studio_v1.3.0-release.zip`
+- [ ] Release 本文に `RELEASE_NOTES_v1_3_0.md` の内容を使う
 - [ ] 公開後、Release ページから zip がダウンロードできることを確認する

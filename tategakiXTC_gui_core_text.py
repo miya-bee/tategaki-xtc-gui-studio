@@ -1289,7 +1289,11 @@ def _process_text_input_document(
     for warning in document.warnings or []:
         LOGGER.warning('%s 入力注意: %s', document.format_label, warning)
     _emit_progress(progress_cb, 0, 1, f'{document.format_label}ファイルを読み込みました。')
-    return _render_text_blocks_to_xtc(
+    render_text_blocks_to_xtc = globals().get('_render_text_blocks_to_xtc')
+    if not callable(render_text_blocks_to_xtc):
+        from tategakiXTC_gui_core_pages import _render_text_blocks_to_xtc as render_text_blocks_to_xtc
+        globals()['_render_text_blocks_to_xtc'] = render_text_blocks_to_xtc
+    return render_text_blocks_to_xtc(
         document.blocks,
         document.source_path,
         font_path,

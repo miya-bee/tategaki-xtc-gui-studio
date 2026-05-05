@@ -18,6 +18,7 @@ DEFAULT_EXCLUDED_DIR_NAMES = {
     '.mypy_cache',
     '.ruff_cache',
     '.git',
+    '.github',
     '__MACOSX',
     '.venv',
     'venv',
@@ -86,6 +87,7 @@ DEFAULT_EXCLUDED_GLOBS = (
     'code_split_preparation_roadmap_bugfix*.md',
     'split_refactor_progress_bugfix*.md',
     'CONTINUATION_PROGRESS*.md',
+    'PRE_RELEASE_REGRESSION_REPORT_*.md',
     '*handoff*.md',
     '*Handoff*.md',
     '*HANDOFF*.md',
@@ -122,7 +124,7 @@ REQUIRED_PUBLIC_DOC_FILES = (
     'WINDOWS_SETUP.md',
     'FAQ.md',
     'KNOWN_LIMITATIONS.md',
-    'PUBLISH_CHECKLIST_v1_2_2.md',
+    'PUBLISH_CHECKLIST_v1_3_0.md',
     RELEASE_NOTES_FILE,
 )
 REQUIRED_PROJECT_APP_MODULE_FILES = (
@@ -161,6 +163,16 @@ REQUIRED_PROJECT_APP_MODULE_FILES = (
     'tategakiXTC_gui_studio_settings_helpers.py',
     'tategakiXTC_gui_widget_factory.py',
     'tategakiXTC_worker_logic.py',
+    'tategakiXTC_folder_batch_plan.py',
+    'tategakiXTC_folder_batch_executor.py',
+    'tategakiXTC_folder_batch_settings.py',
+    'tategakiXTC_folder_batch_safety.py',
+    'tategakiXTC_folder_batch_dialog.py',
+    'tategakiXTC_folder_batch_controller.py',
+    'tategakiXTC_folder_batch_converter_adapter.py',
+    'tategakiXTC_folder_batch_dependencies.py',
+    'tategakiXTC_folder_batch_mainwindow_launcher.py',
+    'tategakiXTC_folder_batch_worker_bridge.py',
 )
 REQUIRED_PROJECT_APP_CODE_FILES = (
     *REQUIRED_PROJECT_APP_ENTRY_FILES,
@@ -206,7 +218,6 @@ REQUIRED_PROJECT_TOOLING_FILES = (
     'build_release_zip.py',
     'mypy.ini',
     '.coveragerc',
-    '.github/workflows/python-tests.yml',
 )
 REQUIRED_PROJECT_GUI_ASSET_FILES = (
     'ui_assets/spin_up.svg',
@@ -283,6 +294,17 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_epub_regression.py',
     'tests/test_epub_structure_progress_regression.py',
     'tests/test_extended_golden_cases.py',
+    'tests/test_folder_batch_controller.py',
+    'tests/test_folder_batch_converter_adapter.py',
+    'tests/test_folder_batch_dependencies.py',
+    'tests/test_folder_batch_dialog_controller_sweep.py',
+    'tests/test_folder_batch_executor.py',
+    'tests/test_folder_batch_mainwindow_integration_static.py',
+    'tests/test_folder_batch_mainwindow_launcher.py',
+    'tests/test_folder_batch_plan.py',
+    'tests/test_folder_batch_safety.py',
+    'tests/test_folder_batch_settings.py',
+    'tests/test_folder_batch_worker_bridge.py',
     'tests/test_font_draw_helper_regression.py',
     'tests/test_font_popup_scroll_regression.py',
     'tests/test_golden_profile_registry.py',
@@ -321,6 +343,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_split_module_compatibility_regression.py',
     'tests/test_text_code_font_lazy_regression.py',
     'tests/test_text_input_helper_regression.py',
+    'tests/test_text_render_sync_regression.py',
     'tests/test_text_markdown_scope.py',
     'tests/test_type_annotations_regression.py',
     'tests/test_vertical_renderer_unification.py',
@@ -351,7 +374,7 @@ REQUIRED_UTF8_TEXT_FILES = tuple(
 )
 REQUIRED_APP_CONTENT_MARKERS = {
     'tategakiXTC_release_metadata.py': (
-        "APP_VERSION = '1.2.2'",
+        "APP_VERSION = '1.3.0'",
         'RELEASE_NOTES_FILE',
         'RELEASE_ZIP_FILE_NAME',
     ),
@@ -520,6 +543,45 @@ REQUIRED_APP_CONTENT_MARKERS = {
         'plan_output_path_for_target',
         'build_conversion_summary',
     ),
+    'tategakiXTC_folder_batch_plan.py': (
+        'class FolderBatchPlan',
+        'def build_folder_batch_plan',
+        'DEFAULT_FOLDER_BATCH_SUFFIXES',
+    ),
+    'tategakiXTC_folder_batch_executor.py': (
+        'class FolderBatchExecutionResult',
+        'def execute_folder_batch_plan',
+    ),
+    'tategakiXTC_folder_batch_settings.py': (
+        'class FolderBatchDialogDefaults',
+        'def load_folder_batch_dialog_defaults',
+        'def save_folder_batch_result_defaults',
+    ),
+    'tategakiXTC_folder_batch_safety.py': (
+        'class FolderBatchRootSafetyReport',
+        'def analyze_folder_batch_roots',
+    ),
+    'tategakiXTC_folder_batch_dialog.py': (
+        'class FolderBatchDialog',
+        'class FolderBatchDialogResult',
+    ),
+    'tategakiXTC_folder_batch_controller.py': (
+        'class FolderBatchControllerRun',
+        'def open_folder_batch_dialog_and_execute',
+        'def make_dry_run_converter',
+    ),
+    'tategakiXTC_folder_batch_converter_adapter.py': (
+        'class FolderBatchConversionContext',
+        'def build_mainwindow_converter_from_known_hook',
+    ),
+    'tategakiXTC_folder_batch_mainwindow_launcher.py': (
+        'def open_folder_batch_dialog_for_mainwindow_real_or_warn',
+        'def install_folder_batch_menu_action_best_effort',
+    ),
+    'tategakiXTC_folder_batch_worker_bridge.py': (
+        'def make_mainwindow_worker_bridge_converter',
+        'def collect_worker_settings_from_mainwindow',
+    ),
 }
 
 REQUIRED_BATCH_CONTENT_MARKERS = {
@@ -575,10 +637,6 @@ REQUIRED_TOOLING_CONTENT_MARKERS = {
         'branch = True',
         'source =',
         'tategakiXTC_worker_logic',
-    ),
-    '.github/workflows/python-tests.yml': (
-        'actions/setup-python@v5',
-        'build_release_zip.py --verify',
     ),
 }
 

@@ -547,6 +547,32 @@ class MainWindow(QMainWindow):
             fallback_status_message=fallback_status_message,
         )
 
+    def _install_folder_batch_menu_action(self: MainWindow) -> None:
+        """Add the first low-risk UI entry point for folder batch conversion."""
+        try:
+            from tategakiXTC_folder_batch_mainwindow_launcher import (
+                install_folder_batch_menu_action_best_effort,
+            )
+
+            install_folder_batch_menu_action_best_effort(self)
+        except Exception:
+            APP_LOGGER.exception('フォルダ一括変換メニューの追加に失敗しました')
+
+    def _open_folder_batch_dialog(self: MainWindow) -> None:
+        """Open the folder batch dialog and run it through the worker bridge."""
+        try:
+            from tategakiXTC_folder_batch_mainwindow_launcher import (
+                open_folder_batch_dialog_for_mainwindow_real_or_warn,
+            )
+
+            open_folder_batch_dialog_for_mainwindow_real_or_warn(self)
+        except Exception as exc:
+            APP_LOGGER.exception('フォルダ一括変換ダイアログの起動に失敗しました')
+            self._show_warning_dialog_with_status_fallback(
+                'フォルダ一括変換',
+                f'フォルダ一括変換を開始できませんでした: {exc}',
+            )
+
     def _check_conversion_dependencies(self: MainWindow, cfg: WorkerConversionSettings) -> bool:
         supported = self._supported_targets_for_path(cfg.get('target', ''))
         missing = self._missing_dependencies_for_targets(supported)
@@ -1507,8 +1533,18 @@ class MainWindow(QMainWindow):
             lambda: self.select_target_path(False),
         )
 
+        btn_file_batch = self._make_button_from_plan(
+            gui_layouts.build_button_widget_plan(
+                'ファイル一括変換',
+                object_name='topBtn',
+                fixed_width=132,
+            ),
+            self._open_folder_batch_dialog,
+        )
+
         lay.addWidget(btn_file)
         lay.addWidget(btn_folder)
+        lay.addWidget(btn_file_batch)
 
         self.target_edit = QLineEdit()
         self.target_edit.setObjectName('targetEdit')
@@ -7142,6 +7178,20 @@ class MainWindow(QMainWindow):
             output_conflict=self.current_output_conflict_mode(),
             open_folder=self.open_folder_check.isChecked(),
         )
+
+    def _folder_batch_worker_settings(
+        self: MainWindow,
+        source_path: object = None,
+        output_path: object = None,
+        item: object = None,
+    ) -> WorkerConversionSettings:
+        """Return current worker settings for one folder-batch item.
+
+        The folder-batch worker bridge overrides target/output fields per item,
+        so this hook deliberately avoids the normal single-file output-name
+        prompt used by ``_prepare_conversion_settings()``.
+        """
+        return dict(self.current_settings_dict())
 
     def _window_state_save_payload(self: MainWindow) -> dict[str, object]:
         normal_geom = self.normalGeometry() if self.isMaximized() else self.geometry()
