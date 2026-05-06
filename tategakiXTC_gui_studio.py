@@ -560,6 +560,24 @@ class MainWindow(QMainWindow):
 
     def _open_folder_batch_dialog(self: MainWindow) -> None:
         """Open the folder batch dialog and run it through the worker bridge."""
+        if bool(self.__dict__.get('_folder_batch_running', False)):
+            try:
+                self._show_ui_status_message_with_reflection_or_direct_fallback(
+                    'フォルダ一括変換はすでに実行中です。',
+                    5000,
+                )
+            except Exception:
+                pass
+            return
+        if self.__dict__.get('worker') is not None:
+            try:
+                self._show_warning_dialog_with_status_fallback(
+                    'フォルダ一括変換',
+                    '通常変換の実行中は、フォルダ一括変換を開始できません。現在の変換が終わってからもう一度実行してください。',
+                )
+            except Exception:
+                pass
+            return
         try:
             from tategakiXTC_folder_batch_mainwindow_launcher import (
                 open_folder_batch_dialog_for_mainwindow_real_or_warn,
@@ -567,6 +585,11 @@ class MainWindow(QMainWindow):
 
             open_folder_batch_dialog_for_mainwindow_real_or_warn(self)
         except Exception as exc:
+            try:
+                self.__dict__['_folder_batch_running'] = False
+                self.__dict__['_folder_batch_cancel_requested'] = False
+            except Exception:
+                pass
             APP_LOGGER.exception('フォルダ一括変換ダイアログの起動に失敗しました')
             self._show_warning_dialog_with_status_fallback(
                 'フォルダ一括変換',
@@ -1517,8 +1540,9 @@ class MainWindow(QMainWindow):
 
         btn_file = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('file_button_text', 'ファイル'),
+                top_bar_plan.get('file_button_text', 'ファイルを開く...'),
                 object_name='topBtn',
+                tooltip=top_bar_plan.get('file_button_tooltip', '1つのファイルを読み込みます'),
                 fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
             ),
             lambda: self.select_target_path(True),
@@ -1526,25 +1550,32 @@ class MainWindow(QMainWindow):
 
         btn_folder = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('folder_button_text', 'フォルダ'),
+                top_bar_plan.get('folder_button_text', '保存先を選ぶ...'),
                 object_name='topBtn',
+                tooltip=top_bar_plan.get('folder_button_tooltip', '変換後のXTC保存先を選びます'),
                 fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
             ),
             lambda: self.select_target_path(False),
         )
 
-        btn_file_batch = self._make_button_from_plan(
+        self.folder_batch_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                'ファイル一括変換',
+                top_bar_plan.get('folder_batch_button_text', 'フォルダ一括変換...'),
                 object_name='topBtn',
-                fixed_width=132,
+                tooltip=top_bar_plan.get('folder_batch_button_tooltip', 'フォルダ内のファイルをまとめて変換します'),
+                fixed_width=top_bar_plan.get('folder_batch_button_width', 168),
             ),
             self._open_folder_batch_dialog,
         )
 
         lay.addWidget(btn_file)
         lay.addWidget(btn_folder)
-        lay.addWidget(btn_file_batch)
+        lay.addWidget(self.folder_batch_btn)
+        lay.addWidget(self._help_icon_button(
+            str(top_bar_plan.get('top_buttons_help_text', '上部3ボタンの違いを説明します。')),
+            tooltip=str(top_bar_plan.get('top_buttons_help_tooltip', '上部3ボタンの違い')),
+            title=str(top_bar_plan.get('top_buttons_help_title', '上部ボタンの使い分け')),
+        ))
 
         self.target_edit = QLineEdit()
         self.target_edit.setObjectName('targetEdit')
@@ -2024,14 +2055,20 @@ class MainWindow(QMainWindow):
         image_glyph_position_row = self._make_hbox_layout_from_plan(
             gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))
         )
+        glyph_combo_width = self._plan_int_value(image_plan, 'glyph_position_combo_width', 92)
+        closing_bracket_combo_width = self._plan_int_value(image_plan, 'closing_bracket_position_combo_width', glyph_combo_width)
+        glyph_group_spacing = self._plan_int_value(image_plan, 'glyph_position_group_spacing', 8)
+        for combo in (self.punctuation_position_combo, self.ichi_position_combo):
+            combo.setMaximumWidth(glyph_combo_width)
+        self.lower_closing_bracket_position_combo.setMaximumWidth(closing_bracket_combo_width)
         image_glyph_position_row.addWidget(self._dim_label('句読点'))
         image_glyph_position_row.addWidget(self.punctuation_position_combo)
         image_glyph_position_row.addWidget(self._help_icon_button('ぶら下がり句読点のみ対象です。下補正 強/弱: 標準より下へ寄せます。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
-        image_glyph_position_row.addSpacing(10)
-        image_glyph_position_row.addWidget(self._dim_label('漢数字「一」'))
+        image_glyph_position_row.addSpacing(glyph_group_spacing)
+        image_glyph_position_row.addWidget(self._dim_label('漢数字 一'))
         image_glyph_position_row.addWidget(self.ichi_position_combo)
         image_glyph_position_row.addWidget(self._help_icon_button('文中すべての漢数字「一」が対象です。下補正 強/弱: 標準より下へ寄せます。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
-        image_glyph_position_row.addSpacing(10)
+        image_glyph_position_row.addSpacing(glyph_group_spacing)
         image_glyph_position_row.addWidget(self._dim_label('下鍵括弧'))
         image_glyph_position_row.addWidget(self.lower_closing_bracket_position_combo)
         image_glyph_position_row.addWidget(self._help_icon_button('閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみ対象です。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
@@ -2041,10 +2078,13 @@ class MainWindow(QMainWindow):
         image_wave_dash_row = self._make_hbox_layout_from_plan(
             gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))
         )
+        self.wave_dash_drawing_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_drawing_combo_width', 108))
+        self.wave_dash_position_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_position_combo_width', 92))
+        wave_dash_group_spacing = self._plan_int_value(image_plan, 'wave_dash_group_spacing', 8)
         image_wave_dash_row.addWidget(self._dim_label('波線描画'))
         image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)
         image_wave_dash_row.addWidget(self._help_icon_button('波線系記号（～/〜/〰/~ など）の描画方式です。回転グリフ: フォントの質感を保って90度回転します。別描画: アプリ側で縦波線を描きます。回転グリフに失敗した場合は別描画へ自動フォールバックします。'))
-        image_wave_dash_row.addSpacing(10)
+        image_wave_dash_row.addSpacing(wave_dash_group_spacing)
         image_wave_dash_row.addWidget(self._dim_label('波線位置'))
         image_wave_dash_row.addWidget(self.wave_dash_position_combo)
         image_wave_dash_row.addWidget(self._help_icon_button('波線系記号の縦位置だけを下方向へ補正します。標準: これまでの位置、下補正弱/強: 標準より下へ寄せます。'))
@@ -2069,7 +2109,14 @@ class MainWindow(QMainWindow):
         for key, p in self.preset_definitions.items():
             self.preset_combo.addItem(p['button_text'], key)
         self.preset_combo.currentIndexChanged.connect(self.on_preset_selection_changed)
-        row.addWidget(self.preset_combo, 1)
+        preset_combo_width = self._plan_int_value(
+            preset_plan,
+            'combo_width',
+            self._plan_int_value(preset_plan, 'combo_max_width', 294),
+        )
+        self.preset_combo.setMinimumWidth(preset_combo_width)
+        self.preset_combo.setMaximumWidth(self._plan_int_value(preset_plan, 'combo_max_width', preset_combo_width))
+        row.addWidget(self.preset_combo)
 
         self.preset_apply_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
@@ -2100,6 +2147,7 @@ class MainWindow(QMainWindow):
         for button in (self.preset_apply_btn, self.preset_save_btn):
             button.setMinimumWidth(preset_button_width)
             row.addWidget(button)
+        row.addStretch(1)
         lay.addLayout(row)
 
         self.preset_summary_label = QLabel(str(preset_plan.get('summary_text', '')))
@@ -2770,10 +2818,11 @@ class MainWindow(QMainWindow):
     def _note_label(text: str) -> QLabel:
         return gui_widget_factory.make_note_label(text)
 
-    def _help_icon_button(self, text: str, *, tooltip: str | None = None) -> QPushButton:
+    def _help_icon_button(self, text: str, *, tooltip: str | None = None, title: str | None = None) -> QPushButton:
         return gui_widget_factory.make_help_icon_button(
             text,
             tooltip=tooltip,
+            dialog_title=title,
             clicked_with_button=lambda button, self=self: self._show_inline_help(button),
             no_focus_policy=Qt.NoFocus,
         )
@@ -2782,9 +2831,10 @@ class MainWindow(QMainWindow):
         text = str(button.property('helpText') or '').strip()
         if not text:
             return
+        title = str(button.property('helpTitle') or '説明').strip() or '説明'
         try:
             msg = QMessageBox(self)
-            msg.setWindowTitle('説明')
+            msg.setWindowTitle(title)
             msg.setIcon(QMessageBox.Information)
             msg.setText(text)
             msg.setStandardButtons(QMessageBox.Ok)
@@ -7748,6 +7798,14 @@ class MainWindow(QMainWindow):
                 self.run_btn.setText('変換中…' if running else '▶  変換実行')
             except Exception:
                 pass
+        for name in ('folder_batch_btn', 'folder_batch_action'):
+            widget = getattr(self, name, None)
+            setter = getattr(widget, 'setEnabled', None)
+            if callable(setter):
+                try:
+                    setter(not running)
+                except Exception:
+                    pass
         if hasattr(self, 'stop_btn'):
             try:
                 self.stop_btn.setEnabled(running)
@@ -8194,6 +8252,17 @@ class MainWindow(QMainWindow):
             self._handle_conversion_startup_failure(str(exc))
 
     def stop_conversion(self: MainWindow) -> None:
+        if bool(self.__dict__.get('_folder_batch_running', False)) and not self.worker:
+            try:
+                from tategakiXTC_folder_batch_mainwindow_launcher import (
+                    request_folder_batch_cancel_best_effort,
+                )
+
+                request_folder_batch_cancel_best_effort(self)
+            except Exception:
+                self.__dict__['_folder_batch_cancel_requested'] = True
+                APP_LOGGER.exception('フォルダ一括変換の停止要求に失敗しました')
+            return
         if not self.worker:
             return
         try:
@@ -10347,12 +10416,13 @@ class MainWindow(QMainWindow):
             tv.setReadOnly(True)
             tv.setPlainText("""\
 【基本的な流れ】
-1. 上部の「ファイル」または「フォルダ」で変換対象を選びます。
-2. 左側の設定を調整します。
-3. 必要に応じて上部の「プレビュー更新」で手動再描画します。
-4. 右側のフォントビューで文字の見え方を確認します。
-5. 「▶ 変換実行」を押すと .xtc / .xtch を保存します。
-6. 変換後は実機ビューで XTC を確認できます。
+1. 上部の「ファイルを開く...」で変換対象を選び、「保存先を選ぶ...」で保存先を選びます。
+2. 複数ファイルをまとめて変換するときは「フォルダ一括変換...」を使います。
+3. 左側の設定を調整します。
+4. 必要に応じて上部の「プレビュー更新」で手動再描画します。
+5. 右側のフォントビューで文字の見え方を確認します。
+6. 「▶ 変換実行」を押すと .xtc / .xtch を保存します。
+7. 変換後は実機ビューで XTC を確認できます。
 
 【プレビュー】
 ・フォントビュー: 設定中の文字の見え方を確認します。

@@ -229,7 +229,13 @@ def build_image_section_plan() -> dict[str, Any]:
         'threshold_enabled': False,
         'threshold_help_spacing': 6,
         'glyph_position_row_spacing': 6,
+        'glyph_position_group_spacing': 8,
+        'glyph_position_combo_width': 92,
+        'closing_bracket_position_combo_width': 92,
         'wave_dash_row_spacing': 6,
+        'wave_dash_group_spacing': 8,
+        'wave_dash_drawing_combo_width': 108,
+        'wave_dash_position_combo_width': 92,
         'help_text': '白黒反転（出力）: 白と黒を入れ替えて出力します。プレビューにも反映されます。しきい値: 白と黒の分かれ目を調整します。ディザリング: 粒状感と引き換えに濃淡感を残します。',
         'trailing_stretch': True,
     }
@@ -254,6 +260,8 @@ def build_preset_section_plan(*, minimum_button_width: object = 104) -> dict[str
         'save_tooltip': '現在の組版設定をこのプリセットへ上書き保存',
         'button_object_name': 'smallBtn',
         'button_min_width': _coerce_nonnegative_int(minimum_button_width, default=104) or 104,
+        'combo_width': 294,
+        'combo_max_width': 294,
         'summary_text': '',
         'summary_label_object_name': 'presetSummaryLabel',
         'summary_label_word_wrap': True,
@@ -272,15 +280,23 @@ def build_uniform_button_row_plan(width_candidates: Iterable[object], *, minimum
 
 
 
-def build_top_bar_plan(*, path_button_width: object = 84) -> dict[str, Any]:
+def build_top_bar_plan(*, path_button_width: object = 128) -> dict[str, Any]:
     return {
         'bar_height': 56,
         'contents_margins': (16, 0, 12, 0),
         'spacing': 10,
-        'path_button_width': _coerce_nonnegative_int(path_button_width, default=84) or 84,
-        'file_button_text': 'ファイル',
-        'folder_button_text': 'フォルダ',
-        'target_placeholder': 'EPUB / ZIP / CBZ / CBR / RAR / TXT / Markdown / 画像 / フォルダ',
+        'path_button_width': _coerce_nonnegative_int(path_button_width, default=136) or 136,
+        'file_button_text': 'ファイルを開く...',
+        'file_button_tooltip': '1つのファイルを開いて変換します',
+        'folder_button_text': '保存先を選ぶ...',
+        'folder_button_tooltip': '変換後のXTC / XTCH の保存先を選びます',
+        'folder_batch_button_text': 'フォルダ一括変換...',
+        'folder_batch_button_width': 152,
+        'folder_batch_button_tooltip': 'フォルダ内の複数ファイルをまとめて変換します',
+        'top_buttons_help_text': '上部ボタンの使い分け\n\n1) ファイルを開く...\n1つのファイルだけを開いて変換するときに使います。TXT / Markdown / EPUB / 画像などを個別に確認したい場合はこちらです。\n\n2) 保存先を選ぶ...\n変換後の XTC / XTCH を保存するフォルダを選びます。単体変換では、ここで選んだ場所に出力されます。\n\n3) フォルダ一括変換...\nフォルダ内の複数ファイルをまとめて変換するときに使います。サブフォルダも対象にしたい場合や、フォルダ構造を保って出力したい場合はこちらです。\n\n迷ったときの目安\n・1冊 / 1ファイルだけ試す → ファイルを開く...\n・保存場所を変えたい → 保存先を選ぶ...\n・複数ファイルをまとめて処理したい → フォルダ一括変換...',
+        'top_buttons_help_title': '上部ボタンの使い分け',
+        'top_buttons_help_tooltip': '上部3ボタンの使い分け',
+        'target_placeholder': '変換対象のファイル / フォルダ',
         'run_button_text': '▶  変換実行',
         'run_button_width': 130,
         'stop_button_text': '■  停止',

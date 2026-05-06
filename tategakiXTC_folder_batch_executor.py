@@ -82,6 +82,14 @@ class FolderBatchExecutionResult:
         return max(0, self.plan.total_count - self.processed_count)
 
     @property
+    def stopped_pending_count(self) -> int:
+        """Return only the not-yet-converted files left after a stop request."""
+
+        if not self.stopped:
+            return 0
+        return max(0, self.plan.convert_count - self.attempted_count)
+
+    @property
     def existing_skip_count(self) -> int:
         return sum(1 for item in self.items if item.status == FOLDER_BATCH_STATUS_SKIP_EXISTING)
 
@@ -96,6 +104,47 @@ class FolderBatchExecutionResult:
     @property
     def overwritten_success_count(self) -> int:
         return sum(1 for item in self.items if item.success and item.overwritten)
+
+    @property
+    def failed_items(self) -> tuple[FolderBatchExecutionItem, ...]:
+        return tuple(item for item in self.items if item.failed)
+
+    def failure_summary_lines(
+        self,
+        *,
+        max_items: int = 5,
+        max_message_chars: int = 120,
+    ) -> list[str]:
+        failed = self.failed_items
+        if not failed:
+            return []
+        limit = max(1, int(max_items))
+        shown = min(len(failed), limit)
+        lines = [
+            '失敗内訳:',
+            f'表示: {len(failed)} 件中 {shown} 件（詳細はログ欄の [ERROR] を確認）',
+        ]
+        for item in failed[:limit]:
+            message = _compact_failure_message(item.message, max_chars=max_message_chars)
+            lines.append(f'- {item.relative_source_path}: {message}')
+        remaining = len(failed) - limit
+        if remaining > 0:
+            lines.append(f'- 他 {remaining} 件（ログ欄に失敗一覧を出力しました）')
+        return lines
+
+    def failure_log_lines(self, *, max_items: int | None = None) -> list[str]:
+        failed = self.failed_items
+        if not failed:
+            return []
+        limit = len(failed) if max_items is None else max(1, int(max_items))
+        lines = [f'[ERROR-SUMMARY] 失敗ファイル一覧: {len(failed)} 件']
+        for item in failed[:limit]:
+            message = _compact_failure_message(item.message, max_chars=240)
+            lines.append(f'[ERROR-SUMMARY] - {item.relative_source_path} — {message}')
+        remaining = len(failed) - limit
+        if remaining > 0:
+            lines.append(f'[ERROR-SUMMARY] - 他 {remaining} 件')
+        return lines
 
     def summary_lines(self) -> list[str]:
         lines = [
@@ -118,9 +167,12 @@ class FolderBatchExecutionResult:
         if skip_reasons:
             lines.append('スキップ内訳: ' + ' / '.join(skip_reasons))
         if self.stopped:
-            lines.append(f'未処理: {self.pending_count} 件')
-            lines.append('停止要求により、残りのファイルは処理していません。')
+            lines.append(f'未処理: {self.stopped_pending_count} 件')
+            lines.append('停止要求により、現在のファイル完了後に一括変換を停止しました。')
+            if self.skipped_count:
+                lines.append('変換前に判定済みのスキップ項目は集計に含めています。')
         if self.failed_count:
+            lines.extend(self.failure_summary_lines())
             lines.append('失敗したファイルはログ欄の [ERROR] 行を確認してください。')
         elif self.success_count:
             lines.append('出力先フォルダを確認してください。')
@@ -150,6 +202,15 @@ def _emit_progress(
 def _safe_message(exc: BaseException) -> str:
     text = str(exc).strip()
     return text or exc.__class__.__name__
+
+
+def _compact_failure_message(message: object, *, max_chars: int = 120) -> str:
+    text = str(message or '').strip() or '詳細不明'
+    text = ' '.join(text.split())
+    limit = max(20, int(max_chars))
+    if len(text) <= limit:
+        return text
+    return text[: max(1, limit - 1)].rstrip() + '…'
 
 
 def execute_folder_batch_plan(
@@ -196,7 +257,7 @@ def execute_folder_batch_plan(
 
         if should_cancel is not None and should_cancel():
             stopped = True
-            _emit_log(log_cb, '[STOP] 停止要求により、フォルダ一括変換を中断しました。')
+            _emit_log(log_cb, '[STOP] 停止要求を検出しました。現在のファイルまででフォルダ一括変換を停止します。')
             break
 
         assert item.output_path is not None
@@ -242,9 +303,14 @@ def execute_folder_batch_plan(
 
     result = FolderBatchExecutionResult(plan=plan, items=tuple(result_items), stopped=stopped)
     status_label = 'STOP' if result.stopped else 'DONE'
+    stop_tail = ''
+    if result.stopped:
+        stop_tail = f' / 未処理 {result.stopped_pending_count} 件'
     _emit_log(
         log_cb,
         f'[{status_label}] 成功 {result.success_count} 件 / スキップ {result.skipped_count} 件 / '
-        f'失敗 {result.failed_count} 件 / 処理済み {result.processed_count} / {result.plan.total_count} 件',
+        f'失敗 {result.failed_count} 件 / 処理済み {result.processed_count} / {result.plan.total_count} 件{stop_tail}',
     )
+    for line in result.failure_log_lines():
+        _emit_log(log_cb, line)
     return result

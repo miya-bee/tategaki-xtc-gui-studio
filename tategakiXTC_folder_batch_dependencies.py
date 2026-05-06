@@ -69,7 +69,7 @@ def format_folder_batch_missing_dependency_lines(missing: Iterable[Mapping[str, 
         return []
 
     lines = [
-        '注意: 一部の変換に必要な追加ライブラリが不足しています。',
+        '注意: EPUB などの変換に必要な追加ライブラリが不足しています。',
     ]
     for item in items:
         label = str(item.get('label') or item.get('package') or '不明なライブラリ')
@@ -83,7 +83,7 @@ def format_folder_batch_missing_dependency_lines(missing: Iterable[Mapping[str, 
             lines.append(f'- {label}（pip install {package}）')
         else:
             lines.append(f'- {label}')
-    lines.append('EPUB など該当形式は失敗する可能性があります。requirements.txt で依存ライブラリを入れ直してください。')
+    lines.append('該当形式は失敗する可能性があります。install_requirements.bat または requirements.txt で依存ライブラリを入れ直してください。')
     return lines
 
 

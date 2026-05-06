@@ -269,13 +269,16 @@ def make_help_icon_button(
     text: str,
     *,
     tooltip: str | None = None,
+    dialog_title: str | None = None,
     clicked: Callable[..., Any] | None = None,
     clicked_with_button: Callable[[QPushButton], Any] | None = None,
     property_name: str = 'helpText',
     button_factory: type[QPushButton] = QPushButton,
     no_focus_policy: Qt.FocusPolicy = Qt.NoFocus,
 ) -> QPushButton:
-    tip = str(tooltip if tooltip is not None else text)
+    help_text = str(text)
+    tip = str(tooltip if tooltip is not None else help_text)
+    resolved_dialog_title = str(dialog_title if dialog_title is not None else '説明')
     button = make_button_from_plan(
         gui_layouts.build_button_widget_plan(
             '?',
@@ -290,7 +293,8 @@ def make_help_icon_button(
     )
     set_property = getattr(button, 'setProperty', None)
     if callable(set_property):
-        set_property(property_name, tip)
+        set_property(property_name, help_text)
+        set_property('helpTitle', resolved_dialog_title)
     if clicked_with_button is not None:
         button.clicked.connect(lambda _checked=False, b=button: clicked_with_button(b))
     return button

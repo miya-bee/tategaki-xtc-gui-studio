@@ -124,7 +124,7 @@ REQUIRED_PUBLIC_DOC_FILES = (
     'WINDOWS_SETUP.md',
     'FAQ.md',
     'KNOWN_LIMITATIONS.md',
-    'PUBLISH_CHECKLIST_v1_3_0.md',
+    'PUBLISH_CHECKLIST_v1_3_1.md',
     RELEASE_NOTES_FILE,
 )
 REQUIRED_PROJECT_APP_MODULE_FILES = (
@@ -374,7 +374,7 @@ REQUIRED_UTF8_TEXT_FILES = tuple(
 )
 REQUIRED_APP_CONTENT_MARKERS = {
     'tategakiXTC_release_metadata.py': (
-        "APP_VERSION = '1.3.0'",
+        "APP_VERSION = '1.3.1'",
         'RELEASE_NOTES_FILE',
         'RELEASE_ZIP_FILE_NAME',
     ),

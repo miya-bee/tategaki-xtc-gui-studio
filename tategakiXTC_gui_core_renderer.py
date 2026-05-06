@@ -2643,6 +2643,12 @@ def _draw_vertical_wave_dash_rotated_glyph(
 ) -> bool:
     curr_x, curr_y = pos_tuple
     try:
+        # Some bundled/user fonts contain ～/〜/〰/~ but do not contain
+        # mathematical wave-like glyphs such as ∼/∿/≀.  Rendering a missing
+        # glyph can still produce a non-empty tofu/"?" image, so check for a
+        # distinct glyph before taking the rotated-font path.
+        if not _font_has_distinct_glyph(font, char, is_bold=is_bold, is_italic=is_italic):
+            return False
         rotate_degrees = _vertical_wave_dash_rotation_degrees(char)
         glyph_img, glyph_mask = _render_text_glyph_and_mask_shared(
             char,

@@ -35,6 +35,8 @@ from tategakiXTC_folder_batch_settings import (
 
 FolderBatchInformationCallback = Callable[[str, str], None]
 FolderBatchWarningCallback = Callable[[str, str], None]
+FolderBatchBeforeExecuteCallback = Callable[[FolderBatchPlan], None]
+FolderBatchAfterExecuteCallback = Callable[[FolderBatchExecutionResult | None], None]
 OutputFormatGetter = Callable[[], str]
 MissingDependencyGetter = Callable[[Iterable[str]], list[dict[str, object]]]
 
@@ -101,34 +103,52 @@ def format_folder_batch_missing_dependency_message(missing_items: Iterable[dict[
 
     items = list(missing_items)
     lines = [
-        'このフォルダ一括変換に必要なライブラリが不足しています。',
-        '不足しているライブラリを入れてから、もう一度実行してください。',
+        'EPUB などの変換に必要な追加ライブラリが不足しています。',
+        '安全のため、フォルダ一括変換は開始していません。',
+        'TXT / Markdown / 画像だけを変換する場合は、EPUB などを除外して再実行できます。',
         '',
-        '不足:',
+        '不足しているライブラリ:',
     ]
     packages: list[str] = []
     seen_packages: set[str] = set()
+    purposes: list[str] = []
+    seen_purposes: set[str] = set()
     for item in items:
         label = _safe_dependency_text(item, 'label') or _safe_dependency_text(item, 'package') or '不明なライブラリ'
         purpose = _safe_dependency_text(item, 'purpose')
         package = _safe_dependency_text(item, 'package') or label
         if purpose:
             lines.append(f'- {label}（{purpose}）')
+            if purpose not in seen_purposes:
+                purposes.append(purpose)
+                seen_purposes.add(purpose)
         else:
             lines.append(f'- {label}')
         if package and package not in seen_packages:
             packages.append(package)
             seen_packages.add(package)
+    if purposes:
+        lines.extend([
+            '',
+            '影響する変換:',
+            '- ' + ' / '.join(purposes),
+        ])
     if packages:
         lines.extend([
             '',
-            'インストール例:',
-            f'py -3.10 -m pip install {" ".join(packages)}',
-            'または',
+            '対応方法:',
+            '1. アプリを終了する',
+            '2. 展開先フォルダの install_requirements.bat を実行する',
+            '3. うまくいかない場合は、コマンドプロンプトで以下を実行する',
+            '',
             'py -3.10 -m pip install -r requirements.txt',
+            '',
+            '不足分だけ入れる場合:',
+            f'py -3.10 -m pip install {" ".join(packages)}',
         ])
     lines.extend([
         '',
+        '補足: ebooklib / beautifulsoup4 は EPUB の読み込みと本文解析に使います。',
         'このままでは対象ファイルを変換できないため、処理は開始していません。',
     ])
     return '\n'.join(lines)
@@ -188,6 +208,20 @@ def folder_batch_plan_can_execute(plan: FolderBatchPlan | object) -> bool:
         return False
 
 
+def _safe_log_callback_warning(
+    log_cb: FolderBatchLogCallback | None,
+    label: str,
+    exc: BaseException,
+) -> None:
+    if log_cb is None:
+        return
+    try:
+        text = str(exc).strip() or exc.__class__.__name__
+        log_cb(f'[WARN] {label}に失敗しました: {text}')
+    except Exception:
+        pass
+
+
 def run_folder_batch_plan_with_callbacks(
     plan: FolderBatchPlan,
     converter: FolderBatchConvertCallback,
@@ -196,19 +230,37 @@ def run_folder_batch_plan_with_callbacks(
     progress_cb: FolderBatchProgressCallback | None = None,
     should_cancel: FolderBatchCancelCallback | None = None,
     information_cb: FolderBatchInformationCallback | None = None,
+    before_execute_cb: FolderBatchBeforeExecuteCallback | None = None,
+    after_execute_cb: FolderBatchAfterExecuteCallback | None = None,
 ) -> FolderBatchExecutionResult:
     if log_cb is not None:
         for line in summarize_folder_batch_plan(plan):
             log_cb(f'[PLAN] {line}')
-    result = execute_folder_batch_plan(
-        plan,
-        converter,
-        log_cb=log_cb,
-        progress_cb=progress_cb,
-        should_cancel=should_cancel,
-    )
+    if before_execute_cb is not None:
+        try:
+            before_execute_cb(plan)
+        except Exception as exc:
+            _safe_log_callback_warning(log_cb, '実行前UI更新', exc)
+    result: FolderBatchExecutionResult | None = None
+    try:
+        result = execute_folder_batch_plan(
+            plan,
+            converter,
+            log_cb=log_cb,
+            progress_cb=progress_cb,
+            should_cancel=should_cancel,
+        )
+    finally:
+        if after_execute_cb is not None:
+            try:
+                after_execute_cb(result)
+            except Exception as exc:
+                _safe_log_callback_warning(log_cb, '実行後UI更新', exc)
     if information_cb is not None:
-        information_cb('フォルダ一括変換', '\n'.join(result.summary_lines()))
+        try:
+            information_cb('フォルダ一括変換', '\n'.join(result.summary_lines()))
+        except Exception as exc:
+            _safe_log_callback_warning(log_cb, '完了通知', exc)
     return result
 
 
@@ -225,6 +277,8 @@ def open_folder_batch_dialog_and_execute(
     information_cb: FolderBatchInformationCallback | None = None,
     warning_cb: FolderBatchWarningCallback | None = None,
     missing_dependency_getter: MissingDependencyGetter | None = None,
+    before_execute_cb: FolderBatchBeforeExecuteCallback | None = None,
+    after_execute_cb: FolderBatchAfterExecuteCallback | None = None,
     dialog_cls: Callable[..., FolderBatchDialogProtocol] | None = None,
     accepted_value: int = 1,
 ) -> FolderBatchControllerRun | None:
@@ -294,6 +348,8 @@ def open_folder_batch_dialog_and_execute(
             progress_cb=progress_cb,
             should_cancel=should_cancel,
             information_cb=information_cb,
+            before_execute_cb=before_execute_cb,
+            after_execute_cb=after_execute_cb,
         )
     except Exception as exc:
         if warning_cb is not None:

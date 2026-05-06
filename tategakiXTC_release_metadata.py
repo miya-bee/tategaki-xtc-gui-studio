@@ -7,9 +7,9 @@ tooling can read public version information without triggering heavy optional
 dependencies.
 """
 
-APP_VERSION = '1.3.0'
+APP_VERSION = '1.3.1'
 PUBLIC_VERSION = APP_VERSION
-PREVIOUS_PUBLIC_VERSION = '1.2.2'
+PREVIOUS_PUBLIC_VERSION = '1.3.0'
 PUBLIC_VERSION_TAG = PUBLIC_VERSION
 RELEASE_NOTES_FILE = f'RELEASE_NOTES_v{PUBLIC_VERSION.replace(".", "_")}.md'
 RELEASE_ZIP_FILE_NAME = f'tategaki-xtc-gui-studio_v{PUBLIC_VERSION}-release.zip'
