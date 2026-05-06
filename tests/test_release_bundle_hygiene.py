@@ -1640,7 +1640,6 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
                 [
                     'build_release_zip.py (required for project release archives)',
                     'mypy.ini (required for project release archives)',
-                    '.github/workflows/python-tests.yml (required for project release archives)',
                 ],
             )
 
@@ -2304,6 +2303,10 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
                     'LICENSE.txt (required for project release archives)',
                     'CHANGELOG.md (required for project release archives)',
                     'RELEASE_CHECKLIST.md (required for project release archives)',
+                    'WINDOWS_SETUP.md (required for project release archives)',
+                    'FAQ.md (required for project release archives)',
+                    'KNOWN_LIMITATIONS.md (required for project release archives)',
+                    'PUBLISH_CHECKLIST_v1_3_1.md (required for project release archives)',
                     f'{rel.RELEASE_NOTES_FILE} (required for project release archives)',
                 ],
             )

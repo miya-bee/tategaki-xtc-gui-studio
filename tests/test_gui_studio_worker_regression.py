@@ -346,43 +346,55 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertEqual(text_calls[0][3:], (False, 'cb1'))
         self.assertEqual(archive_calls[0], (Path('sample.zip'), Path('sample2.xtc'), False, 'cb2'))
 
-    def test_process_single_image_file_writes_blob(self):
+    def test_process_single_image_file_wraps_page_blob_in_xtc_container(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
             src = base / 'cover.png'
             src.write_bytes(b'raw-image')
             out = base / 'cover.xtc'
+            args = types.SimpleNamespace(width=480, height=800, output_format='xtc')
             seen = []
-            with mock.patch.object(self.studio.core, 'process_image_data', return_value=b'blob-data') as mocked:
+
+            def fake_build_xtc(page_blobs, output_path, width, height, output_format, should_cancel=None, progress_cb=None):
+                self.assertEqual(page_blobs, [b'page-blob'])
+                self.assertEqual(Path(output_path), out)
+                self.assertEqual((width, height, output_format), (480, 800, 'xtc'))
+                self.assertFalse(should_cancel())
+                Path(output_path).write_bytes(b'XTC\x00container')
+
+            with mock.patch.object(self.studio.core, 'process_image_data', return_value=b'page-blob') as mocked, \
+                 mock.patch.object(self.studio.core, 'build_xtc', side_effect=fake_build_xtc) as mocked_build:
                 result = self.studio._process_single_image_file(
                     src,
                     'unused-font.ttf',
-                    object(),
+                    args,
                     out,
                     should_cancel=lambda: False,
                     progress_cb=lambda current, total, message: seen.append((current, total, message)),
                 )
             self.assertEqual(result, out)
-            self.assertEqual(out.read_bytes(), b'blob-data')
+            self.assertEqual(out.read_bytes()[:4], b'XTC\x00')
             mocked.assert_called_once()
+            mocked_build.assert_called_once()
             self.assertEqual(seen[0], (0, 1, '画像を読み込み中…'))
             self.assertEqual(seen[-1], (1, 1, '画像変換が完了しました。'))
 
-    def test_process_single_image_file_removes_partial_when_replace_fails(self):
+    def test_process_single_image_file_keeps_old_output_when_container_write_fails(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
             src = base / 'cover.png'
             src.write_bytes(b'raw-image')
             out = base / 'cover.xtc'
             out.write_bytes(b'old-data')
+            args = types.SimpleNamespace(width=480, height=800, output_format='xtc')
 
-            with mock.patch.object(self.studio.core, 'process_image_data', return_value=b'blob-data'), \
-                 mock.patch.object(self.studio.os, 'replace', side_effect=OSError('replace failed')):
+            with mock.patch.object(self.studio.core, 'process_image_data', return_value=b'page-blob'), \
+                 mock.patch.object(self.studio.core, 'build_xtc', side_effect=OSError('replace failed')):
                 with self.assertRaises(OSError):
                     self.studio._process_single_image_file(
                         src,
                         'unused-font.ttf',
-                        object(),
+                        args,
                         out,
                         should_cancel=lambda: False,
                     )
@@ -4316,20 +4328,26 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIsNone(window.worker)
         self.assertIsNone(window.worker_thread)
 
-    def test_set_worker_controls_running_toggles_run_and_stop_buttons(self):
+    def test_set_worker_controls_running_toggles_run_stop_and_folder_batch_buttons(self):
         window = self.make_window()
         window.run_btn = _ButtonStub()
         window.stop_btn = _ButtonStub()
+        window.folder_batch_btn = _ButtonStub()
+        window.folder_batch_action = _ButtonStub()
 
         window._set_worker_controls_running(True)
         self.assertFalse(window.run_btn.enabled)
         self.assertEqual(window.run_btn.text_value, '変換中…')
         self.assertTrue(window.stop_btn.enabled)
+        self.assertFalse(window.folder_batch_btn.enabled)
+        self.assertFalse(window.folder_batch_action.enabled)
 
         window._set_worker_controls_running(False)
         self.assertTrue(window.run_btn.enabled)
         self.assertEqual(window.run_btn.text_value, '▶  変換実行')
         self.assertFalse(window.stop_btn.enabled)
+        self.assertTrue(window.folder_batch_btn.enabled)
+        self.assertTrue(window.folder_batch_action.enabled)
 
     def test_prepare_conversion_ui_for_run_resets_results_and_sets_running_state(self):
         window = self.make_window()
@@ -17153,7 +17171,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
 
     def test_default_top_path_button_width_matches_latest_layout(self):
-        self.assertEqual(self.studio.DEFAULT_TOP_PATH_BUTTON_WIDTH, 84)
+        self.assertEqual(self.studio.DEFAULT_TOP_PATH_BUTTON_WIDTH, 128)
 
     def test_left_settings_sections_hide_behavior_section_and_keep_ref028_order(self):
         window = self.make_window()

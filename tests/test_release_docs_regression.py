@@ -64,12 +64,12 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
         self.assertIn('v1.0.2 の次の正式版 v1.1.0', changelog)
 
     def test_release_notes_exist_for_current_public_version(self) -> None:
-        notes = Path('RELEASE_NOTES_v1_2_2.md').read_text(encoding='utf-8')
-        self.assertIn('v1.2.2', notes)
-        self.assertIn('安定版', notes)
-        self.assertIn('波ダッシュ・チルダ類', notes)
-        self.assertIn('回転グリフ', notes)
-        self.assertIn('別描画', notes)
+        notes = Path('RELEASE_NOTES_v1_3_1.md').read_text(encoding='utf-8')
+        self.assertIn('v1.3.1', notes)
+        self.assertIn('フォルダ一括変換', notes)
+        self.assertIn('サブフォルダ', notes)
+        self.assertIn('既存ファイル', notes)
+        self.assertIn('optional dependency', notes)
 
 
     def test_docs_treat_v1_1_0_as_next_after_v1_0_2(self) -> None:
@@ -87,15 +87,15 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
         metadata = Path('tategakiXTC_release_metadata.py').read_text(encoding='utf-8')
         self.assertIn('APP_VERSION,', studio)
         self.assertIn('from tategakiXTC_release_metadata import', constants)
-        self.assertIn("APP_VERSION = '1.2.2'", metadata)
+        self.assertIn("APP_VERSION = '1.3.1'", metadata)
 
-    def test_v1_2_2_support_docs_exist(self) -> None:
+    def test_v1_3_0_support_docs_exist(self) -> None:
         for relative in (
             'WINDOWS_SETUP.md',
             'FAQ.md',
             'KNOWN_LIMITATIONS.md',
-            'RELEASE_NOTES_v1_2_2.md',
-            'PUBLISH_CHECKLIST_v1_2_2.md',
+            'RELEASE_NOTES_v1_3_1.md',
+            'PUBLISH_CHECKLIST_v1_3_1.md',
         ):
             self.assertTrue(Path(relative).exists(), relative)
 

@@ -1314,6 +1314,17 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
             core.draw_char_tate(draw, '～', (20, 10), self.font, 24, is_bold=True)
         self.assertIsNotNone(ImageOps.invert(img.crop((20, 10, 44, 34))).getbbox())
 
+    def test_draw_vertical_wave_dash_falls_back_when_rotated_glyph_is_missing(self):
+        img = Image.new('L', (64, 64), 255)
+        draw = core.create_image_draw(img)
+        setattr(draw, '_tategaki_wave_dash_drawing_mode', 'rotate')
+        with mock.patch.object(core, '_font_has_distinct_glyph', return_value=False) as mocked_has_glyph:
+            with mock.patch.object(core, '_render_text_glyph_and_mask_shared', wraps=core._render_text_glyph_and_mask_shared) as mocked_bundle:
+                core.draw_char_tate(draw, '∿', (20, 10), self.font, 24, is_bold=True)
+        self.assertEqual(mocked_has_glyph.call_count, 1)
+        self.assertEqual(mocked_bundle.call_count, 0)
+        self.assertIsNotNone(ImageOps.invert(img.crop((20, 10, 44, 34))).getbbox())
+
     def test_wave_dash_position_mode_moves_dash_down_only(self):
         def bbox_for(mode):
             img = Image.new('L', (64, 64), 255)

@@ -322,8 +322,10 @@ class GuiWidgetFactoryRegressionTests(unittest.TestCase):
 
         received = []
         button = gui_widget_factory.make_help_icon_button(
-            '説明文',
-            clicked_with_button=lambda btn: received.append(btn.properties.get('helpText')),
+            '詳しい説明文',
+            tooltip='短いツールチップ',
+            dialog_title='補足説明',
+            clicked_with_button=lambda btn: received.append((btn.properties.get('helpText'), btn.properties.get('helpTitle'))),
             button_factory=_ButtonStub,
             no_focus_policy='NO_FOCUS',
         )
@@ -336,12 +338,13 @@ class GuiWidgetFactoryRegressionTests(unittest.TestCase):
         self.assertEqual(button.text, '?')
         self.assertEqual(button.object_name, 'miniHelpBtn')
         self.assertEqual(button.fixed_size, (20, 20))
-        self.assertEqual(button.tooltip, '説明文')
-        self.assertEqual(button.properties['helpText'], '説明文')
+        self.assertEqual(button.tooltip, '短いツールチップ')
+        self.assertEqual(button.properties['helpText'], '詳しい説明文')
+        self.assertEqual(button.properties['helpTitle'], '補足説明')
         self.assertEqual(button.focus_policy, 'NO_FOCUS')
         self.assertEqual(len(button.clicked.connected), 1)
         button.clicked.connected[0]()
-        self.assertEqual(received, ['説明文'])
+        self.assertEqual(received, [('詳しい説明文', '補足説明')])
 
     def test_make_section_box_layout_preserves_layout_attachment_when_parent_ctor_rejects_box(self):
         box, layout, _plan = gui_widget_factory.make_section_box_layout(

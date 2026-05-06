@@ -29,30 +29,14 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         self.assertIn('py_compile.compile', content)
         self.assertNotIn(r'tests\*.py', content)
 
-    def test_github_actions_tests_multiple_python_versions_and_coverage(self):
-        content = Path('.github/workflows/python-tests.yml').read_text(encoding='utf-8')
-        self.assertIn("['3.10', '3.11', '3.12']", content)
-        self.assertIn('matrix.python-version', content)
-        self.assertIn('python -m pip install -r requirements.txt', content)
-        self.assertNotIn('python -m pip install -r requirements-web.txt', content)
-        self.assertIn('python -m mypy --config-file mypy.ini', content)
-        self.assertIn('python -m coverage run -m unittest discover -s tests -v', content)
-        self.assertIn('python -m coverage report -m --fail-under=60 > coverage-report.txt', content)
-        self.assertIn('Get-Content coverage-report.txt', content)
-        self.assertIn('python -m coverage xml -o coverage.xml', content)
-        self.assertIn('python -m coverage html -d htmlcov', content)
-        self.assertIn('build_release_zip.py', content)
-        self.assertIn('python build_release_zip.py --verify dist/${{ github.event.repository.name }}-release.zip', content)
-        self.assertIn('tategakiXTC_gui_widget_factory.py', content)
-        self.assertIn('tategakiXTC_worker_logic.py', content)
-        self.assertNotIn('localweb_launcher.py', content)
-        self.assertNotIn('tategakiXTC_localweb.py', content)
-        self.assertNotIn('tategakiXTC_localweb_service.py', content)
-        self.assertIn('py_compile.compile', content)
-        self.assertNotIn(r'tests\*.py', content)
-        self.assertIn('Upload coverage artifacts', content)
-        self.assertIn('coverage-report.txt', content)
-        self.assertIn('build_release_zip.py --verify', content)
+    def test_github_actions_folder_is_not_public_release_payload(self):
+        import build_release_zip as builder
+
+        self.assertIn("'.github'", Path('build_release_zip.py').read_text(encoding='utf-8'))
+        self.assertIn('.github/', Path('.gitignore').read_text(encoding='utf-8'))
+        self.assertFalse(builder.should_include_path(Path('.github/workflows/python-tests.yml'), Path('.')))
+        self.assertNotIn('.github/workflows/python-tests.yml', builder.REQUIRED_PROJECT_RELEASE_FILES)
+        self.assertNotIn('.github/workflows/python-tests.yml', builder.REQUIRED_PROJECT_TOOLING_FILES)
 
 
     def test_changelog_exists_and_mentions_current_release(self):
@@ -66,10 +50,11 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
 
     def test_release_notes_file_matches_public_version(self):
-        self.assertTrue(Path('RELEASE_NOTES_v1_2_2.md').exists())
+        self.assertTrue(Path('RELEASE_NOTES_v1_3_1.md').exists())
         self.assertFalse(Path('RELEASE_NOTES_v1_1_69.md').exists())
-        notes = Path('RELEASE_NOTES_v1_2_2.md').read_text(encoding='utf-8')
-        self.assertIn('v1.2.2', notes)
+        notes = Path('RELEASE_NOTES_v1_3_1.md').read_text(encoding='utf-8')
+        self.assertIn('v1.3.1', notes)
+        self.assertIn('フォルダ一括変換', notes)
         self.assertNotIn('1.1.69', notes)
         self.assertNotIn('bugfix', notes.casefold())
 
@@ -177,7 +162,8 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         self.assertIn('REQUIRED_TOOLING_CONTENT_MARKERS', build_release_source)
         self.assertIn('mypy.ini', build_release_source)
         self.assertIn('.coveragerc', build_release_source)
-        self.assertIn('.github/workflows/python-tests.yml', build_release_source)
+        self.assertIn("'.github'", build_release_source)
+        self.assertNotIn("'.github/workflows/python-tests.yml'", build_release_source)
         self.assertIn('REQUIRED_PROJECT_REGRESSION_TEST_FILES', build_release_source)
         self.assertIn('verify_release_zip_untracked_regression_test_files', build_release_source)
         self.assertIn('verify_release_zip_untracked_golden_case_files', build_release_source)
@@ -340,8 +326,8 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
     def test_readme_verify_command_examples_include_zip_path_argument(self):
         content = Path('README.md').read_text(encoding='utf-8')
-        self.assertIn('build_release_zip.py ^\n      --verify ^\n      dist\\tategaki-xtc-gui-studio_v1.2.2-release.zip', content)
-        self.assertIn('python build_release_zip.py --verify dist\\tategaki-xtc-gui-studio_v1.2.2-release.zip', content)
+        self.assertIn('build_release_zip.py ^\n      --verify ^\n      dist\\tategaki-xtc-gui-studio_v1.3.1-release.zip', content)
+        self.assertIn('python build_release_zip.py --verify dist\\tategaki-xtc-gui-studio_v1.3.1-release.zip', content)
         self.assertNotIn('dist\\sweep471_smoke-release.zip', content)
 
 
@@ -375,7 +361,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         ):
             self.assertIn(expected, builder)
         self.assertIn('install_requirements.bat', readme)
-        self.assertIn('tategaki-xtc-gui-studio_v1.2.2-release.zip', readme)
+        self.assertIn('tategaki-xtc-gui-studio_v1.3.1-release.zip', readme)
         self.assertIn('RELEASE_NOTES_v1_2_2.md', readme)
 
 
