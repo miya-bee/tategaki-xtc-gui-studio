@@ -596,16 +596,18 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             ('up_strong', '上補正 強'),
         ])
         self.assertEqual(constants.CLOSING_BRACKET_POSITION_MODE_OPTIONS, [
-            ('up_strong', '上補正 強'),
-            ('up_weak', '上補正 弱'),
+            ('down_strong', '下補正 強'),
+            ('down_weak', '下補正 弱'),
             ('standard', '標準'),
+            ('up_weak', '上補正 弱'),
+            ('up_strong', '上補正 強'),
         ])
         source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
         self.assertIn("_dim_label('句読点')", source)
         self.assertIn("_dim_label('下鍵括弧')", source)
         self.assertNotIn('image_lower_bracket_position_row', source)
-        self.assertLess(source.index("_dim_label('句読点')"), source.index("_dim_label('漢数字「一」')"))
-        self.assertLess(source.index("_dim_label('漢数字「一」')"), source.index("_dim_label('下鍵括弧')"))
+        self.assertLess(source.index("_dim_label('句読点')"), source.index("_dim_label('漢数字 一')"))
+        self.assertLess(source.index("_dim_label('漢数字 一')"), source.index("_dim_label('下鍵括弧')"))
         self.assertNotIn("_dim_label('ぶら下がり句読点')", source)
         self.assertNotIn("_dim_label('句読点位置')", source)
 

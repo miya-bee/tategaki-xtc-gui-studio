@@ -18075,7 +18075,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn("gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))", image_source)
         self.assertIn("image_glyph_position_row.addWidget(self._dim_label('句読点'))", image_source)
         self.assertIn("image_glyph_position_row.addWidget(self.punctuation_position_combo)", image_source)
-        self.assertIn("image_glyph_position_row.addWidget(self._dim_label('漢数字「一」'))", image_source)
+        self.assertIn("image_glyph_position_row.addWidget(self._dim_label('漢数字 一'))", image_source)
         self.assertIn("image_glyph_position_row.addWidget(self.ichi_position_combo)", image_source)
         self.assertIn("lay.addLayout(image_glyph_position_row)", image_source)
         self.assertIn("image_wave_dash_row = self._make_hbox_layout_from_plan(", image_source)

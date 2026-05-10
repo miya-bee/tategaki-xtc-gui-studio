@@ -50,10 +50,10 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
 
     def test_release_notes_file_matches_public_version(self):
-        self.assertTrue(Path('RELEASE_NOTES_v1_3_1.md').exists())
+        self.assertTrue(Path('RELEASE_NOTES_v1_3_2.md').exists())
         self.assertFalse(Path('RELEASE_NOTES_v1_1_69.md').exists())
-        notes = Path('RELEASE_NOTES_v1_3_1.md').read_text(encoding='utf-8')
-        self.assertIn('v1.3.1', notes)
+        notes = Path('RELEASE_NOTES_v1_3_2.md').read_text(encoding='utf-8')
+        self.assertIn('v1.3.2', notes)
         self.assertIn('フォルダ一括変換', notes)
         self.assertNotIn('1.1.69', notes)
         self.assertNotIn('bugfix', notes.casefold())
@@ -326,8 +326,8 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
     def test_readme_verify_command_examples_include_zip_path_argument(self):
         content = Path('README.md').read_text(encoding='utf-8')
-        self.assertIn('build_release_zip.py ^\n      --verify ^\n      dist\\tategaki-xtc-gui-studio_v1.3.1-release.zip', content)
-        self.assertIn('python build_release_zip.py --verify dist\\tategaki-xtc-gui-studio_v1.3.1-release.zip', content)
+        self.assertIn('build_release_zip.py ^\n      --verify ^\n      dist\\tategaki-xtc-gui-studio_v1.3.2-release.zip', content)
+        self.assertIn('python build_release_zip.py --verify dist\\tategaki-xtc-gui-studio_v1.3.2-release.zip', content)
         self.assertNotIn('dist\\sweep471_smoke-release.zip', content)
 
 
@@ -361,7 +361,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         ):
             self.assertIn(expected, builder)
         self.assertIn('install_requirements.bat', readme)
-        self.assertIn('tategaki-xtc-gui-studio_v1.3.1-release.zip', readme)
+        self.assertIn('tategaki-xtc-gui-studio_v1.3.2-release.zip', readme)
         self.assertIn('RELEASE_NOTES_v1_2_2.md', readme)
 
 

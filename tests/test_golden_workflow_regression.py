@@ -129,7 +129,10 @@ class GoldenWorkflowRegressionTests(unittest.TestCase):
 
     def test_golden_images_readme_separates_local_cmd_examples_from_ci_workflow(self):
         text = (ROOT / "tests" / "golden_images" / "README.md").read_text(encoding="utf-8")
-        workflow = (ROOT / ".github" / "workflows" / "python-tests.yml").read_text(encoding="utf-8")
+        workflow_path = ROOT / ".github" / "workflows" / "python-tests.yml"
+        if not workflow_path.exists():
+            self.skipTest("GitHub Actions workflow is not included in release zip payloads")
+        workflow = workflow_path.read_text(encoding="utf-8")
         self.assertIn("## CI 上の確認", text)
         self.assertIn("GitHub Actions", text)
         self.assertIn(r"python tests/generate_golden_images.py --check", workflow)
