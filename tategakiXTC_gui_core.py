@@ -180,7 +180,7 @@ def _emit_progress(progress_cb: ProgressCallback | None = None, current: int | f
 # ==========================================
 
 DEF_WIDTH, DEF_HEIGHT = 480, 800
-PREVIEW_PAGE_LIMIT = 10
+PREVIEW_PAGE_LIMIT = 20
 PREVIEW_BUNDLE_CACHE_MAX = 8
 IMG_EXTS = ('.jpg', '.jpeg', '.png', '.webp')
 EPUB_INPUT_SUFFIXES = ('.epub',)

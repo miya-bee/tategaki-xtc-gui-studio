@@ -16,6 +16,8 @@ from typing import Any
 
 
 LOWER_CLOSING_BRACKET_POSITION_MODES: dict[str, str] = {
+    'down_strong': '下補正 強',
+    'down_weak': '下補正 弱',
     'standard': '標準',
     'up_weak': '上補正 弱',
     'up_strong': '上補正 強',

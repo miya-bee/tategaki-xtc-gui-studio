@@ -127,6 +127,11 @@ def _lower_closing_bracket_extra_y_for_mode(original_char: str, f_size: int, pos
     if original_char not in LOWER_CLOSING_KAGIKAKKO_POSITION_CHARS:
         return 0
     mode = _glyph_position_mode(position_mode)
+    # PIL / image coordinates use positive Y for downward movement.
+    if mode == 'down_strong':
+        return _lower_closing_bracket_adjusted_raise(f_size)
+    if mode == 'down_weak':
+        return _lower_closing_bracket_adjusted_raise(f_size, weak=True)
     if mode == 'up_weak':
         return -_lower_closing_bracket_adjusted_raise(f_size, weak=True)
     if mode == 'up_strong':

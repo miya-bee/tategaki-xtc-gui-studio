@@ -2071,7 +2071,7 @@ class MainWindow(QMainWindow):
         image_glyph_position_row.addSpacing(glyph_group_spacing)
         image_glyph_position_row.addWidget(self._dim_label('下鍵括弧'))
         image_glyph_position_row.addWidget(self.lower_closing_bracket_position_combo)
-        image_glyph_position_row.addWidget(self._help_icon_button('閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみ対象です。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
+        image_glyph_position_row.addWidget(self._help_icon_button('閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみ対象です。下補正 強/弱: 標準より下へ寄せます。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
         image_glyph_position_row.addStretch(1)
         lay.addLayout(image_glyph_position_row)
 
