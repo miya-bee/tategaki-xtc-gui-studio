@@ -3,7 +3,6 @@
 **縦書きXTC GUI Studio** は、EPUB やテキストを、xteink X4 / X3 などで扱いやすい縦書き XTC / XTCH 形式へ変換するための Python GUI アプリです。
 
 このリポジトリの公開版は **Python GUI版のみ**です。  
-旧ローカル Web 試作版関連ファイルは、v1.1.0 以降の公開対象から除外しています。
 
 ## Python環境なしで使いたい方へ（Windows向け配布版）
 
