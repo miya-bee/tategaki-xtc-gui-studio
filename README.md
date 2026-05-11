@@ -5,6 +5,21 @@
 このリポジトリの公開版は **Python GUI版のみ**です。  
 旧ローカル Web 試作版関連ファイルは、v1.1.0 以降の公開対象から除外しています。
 
+## Python環境なしで使いたい方へ（Windows向け配布版）
+
+このGitHubリポジトリでは、Python環境を自分で用意して使うコード版を無料公開しています。
+
+一方で、Pythonのインストールや必要ライブラリの導入が難しい方向けに、Windows exe版とローカルWeb-GUI版をまとめた配布版も用意しています。
+
+- Windows exe版：Python環境の準備なしで起動しやすい版
+- ローカルWeb-GUI版：ブラウザから操作できるWindows向けローカル版
+
+配布版は、以下の記事で案内しています。
+
+[縦書きXTC GUI Studio：Windows exe版とローカルWeb-GUI版を公開します](https://note.com/miya_bee_note/n/n8e8424e96e4e)
+
+Python環境を自分で用意できる方は、このGitHub上の無料コード版をご利用ください。
+
 ## バージョン
 
 現在の公開版は **v1.3.2** です。
