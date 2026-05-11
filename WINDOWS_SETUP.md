@@ -178,10 +178,11 @@ py -3.10 -B tategakiXTC_gui_studio.py
 py -3.10 -m pip install -r requirements.txt
 ```
 
-````text
+
 テストを実行する場合は、release zip を展開したフォルダーへ移動してから実行してください。
 
 ```cmd
 cd /d C:\Users\nishi\Downloads\tategaki-xtc-gui-studio_v1.3.2-release
+
 py -3.10 -m unittest discover -s tests -v
 ```
