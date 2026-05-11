@@ -1,6 +1,13 @@
+> Python環境を自分で用意せずに使いたい場合は、Windows exe版とローカルWeb-GUI版をまとめた配布版もあります。
+>
+> 配布版の案内はこちらです。
+>
+> https://note.com/miya_bee_note/n/n8e8424e96e4e
+
+
 # Windows セットアップ手順
 
-この文書は、縦書きXTC GUI Studio v1.3.0 を Windows で起動するための手順です。
+この文書は、縦書きXTC GUI Studio v1.3.2 の Python GUI版を Windows で起動するための手順です。
 
 ## 1. Python を確認する
 
