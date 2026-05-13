@@ -184,11 +184,11 @@ def _small_kana_offset(f_size: int) -> tuple[int, int]:
 
 @lru_cache(maxsize=64)
 def _kagikakko_extra_y(original_char: str, f_size: int) -> int:
-    if original_char in {'「', '『'}:
+    if original_char in {'「', '『', '﹁', '﹃'}:
         # sweep317: sweep316 ではフォントによって開き鉤括弧が下寄りに
         # 見えるケースがあったため、下げ量を少し弱める。
         return max(1, int(round(f_size * 0.18)))
-    if original_char in {'」', '』'}:
+    if original_char in {'」', '』', '﹂', '﹄'}:
         # sweep341: 閉じ鉤括弧は一部フォントで水平画が下に沈むため、
         # 通常描画側も少し強めに上げる。ぶら下げ時の bbox 補正とは
         # 独立させ、通常位置の見え方だけを微調整する。
@@ -262,7 +262,7 @@ def _classify_tate_draw_char(char: str) -> str:
         return 'ichi'
     if char in {'ー', '－'}:
         return 'long_vowel'
-    if char in HORIZONTAL_BRACKET_ORIGINAL_CHARS:
+    if char in HORIZONTAL_BRACKET_ORIGINAL_CHARS or char in LOWER_CLOSING_KAGIKAKKO_POSITION_CHARS:
         return 'horizontal_bracket'
     if char in {'、', '。', '，', '．', '､', '｡'}:
         return 'punctuation'
