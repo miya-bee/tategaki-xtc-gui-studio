@@ -1244,6 +1244,10 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertLess(up_strong_y, up_weak_y)
         self.assertEqual(capture_extra_y('「', 'down_strong'), standard_y)
         self.assertEqual(capture_extra_y('「', 'up_strong'), standard_y)
+        self.assertEqual(capture_extra_y('﹂', 'down_strong'), down_strong_y)
+        self.assertEqual(capture_extra_y('﹂', 'up_strong'), up_strong_y)
+        self.assertEqual(capture_extra_y('﹄', 'down_weak'), down_weak_y)
+        self.assertEqual(capture_extra_y('﹄', 'up_weak'), up_weak_y)
 
     def test_draw_tatechuyoko_and_char_tate_cover_major_dispatch_paths(self):
         img = Image.new('L', (160, 120), 255)

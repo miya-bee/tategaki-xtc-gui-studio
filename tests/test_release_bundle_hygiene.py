@@ -2306,7 +2306,7 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
                     'WINDOWS_SETUP.md (required for project release archives)',
                     'FAQ.md (required for project release archives)',
                     'KNOWN_LIMITATIONS.md (required for project release archives)',
-                    'PUBLISH_CHECKLIST_v1_3_2.md (required for project release archives)',
+                    'PUBLISH_CHECKLIST_v1_3_3.md (required for project release archives)',
                     f'{rel.RELEASE_NOTES_FILE} (required for project release archives)',
                 ],
             )
