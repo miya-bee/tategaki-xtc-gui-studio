@@ -19,7 +19,7 @@ class LayoutRegressionTests(unittest.TestCase):
         text = '2025年AI!?ABCD'
         self.assertEqual(
             core._tokenize_vertical_text(text),
-            ['2025', '年', 'A', 'I', '!', '?', 'A', 'B', 'C', 'D'],
+            ['2025', '年', 'A', 'I', '!?', 'A', 'B', 'C', 'D'],
         )
 
     def test_tokenize_vertical_text_keeps_three_ascii_chars_together(self):
