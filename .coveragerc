@@ -38,3 +38,13 @@ source =
     tategakiXTC_gui_studio_settings_helpers
     tategakiXTC_gui_widget_factory
     tategakiXTC_worker_logic
+    tategakiXTC_folder_batch_plan
+    tategakiXTC_folder_batch_executor
+    tategakiXTC_folder_batch_settings
+    tategakiXTC_folder_batch_safety
+    tategakiXTC_folder_batch_dialog
+    tategakiXTC_folder_batch_controller
+    tategakiXTC_folder_batch_converter_adapter
+    tategakiXTC_folder_batch_dependencies
+    tategakiXTC_folder_batch_mainwindow_launcher
+    tategakiXTC_folder_batch_worker_bridge
