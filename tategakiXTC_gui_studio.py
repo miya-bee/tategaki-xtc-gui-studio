@@ -4802,6 +4802,23 @@ class MainWindow(QMainWindow):
                 pass
         return False
 
+    def _cancel_pending_settings_live_preview_refresh(self: MainWindow) -> None:
+        # v1.3.5.1: 手動の「プレビュー更新」が開始された時点で、設定変更由来の
+        # live-preview timer を無効化する。未処理 timer が request_preview_refresh()
+        # 冒頭の processEvents() 中に発火すると、生成完了後に後続 preview を予約し、
+        # 「プレビュー更新で暴走」して見えるため。QTimer.singleShot 自体はキャンセル
+        # できないので generation を進め、pending/deferred 状態も明示的に落とす。
+        try:
+            self._settings_preview_refresh_generation = int(
+                getattr(self, '_settings_preview_refresh_generation', 0) or 0
+            ) + 1
+        except Exception:
+            self._settings_preview_refresh_generation = 1
+        self._settings_preview_refresh_pending = False
+        self._settings_preview_refresh_pending_reset_page = False
+        self._settings_preview_refresh_scheduled = False
+        self._settings_preview_refresh_deferred_until_preview_finished = False
+
     def _schedule_live_preview_refresh(
         self: MainWindow,
         *,
@@ -5866,6 +5883,7 @@ class MainWindow(QMainWindow):
             self._pending_preview_refresh_request = None
             self.preview_dirty = True
             return False
+        self._cancel_pending_settings_live_preview_refresh()
         self._preview_running = True
         try:
             self._flush_pending_ui_changes()
