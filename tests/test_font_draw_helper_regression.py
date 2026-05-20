@@ -741,7 +741,7 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertTrue(core._should_center_ascii_glyph('A'))
 
     def test_tokenize_and_kinsoku_helpers_cover_edge_branches(self):
-        self.assertEqual(core._tokenize_vertical_text('ABC!?..'), ['A', 'B', 'C', '!', '?', '.', '.'])
+        self.assertEqual(core._tokenize_vertical_text('ABC!?..'), ['A', 'B', 'C', '!?', '.', '.'])
         self.assertFalse(core._is_line_head_forbidden(''))
         self.assertTrue(core._is_line_head_forbidden('!!'))
         self.assertFalse(core._is_line_end_forbidden(''))
@@ -1267,7 +1267,7 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
 
         offsets.assert_called_once_with(24)
         make_variant.assert_called_once_with(self.font, 18)
-        self.assertEqual(draw_positions, [((43, 10), '！'), ((55, 10), '？')])
+        self.assertEqual(draw_positions, [((11, 8), '！'), ((23, 8), '？')])
 
     def test_draw_char_tate_keeps_inline_punctuation_standard_when_down_mode_selected(self):
         img = Image.new('L', (160, 120), 255)
@@ -1571,7 +1571,7 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
             core.draw_tatechuyoko(draw, 'AB', (20, 30), self.font, 24)
 
         cached_bundle.assert_called_once_with(font_path, font_index, 24, 'AB', False, False)
-        paste_offsets.assert_called_once_with(24, 10, 12)
+        paste_offsets.assert_called_once_with(24, 10, 12, (0, 0, 10, 12))
         paste_glyph.assert_called_once()
         self.assertEqual(paste_glyph.call_args.args[2], (27, 35))
 
