@@ -208,6 +208,7 @@ def build_preview_payload(
         'punctuation_position_mode': render_settings_base.get('punctuation_position_mode', 'standard'),
         'ichi_position_mode': render_settings_base.get('ichi_position_mode', 'standard'),
         'halfwidth_digit_position_mode': render_settings_base.get('halfwidth_digit_position_mode', 'standard'),
+        'tatechuyoko_symbol_position_mode': render_settings_base.get('tatechuyoko_symbol_position_mode', 'standard'),
         'lower_closing_bracket_position_mode': render_settings_base.get('lower_closing_bracket_position_mode', 'standard'),
         'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(
             render_settings_base.get('wave_dash_drawing_mode', 'rotate')

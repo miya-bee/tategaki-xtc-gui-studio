@@ -246,7 +246,7 @@ LINE_HEAD_FORBIDDEN_CHARS = (
     | ITERATION_MARK_CHARS
 )
 LINE_END_FORBIDDEN_CHARS = OPENING_BRACKET_CHARS
-DOUBLE_PUNCT_TOKENS = {"!!", "!?", "?!", "？？", "！！", "！？", "？！"}
+DOUBLE_PUNCT_TOKENS = {"!!", "!?", "?!", "??", "？？", "！！", "！？", "？！"}
 HANGING_PUNCTUATION_CHARS = {"、", "。", "，", "．", "､", "｡"}
 LOWERABLE_HANGING_CLOSING_BRACKET_CHARS = set(CLOSING_BRACKET_CHARS)
 CONTINUOUS_PUNCTUATION_PAIRS = {
@@ -294,6 +294,7 @@ class ConversionArgs:
     punctuation_position_mode: str = "standard"
     ichi_position_mode: str = "standard"
     halfwidth_digit_position_mode: str = "standard"
+    tatechuyoko_symbol_position_mode: str = "standard"
     lower_closing_bracket_position_mode: str = "standard"
     wave_dash_drawing_mode: str = "rotate"
     wave_dash_position_mode: str = "standard"
@@ -327,6 +328,7 @@ class ConversionArgs:
         self.punctuation_position_mode = str(self.punctuation_position_mode or 'standard')
         self.ichi_position_mode = str(self.ichi_position_mode or 'standard')
         self.halfwidth_digit_position_mode = str(getattr(self, 'halfwidth_digit_position_mode', 'standard') or 'standard')
+        self.tatechuyoko_symbol_position_mode = str(getattr(self, 'tatechuyoko_symbol_position_mode', 'standard') or 'standard')
         self.lower_closing_bracket_position_mode = str(getattr(self, 'lower_closing_bracket_position_mode', 'standard') or 'standard')
         self.wave_dash_drawing_mode = str(getattr(self, 'wave_dash_drawing_mode', 'rotate') or 'rotate')
         self.wave_dash_position_mode = str(getattr(self, 'wave_dash_position_mode', 'standard') or 'standard')
@@ -907,6 +909,7 @@ from tategakiXTC_gui_core_renderer import (
     _punctuation_extra_y_for_mode,
     _ichi_extra_y_for_mode,
     _halfwidth_digit_extra_y_for_mode,
+    _tatechuyoko_symbol_extra_y_for_mode,
     _lower_closing_bracket_extra_y_for_mode,
     _small_kana_offset,
     _kagikakko_extra_y,

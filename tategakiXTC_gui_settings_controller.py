@@ -52,6 +52,7 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('punctuation_position_mode', _default_value('punctuation_position_mode', 'standard')),
     ('ichi_position_mode', _default_value('ichi_position_mode', 'standard')),
     ('halfwidth_digit_position_mode', _default_value('halfwidth_digit_position_mode', 'standard')),
+    ('tatechuyoko_symbol_position_mode', _default_value('tatechuyoko_symbol_position_mode', 'standard')),
     ('lower_closing_bracket_position_mode', _default_value('lower_closing_bracket_position_mode', 'standard')),
     ('wave_dash_drawing_mode', _default_value('wave_dash_drawing_mode', 'rotate')),
     ('wave_dash_position_mode', _default_value('wave_dash_position_mode', 'standard')),
@@ -168,6 +169,7 @@ def build_settings_ui_apply_defaults(
     punctuation_position_mode: object = 'standard',
     ichi_position_mode: object = 'standard',
     halfwidth_digit_position_mode: object = 'standard',
+    tatechuyoko_symbol_position_mode: object = 'standard',
     lower_closing_bracket_position_mode: object = 'standard',
     wave_dash_drawing_mode: object = 'rotate',
     wave_dash_position_mode: object = 'standard',
@@ -198,6 +200,7 @@ def build_settings_ui_apply_defaults(
         'punctuation_position_mode': punctuation_position_mode,
         'ichi_position_mode': ichi_position_mode,
         'halfwidth_digit_position_mode': halfwidth_digit_position_mode,
+        'tatechuyoko_symbol_position_mode': tatechuyoko_symbol_position_mode,
         'lower_closing_bracket_position_mode': lower_closing_bracket_position_mode,
         'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(wave_dash_drawing_mode),
         'wave_dash_position_mode': studio_logic.normalize_wave_dash_position_mode(wave_dash_position_mode),
@@ -349,6 +352,7 @@ def build_current_preset_payload(
         'punctuation_position_mode': str(render_settings.get('punctuation_position_mode') or _DEFAULT_RENDER_SETTINGS['punctuation_position_mode']),
         'ichi_position_mode': str(render_settings.get('ichi_position_mode') or _DEFAULT_RENDER_SETTINGS['ichi_position_mode']),
         'halfwidth_digit_position_mode': str(render_settings.get('halfwidth_digit_position_mode') or _DEFAULT_RENDER_SETTINGS['halfwidth_digit_position_mode']),
+        'tatechuyoko_symbol_position_mode': str(render_settings.get('tatechuyoko_symbol_position_mode') or _DEFAULT_RENDER_SETTINGS['tatechuyoko_symbol_position_mode']),
         'lower_closing_bracket_position_mode': str(render_settings.get('lower_closing_bracket_position_mode') or _DEFAULT_RENDER_SETTINGS['lower_closing_bracket_position_mode']),
         'wave_dash_drawing_mode': str(render_settings.get('wave_dash_drawing_mode') or fallback_wave_dash_drawing_mode),
         'wave_dash_position_mode': str(render_settings.get('wave_dash_position_mode') or fallback_wave_dash_position_mode),
@@ -388,6 +392,7 @@ def build_live_preset_widget_payload(
     punctuation_position_mode: object = None,
     ichi_position_mode: object = None,
     halfwidth_digit_position_mode: object = None,
+    tatechuyoko_symbol_position_mode: object = None,
     lower_closing_bracket_position_mode: object = None,
     wave_dash_drawing_mode: object = None,
     wave_dash_position_mode: object = None,
@@ -456,6 +461,12 @@ def build_live_preset_widget_payload(
         payload['halfwidth_digit_position_mode'] = normalize_choice_value(
             halfwidth_digit_position_mode,
             str(_DEFAULT_RENDER_SETTINGS['halfwidth_digit_position_mode']),
+            allowed_glyph_position_modes,
+        )
+    if tatechuyoko_symbol_position_mode is not None:
+        payload['tatechuyoko_symbol_position_mode'] = normalize_choice_value(
+            tatechuyoko_symbol_position_mode,
+            str(_DEFAULT_RENDER_SETTINGS['tatechuyoko_symbol_position_mode']),
             allowed_glyph_position_modes,
         )
     if lower_closing_bracket_position_mode is not None:

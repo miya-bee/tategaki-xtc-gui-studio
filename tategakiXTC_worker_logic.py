@@ -49,6 +49,7 @@ class WorkerConversionSettings(TypedDict, total=False):
     punctuation_position_mode: str
     ichi_position_mode: str
     halfwidth_digit_position_mode: str
+    tatechuyoko_symbol_position_mode: str
     lower_closing_bracket_position_mode: str
     wave_dash_drawing_mode: str
     wave_dash_position_mode: str
@@ -274,6 +275,7 @@ def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
         punctuation_position_mode=_str_config_value(cfg, 'punctuation_position_mode', 'standard'),
         ichi_position_mode=_str_config_value(cfg, 'ichi_position_mode', 'standard'),
         halfwidth_digit_position_mode=_str_config_value(cfg, 'halfwidth_digit_position_mode', 'standard'),
+        tatechuyoko_symbol_position_mode=_str_config_value(cfg, 'tatechuyoko_symbol_position_mode', 'standard'),
         lower_closing_bracket_position_mode=_str_config_value(cfg, 'lower_closing_bracket_position_mode', 'standard'),
         wave_dash_drawing_mode=core._wave_dash_drawing_mode(_str_config_value(cfg, 'wave_dash_drawing_mode', 'rotate')),
         wave_dash_position_mode=core._wave_dash_position_mode(_str_config_value(cfg, 'wave_dash_position_mode', 'standard')),

@@ -67,6 +67,7 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'punctuation_position_mode': 'standard',
     'ichi_position_mode': 'standard',
     'halfwidth_digit_position_mode': 'standard',
+    'tatechuyoko_symbol_position_mode': 'standard',
     'lower_closing_bracket_position_mode': 'standard',
     'wave_dash_drawing_mode': 'rotate',
     'wave_dash_position_mode': 'standard',
@@ -163,8 +164,8 @@ PRESET_FIELDS = [
     'margin_t', 'margin_b', 'margin_r', 'margin_l',
     'night_mode', 'dither', 'threshold', 'kinsoku_mode',
     'tatechuyoko_digit_mode',
-    'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'lower_closing_bracket_position_mode',
-    'wave_dash_drawing_mode', 'wave_dash_position_mode', 'output_format',
+    'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'tatechuyoko_symbol_position_mode',
+    'lower_closing_bracket_position_mode', 'wave_dash_drawing_mode', 'wave_dash_position_mode', 'output_format',
 ]
 
 KINSOKU_MODE_OPTIONS = [

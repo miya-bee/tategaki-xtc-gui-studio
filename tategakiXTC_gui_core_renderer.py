@@ -124,6 +124,7 @@ def _apply_draw_glyph_position_modes(draw: Any, args: Any) -> Any:
         setattr(draw, '_tategaki_punctuation_position_mode', _glyph_position_mode(getattr(args, 'punctuation_position_mode', 'standard')))
         setattr(draw, '_tategaki_ichi_position_mode', _glyph_position_mode(getattr(args, 'ichi_position_mode', 'standard')))
         setattr(draw, '_tategaki_halfwidth_digit_position_mode', _glyph_position_mode(getattr(args, 'halfwidth_digit_position_mode', 'standard')))
+        setattr(draw, '_tategaki_tatechuyoko_symbol_position_mode', _glyph_position_mode(getattr(args, 'tatechuyoko_symbol_position_mode', 'standard')))
         setattr(draw, '_tategaki_tatechuyoko_digit_mode', _normalize_tatechuyoko_digit_mode(getattr(args, 'tatechuyoko_digit_mode', '2')))
         setattr(draw, '_tategaki_lower_closing_bracket_position_mode', _glyph_position_mode(getattr(args, 'lower_closing_bracket_position_mode', 'standard')))
         setattr(draw, '_tategaki_wave_dash_drawing_mode', _wave_dash_drawing_mode(getattr(args, 'wave_dash_drawing_mode', 'rotate')))
@@ -234,6 +235,29 @@ def _is_single_halfwidth_digit(token: str) -> bool:
 
 def _is_halfwidth_digit_tatechuyoko_token(token: str) -> bool:
     return isinstance(token, str) and bool(token) and token.isascii() and token.isdigit()
+
+
+@lru_cache(maxsize=64)
+def _tatechuyoko_symbol_adjusted_drop(f_size: int, *, weak: bool = False) -> int:
+    # v1.3.5: v1.3.4.5 の補正量をわずかに強め、Noto 系フォントなどで
+    # 縦中横記号ペアがまだ上寄りに見えるケースに対応する。
+    factor = 0.12 if weak else 0.22
+    return max(3 if weak else 5, int(round(f_size * factor)))
+
+
+@lru_cache(maxsize=64)
+def _tatechuyoko_symbol_extra_y_for_mode(f_size: int, position_mode: str) -> int:
+    mode = _glyph_position_mode(position_mode)
+    if mode == 'down_strong':
+        return _tatechuyoko_symbol_adjusted_drop(f_size)
+    if mode == 'down_weak':
+        return _tatechuyoko_symbol_adjusted_drop(f_size, weak=True)
+    if mode == 'up_weak':
+        return -_tatechuyoko_symbol_adjusted_drop(f_size, weak=True)
+    if mode == 'up_strong':
+        return -_tatechuyoko_symbol_adjusted_drop(f_size)
+    return 0
+
 
 @lru_cache(maxsize=64)
 def _small_kana_offset(f_size: int) -> tuple[int, int]:
@@ -1436,6 +1460,13 @@ def _is_tatechuyoko_token_for_digit_mode(token: str, mode: object = '4') -> bool
     return max_len >= 2 and len(text) <= max_len
 
 
+_HALFWIDTH_SYMBOL_PAIRS = frozenset({"!!", "!?", "?!", "??"})
+
+
+def _is_halfwidth_symbol_pair_token(token: str) -> bool:
+    return str(token) in _HALFWIDTH_SYMBOL_PAIRS
+
+
 @lru_cache(maxsize=16)
 def _tatechuyoko_layout_limits(f_size: int, text_len: int) -> tuple[int, int, int]:
     max_w = max(1, int(round(f_size * 0.92)))
@@ -1651,8 +1682,29 @@ def _build_tatechuyoko_bundle(font: Any, text: str, f_size: int, *, is_bold: boo
 
 
 @lru_cache(maxsize=512)
-def _tatechuyoko_paste_offsets(f_size: int, glyph_w: int, glyph_h: int) -> tuple[int, int]:
-    return max(0, (int(f_size) - int(glyph_w)) // 2), max(0, (int(f_size) - int(glyph_h)) // 2)
+def _tatechuyoko_paste_offsets(
+    f_size: int,
+    glyph_w: int,
+    glyph_h: int,
+    ink_bbox: tuple[int, int, int, int] | None = None,
+) -> tuple[int, int]:
+    """Return a paste offset that centers the visible ink inside a tate-chu-yoko cell.
+
+    Some fonts leave uneven side bearings inside the rendered glyph image.  When
+    an ink bbox is available, align the bbox center to the target cell center
+    instead of aligning the whole image rectangle.  If the glyph is already
+    tightly cropped, this falls back to the historical image-size centering.
+    """
+    cell = int(f_size)
+    gw = int(glyph_w)
+    gh = int(glyph_h)
+    if ink_bbox:
+        left, top, right, bottom = [int(v) for v in ink_bbox[:4]]
+        if right > left and bottom > top:
+            off_x = int(round((cell / 2.0) - ((left + right) / 2.0)))
+            off_y = int(round((cell / 2.0) - ((top + bottom) / 2.0)))
+            return off_x, off_y
+    return max(0, (cell - gw) // 2), max(0, (cell - gh) // 2)
 
 
 def draw_tatechuyoko(draw: Any, text: str, pos_tuple: tuple[int, int], font: Any, f_size: int, is_bold: bool = False, is_italic: bool = False) -> None:
@@ -1665,7 +1717,8 @@ def draw_tatechuyoko(draw: Any, text: str, pos_tuple: tuple[int, int], font: Any
     else:
         glyph_img, glyph_mask = _build_tatechuyoko_bundle(font, text, f_size, is_bold=is_bold, is_italic=is_italic)
     gw, gh = glyph_img.size
-    off_x, off_y = _tatechuyoko_paste_offsets(f_size, gw, gh)
+    ink_bbox = glyph_mask.getbbox() if glyph_mask is not None else None
+    off_x, off_y = _tatechuyoko_paste_offsets(f_size, gw, gh, ink_bbox)
     _paste_glyph_image(draw, glyph_img, (curr_x + off_x, curr_y + off_y), glyph_mask)
 
 
@@ -1678,7 +1731,7 @@ def _tokenize_vertical_text_impl(text: str, tatechuyoko_digit_mode: object = '4'
     digit_mode = _normalize_tatechuyoko_digit_mode(tatechuyoko_digit_mode)
     i = 0
     while i < len(text):
-        if i + 1 < len(text) and text[i] in '！？' and text[i + 1] in '！？':
+        if i + 1 < len(text):
             token = text[i:i + 2]
             if token in DOUBLE_PUNCT_TOKENS:
                 tokens.append(token)
@@ -2848,6 +2901,46 @@ def draw_hanging_punctuation(draw: Any, char: str, pos_tuple: tuple[int, int], f
             pass
 
 
+def _build_centered_double_punctuation_bundle(
+    font: Any,
+    text: str,
+    f_size: int,
+    *,
+    is_bold: bool = False,
+    is_italic: bool = False,
+) -> tuple[Image.Image, Image.Image]:
+    """Render a full-width punctuation pair as one ink-centered bundle.
+
+    The historical double-punctuation route drew each mark directly with fixed
+    x offsets. That made pairs such as ``！？`` visibly drift to one side with
+    some Japanese fonts. This helper keeps the existing pair sizing and
+    relative layout, then trims the actual ink and lets draw_char_tate paste the
+    bundle by the same ink-centering path used for tate-chu-yoko.
+    """
+    sub_f_size, first_x, second_x = _double_punctuation_draw_offsets(int(f_size))
+    sub_font = _make_font_variant(font, sub_f_size)
+    pad = max(4, int(round(int(f_size) * 0.35)))
+    min_x = min(0, int(first_x), int(second_x))
+    max_x = max(int(first_x), int(second_x)) + int(sub_f_size) + 4
+    origin_x = pad - min_x
+    canvas_w = max(1, origin_x + max_x + pad)
+    canvas_h = max(1, int(f_size) + pad * 2)
+    glyph_img = Image.new("L", (canvas_w, canvas_h), 255)
+    glyph_draw = create_image_draw(glyph_img)
+    draw_weighted_text(glyph_draw, (origin_x + int(first_x), pad), text[0], sub_font, is_bold=is_bold, is_italic=is_italic)
+    draw_weighted_text(glyph_draw, (origin_x + int(second_x), pad), text[1], sub_font, is_bold=is_bold, is_italic=is_italic)
+    glyph_img = _trim_glyph_image_to_ink(glyph_img)
+    if glyph_img.width > int(f_size) or glyph_img.height > int(f_size):
+        scale = min(int(f_size) / glyph_img.width, int(f_size) / glyph_img.height)
+        resized = (
+            max(1, int(round(glyph_img.width * scale))),
+            max(1, int(round(glyph_img.height * scale))),
+        )
+        glyph_img = glyph_img.resize(resized, Image.Resampling.LANCZOS)
+    glyph_mask = ImageOps.invert(glyph_img)
+    return glyph_img, glyph_mask
+
+
 def draw_char_tate(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, f_size: int, is_bold: bool = False, ruby_mode: bool = False, is_italic: bool = False) -> None:
     _refresh_core_globals()
     curr_x, curr_y = pos_tuple
@@ -2867,6 +2960,14 @@ def draw_char_tate(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, 
         draw_vertical_wave_dash(draw, char, (curr_x, curr_y), font, f_size, is_bold=is_bold, is_italic=is_italic)
         return
 
+    if _is_halfwidth_symbol_pair_token(char):
+        extra_y = 0
+        if not ruby_mode:
+            symbol_position_mode = _draw_glyph_position_mode(draw, '_tategaki_tatechuyoko_symbol_position_mode')
+            extra_y = _tatechuyoko_symbol_extra_y_for_mode(f_size, symbol_position_mode)
+        draw_tatechuyoko(draw, char, (curr_x, curr_y + extra_y), font, f_size, is_bold=is_bold, is_italic=is_italic)
+        return
+
     if _is_tatechuyoko_token_for_digit_mode(char, getattr(draw, '_tategaki_tatechuyoko_digit_mode', '4')):
         extra_y = 0
         if (not ruby_mode) and _is_halfwidth_digit_tatechuyoko_token(char):
@@ -2878,12 +2979,20 @@ def draw_char_tate(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, 
     original_char = char
     draw_kind = _classify_tate_draw_char(original_char)
 
-    # 2文字（！？や！！）を横並びにする
+    # 2文字（！？や！！）を横並びにする。描画後の ink をセル中央へ戻し、
+    # フォント共通で起きやすい横方向の張り出しを抑える。
     if draw_kind == 'double_punct':
-        sub_f_size, first_x, second_x = _double_punctuation_draw_offsets(f_size)
-        sub_font = _make_font_variant(font, sub_f_size)
-        draw_weighted(draw, (curr_x + first_x, curr_y), original_char[0], sub_font, is_bold=is_bold, is_italic=is_italic)
-        draw_weighted(draw, (curr_x + second_x, curr_y), original_char[1], sub_font, is_bold=is_bold, is_italic=is_italic)
+        glyph_img, glyph_mask = _build_centered_double_punctuation_bundle(
+            font, original_char, f_size, is_bold=is_bold, is_italic=is_italic
+        )
+        gw, gh = glyph_img.size
+        ink_bbox = glyph_mask.getbbox() if glyph_mask is not None else None
+        off_x, off_y = _tatechuyoko_paste_offsets(f_size, gw, gh, ink_bbox)
+        extra_y = 0
+        if not ruby_mode:
+            symbol_position_mode = _draw_glyph_position_mode(draw, '_tategaki_tatechuyoko_symbol_position_mode')
+            extra_y = _tatechuyoko_symbol_extra_y_for_mode(f_size, symbol_position_mode)
+        _paste_glyph_image(draw, glyph_img, (curr_x + off_x, curr_y + off_y + extra_y), glyph_mask)
         return
 
     if draw_kind == 'ichi':
@@ -3471,6 +3580,7 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
         _glyph_position_mode(args.get('punctuation_position_mode', 'standard')),
         _glyph_position_mode(args.get('ichi_position_mode', 'standard')),
         _glyph_position_mode(args.get('halfwidth_digit_position_mode', 'standard')),
+        _glyph_position_mode(args.get('tatechuyoko_symbol_position_mode', 'standard')),
         _normalize_tatechuyoko_digit_mode(args.get('tatechuyoko_digit_mode', '2')),
         _glyph_position_mode(args.get('lower_closing_bracket_position_mode', 'standard')),
         _wave_dash_drawing_mode(args.get('wave_dash_drawing_mode', 'rotate')),
@@ -3631,6 +3741,7 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
                 punctuation_position_mode=_glyph_position_mode(_args.get('punctuation_position_mode', 'standard')),
                 ichi_position_mode=_glyph_position_mode(_args.get('ichi_position_mode', 'standard')),
                 halfwidth_digit_position_mode=_glyph_position_mode(_args.get('halfwidth_digit_position_mode', 'standard')),
+                tatechuyoko_symbol_position_mode=_glyph_position_mode(_args.get('tatechuyoko_symbol_position_mode', 'standard')),
                 tatechuyoko_digit_mode=_normalize_tatechuyoko_digit_mode(_args.get('tatechuyoko_digit_mode', '2')),
                 lower_closing_bracket_position_mode=_glyph_position_mode(_args.get('lower_closing_bracket_position_mode', 'standard')),
                 wave_dash_drawing_mode=_wave_dash_drawing_mode(_args.get('wave_dash_drawing_mode', 'rotate')),

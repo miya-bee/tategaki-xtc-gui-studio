@@ -410,6 +410,11 @@ def build_settings_restore_payload(
         'standard',
         allowed_glyph_position_modes,
     )
+    payload['tatechuyoko_symbol_position_mode'] = normalize_choice_value(
+        raw_payload.get('tatechuyoko_symbol_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
     payload['lower_closing_bracket_position_mode'] = normalize_choice_value(
         raw_payload.get('lower_closing_bracket_position_mode'),
         'standard',
@@ -527,7 +532,7 @@ def build_settings_ui_apply_payload(
             raw_payload.get('tatechuyoko_digit_mode'),
             str(defaults.get('tatechuyoko_digit_mode') or '2'),
         )
-    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode'):
+    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'tatechuyoko_symbol_position_mode'):
         if glyph_key in raw_payload:
             plan[glyph_key] = normalize_choice_value(
                 raw_payload.get(glyph_key),
@@ -648,6 +653,11 @@ def build_settings_save_payload(
     )
     payload['halfwidth_digit_position_mode'] = normalize_choice_value(
         raw_payload.get('halfwidth_digit_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['tatechuyoko_symbol_position_mode'] = normalize_choice_value(
+        raw_payload.get('tatechuyoko_symbol_position_mode'),
         'standard',
         allowed_glyph_position_modes,
     )

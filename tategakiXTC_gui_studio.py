@@ -918,7 +918,7 @@ class MainWindow(QMainWindow):
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
             'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'ruby_hide_check', 'dither_check', 'night_check',
             'open_folder_check', 'output_conflict_combo', 'output_format_combo',
-            'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
+            'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
         )
 
     def _preset_apply_widgets(self: MainWindow) -> tuple[object, ...]:
@@ -926,7 +926,7 @@ class MainWindow(QMainWindow):
             'profile_combo', 'width_spin', 'height_spin', 'font_combo',
             'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'ruby_hide_check', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
+            'ruby_hide_check', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
         )
 
     def _apply_profile_dimensions_to_ui(
@@ -979,6 +979,7 @@ class MainWindow(QMainWindow):
             punctuation_position_mode=self._safe_combo_data('punctuation_position_combo', 'standard'),
             ichi_position_mode=self._safe_combo_data('ichi_position_combo', 'standard'),
             halfwidth_digit_position_mode=self._safe_combo_data('halfwidth_digit_position_combo', 'standard'),
+            tatechuyoko_symbol_position_mode=self._safe_combo_data('tatechuyoko_symbol_position_combo', 'standard'),
             lower_closing_bracket_position_mode=self._safe_combo_data('lower_closing_bracket_position_combo', 'standard'),
             wave_dash_drawing_mode=self._safe_combo_data('wave_dash_drawing_combo', 'rotate'),
             wave_dash_position_mode=self._safe_combo_data('wave_dash_position_combo', 'standard'),
@@ -1083,6 +1084,8 @@ class MainWindow(QMainWindow):
             getattr(self, 'ichi_position_combo', None) is not None and self._set_combo_to_data(self.ichi_position_combo, str(apply_plan['ichi_position_mode']))
         if 'halfwidth_digit_position_mode' in apply_plan:
             getattr(self, 'halfwidth_digit_position_combo', None) is not None and self._set_combo_to_data(self.halfwidth_digit_position_combo, str(apply_plan['halfwidth_digit_position_mode']))
+        if 'tatechuyoko_symbol_position_mode' in apply_plan:
+            getattr(self, 'tatechuyoko_symbol_position_combo', None) is not None and self._set_combo_to_data(self.tatechuyoko_symbol_position_combo, str(apply_plan['tatechuyoko_symbol_position_mode']))
         if 'lower_closing_bracket_position_mode' in apply_plan:
             getattr(self, 'lower_closing_bracket_position_combo', None) is not None and self._set_combo_to_data(self.lower_closing_bracket_position_combo, str(apply_plan['lower_closing_bracket_position_mode']))
         if 'wave_dash_drawing_mode' in apply_plan:
@@ -2096,7 +2099,7 @@ class MainWindow(QMainWindow):
         glyph_combo_width = self._plan_int_value(image_plan, 'glyph_position_combo_width', 92)
         closing_bracket_combo_width = self._plan_int_value(image_plan, 'closing_bracket_position_combo_width', glyph_combo_width)
         glyph_group_spacing = self._plan_int_value(image_plan, 'glyph_position_group_spacing', 8)
-        for combo in (self.punctuation_position_combo, self.ichi_position_combo, self.halfwidth_digit_position_combo):
+        for combo in (self.punctuation_position_combo, self.ichi_position_combo, self.halfwidth_digit_position_combo, self.tatechuyoko_symbol_position_combo):
             combo.setMaximumWidth(glyph_combo_width)
         self.lower_closing_bracket_position_combo.setMaximumWidth(closing_bracket_combo_width)
         image_glyph_position_row.addWidget(self._dim_label('句読点'))
@@ -2112,6 +2115,16 @@ class MainWindow(QMainWindow):
         image_glyph_position_row.addWidget(self._help_icon_button('対象: 文中の半角数字と縦中横の半角数字のみです。\n全角数字とルビ内数字は対象外です。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
         image_glyph_position_row.addStretch(1)
         lay.addLayout(image_glyph_position_row)
+
+        image_tatechuyoko_symbol_row = self._make_hbox_layout_from_plan(
+            gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))
+        )
+        self.tatechuyoko_symbol_position_combo.setMaximumWidth(glyph_combo_width)
+        image_tatechuyoko_symbol_row.addWidget(self._dim_label('縦中横記号'))
+        image_tatechuyoko_symbol_row.addWidget(self.tatechuyoko_symbol_position_combo)
+        image_tatechuyoko_symbol_row.addWidget(self._help_icon_button('対象: 縦中横で描画される記号ペア（！？/？？/！！/？！/!?/??/!!/?!）のみです。\n数字の縦中横には影響しません。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
+        image_tatechuyoko_symbol_row.addStretch(1)
+        lay.addLayout(image_tatechuyoko_symbol_row)
 
         image_wave_dash_row = self._make_hbox_layout_from_plan(
             gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))
@@ -2244,6 +2257,11 @@ class MainWindow(QMainWindow):
         for key, label in GLYPH_POSITION_MODE_OPTIONS:
             self.halfwidth_digit_position_combo.addItem(label, key)
         self.halfwidth_digit_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
+
+        self.tatechuyoko_symbol_position_combo = QComboBox()
+        for key, label in GLYPH_POSITION_MODE_OPTIONS:
+            self.tatechuyoko_symbol_position_combo.addItem(label, key)
+        self.tatechuyoko_symbol_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
 
         self.lower_closing_bracket_position_combo = QComboBox()
         for key, label in CLOSING_BRACKET_POSITION_MODE_OPTIONS:
@@ -6866,6 +6884,9 @@ class MainWindow(QMainWindow):
     def current_halfwidth_digit_position_mode(self: MainWindow) -> str:
         return self._current_glyph_position_mode('halfwidth_digit_position_combo')
 
+    def current_tatechuyoko_symbol_position_mode(self: MainWindow) -> str:
+        return self._current_glyph_position_mode('tatechuyoko_symbol_position_combo')
+
     def current_lower_closing_bracket_position_mode(self: MainWindow) -> str:
         return self._current_glyph_position_mode(
             'lower_closing_bracket_position_combo',
@@ -7077,6 +7098,7 @@ class MainWindow(QMainWindow):
             punctuation_position_mode=self.current_punctuation_position_mode() if self.__dict__.get('punctuation_position_combo') is not None else None,
             ichi_position_mode=self.current_ichi_position_mode() if self.__dict__.get('ichi_position_combo') is not None else None,
             halfwidth_digit_position_mode=self.current_halfwidth_digit_position_mode() if self.__dict__.get('halfwidth_digit_position_combo') is not None else None,
+            tatechuyoko_symbol_position_mode=self.current_tatechuyoko_symbol_position_mode() if self.__dict__.get('tatechuyoko_symbol_position_combo') is not None else None,
             lower_closing_bracket_position_mode=self.current_lower_closing_bracket_position_mode() if self.__dict__.get('lower_closing_bracket_position_combo') is not None else None,
             wave_dash_drawing_mode=self.current_wave_dash_drawing_mode() if self.__dict__.get('wave_dash_drawing_combo') is not None else None,
             wave_dash_position_mode=self.current_wave_dash_position_mode() if self.__dict__.get('wave_dash_position_combo') is not None else None,
@@ -7107,6 +7129,7 @@ class MainWindow(QMainWindow):
         fallback_punctuation_position_mode: str = 'standard',
         fallback_ichi_position_mode: str = 'standard',
         fallback_halfwidth_digit_position_mode: str = 'standard',
+        fallback_tatechuyoko_symbol_position_mode: str = 'standard',
         fallback_lower_closing_bracket_position_mode: str = 'standard',
         fallback_wave_dash_drawing_mode: str = 'rotate',
         fallback_wave_dash_position_mode: str = 'standard',
@@ -7189,6 +7212,11 @@ class MainWindow(QMainWindow):
         )
         normalized['halfwidth_digit_position_mode'] = self._normalize_choice_value(
             source.get('halfwidth_digit_position_mode', fallback_payload.get('halfwidth_digit_position_mode', fallback_halfwidth_digit_position_mode)),
+            'standard',
+            GLYPH_POSITION_MODE_LABELS,
+        )
+        normalized['tatechuyoko_symbol_position_mode'] = self._normalize_choice_value(
+            source.get('tatechuyoko_symbol_position_mode', fallback_payload.get('tatechuyoko_symbol_position_mode', fallback_tatechuyoko_symbol_position_mode)),
             'standard',
             GLYPH_POSITION_MODE_LABELS,
         )
@@ -8159,6 +8187,7 @@ class MainWindow(QMainWindow):
             'punctuation_position_mode': self.current_punctuation_position_mode() if hasattr(self, 'current_punctuation_position_mode') else str(defaults['punctuation_position_mode']),
             'ichi_position_mode': self.current_ichi_position_mode() if hasattr(self, 'current_ichi_position_mode') else str(defaults['ichi_position_mode']),
             'halfwidth_digit_position_mode': self.current_halfwidth_digit_position_mode() if hasattr(self, 'current_halfwidth_digit_position_mode') else str(defaults['halfwidth_digit_position_mode']),
+            'tatechuyoko_symbol_position_mode': self.current_tatechuyoko_symbol_position_mode() if hasattr(self, 'current_tatechuyoko_symbol_position_mode') else str(defaults['tatechuyoko_symbol_position_mode']),
             'lower_closing_bracket_position_mode': self.current_lower_closing_bracket_position_mode() if hasattr(self, 'current_lower_closing_bracket_position_mode') else str(defaults['lower_closing_bracket_position_mode']),
             'wave_dash_drawing_mode': self.current_wave_dash_drawing_mode() if hasattr(self, 'current_wave_dash_drawing_mode') else str(defaults['wave_dash_drawing_mode']),
             'wave_dash_position_mode': self.current_wave_dash_position_mode() if hasattr(self, 'current_wave_dash_position_mode') else str(defaults['wave_dash_position_mode']),

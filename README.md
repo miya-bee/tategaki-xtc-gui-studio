@@ -10,36 +10,36 @@
 
 ## バージョン
 
-現在の公開版は **v1.3.4** です。
+現在の公開版は **v1.3.5** です。
 
-v1.3.4 は、GitHub 公開済みの v1.3.3 / v1.3.3.0 から、内部作業版 v1.3.3.x で積み重ねた改良をまとめた公開版です。縦書き表示の細かな調整、プレビュー操作、変換完了後の確認導線、フォルダ一括変換の中止処理、プリセット保存の安全性を中心に改善しています。
+v1.3.5 は、公開版 v1.3.4 の縦中横記号表示を改善した小修正版です。note コメント欄で報告された `！？` / `!?` / `？？` / `??` などの見え方を中心に、記号ペアのまとまり、右方向への張り出し、Noto 系フォントでの縦位置調整を改善しています。
 
-- 前回公開版: `v1.3.3`
-- 今回公開版: `v1.3.4`
-- GitHub Release tag: `v1.3.4`
-- GitHub Release title: `v1.3.4`
+- 前回公開版: `v1.3.4`
+- 今回公開版: `v1.3.5`
+- GitHub Release tag: `v1.3.5`
+- GitHub Release title: `v1.3.5`
 
-## v1.3.4 の主な更新
+## v1.3.5 の主な更新
 
-- ルビだけを非表示にできる「ルビ消し」モードを追加しました。
-- 半角数字の位置補正と、半角数字の縦中横上限設定を追加しました。
-- 半角英字・ASCII記号の縦書き表示を整理しました。
-- 右ペインの高倍率プレビュー表示と横スクロール挙動を改善しました。
-- 変換対象欄へのファイルドラッグ＆ドロップに対応しました。
-- 変換完了後の Windows エクスプローラー自動起動をやめ、右ペイン上部の完了カードで確認する方式にしました。
-- フォルダ一括変換の中止処理を改善し、中止をエラーではなく中止として表示するようにしました。
-- 中止後にプログレスバーが動き続ける問題、中止後に何も表示されない問題を修正しました。
-- ルビ消し ON/OFF 時のページ維持と、プレビュー更新予約の安定性を改善しました。
-- 初回 ini 無し状態からのプリセット保存について、保存後の sync / status / readback 確認を追加しました。
-- GitHub 公開向け source-only zip と public release zip の除外ルールを分離し、handoff md や logs が混入しないよう整理しました。
+- 半角 `??` を、`!!` / `!?` / `?!` と同じく縦中横記号ペアとして扱うようにしました。
+- 半角 `!?` / `??` / `!!` / `?!` を2文字ペアとしてトークン化します。
+- 全角 `！？` / `？？` / `！！` / `？！` の右方向への張り出しを抑えるため、縦中横描画の貼り付けを ink bbox 中心基準へ寄せました。
+- 半角記号ペアが小さくなりすぎないよう、v1.3.4.3 で試した強い縮小は撤回しました。
+- 画像処理セクションに「縦中横記号」の5段階位置補正を追加しました。
+- 「縦中横記号」補正は全角/半角の記号ペア専用で、数字の縦中横には適用しません。
+- XTC / XTCH 保存形式、ルビ描画ルーチン本体、フォルダ一括変換の基本処理は変更していません。
 
-詳細は `RELEASE_NOTES_v1_3_4.md` と `CHANGELOG.md` を参照してください。
+詳細は `RELEASE_NOTES_v1_3_5.md` と `CHANGELOG.md` を参照してください。
 
 ## 過去の主な公開版
 
+### v1.3.4
+
+ルビ消しモード、半角数字補正、半角数字の縦中横上限、右ペイン高倍率プレビュー、ドラッグ＆ドロップ、変換完了カード、フォルダ一括変換の中止処理などをまとめた公開版です。
+
 ### v1.3.3
 
-ルビ消しモード追加の基準版として扱った公開版です。v1.3.4 では、その後の v1.3.3.x 内部改良をまとめて公開します。
+ルビ消しモード追加の基準版として扱った公開版です。v1.3.4 では、その後の v1.3.3.x 内部改良をまとめて公開しました。
 
 ### v1.3.0
 
@@ -66,6 +66,7 @@ GitHub で公開済みの v1.0.2 の次の公開版です。
 - `WINDOWS_SETUP.md` — Windowsでの導入・起動手順
 - `FAQ.md` — よくある質問
 - `KNOWN_LIMITATIONS.md` — 既知の注意点・仕様
+- `RELEASE_NOTES_v1_3_5.md` — v1.3.4 から v1.3.5 までの差分まとめ
 - `RELEASE_NOTES_v1_3_4.md` — v1.3.3 から v1.3.4 までの差分まとめ
 - `RELEASE_NOTES_v1_3_0.md` — v1.3.0 の更新内容
 - `RELEASE_NOTES_v1_2_2.md` — v1.2.2 の更新内容
@@ -256,7 +257,7 @@ release zip は以下で作成できます。
     .venv\Scripts\python.exe -B ^
       build_release_zip.py ^
       --verify ^
-      dist\tategaki-xtc-gui-studio_v1.3.4-release.zip
+      dist\tategaki-xtc-gui-studio_v1.3.5-release.zip
 
 release zip の作成は、環境に応じて以下でも実行できます。
 
@@ -268,26 +269,26 @@ release zip の作成は、環境に応じて以下でも実行できます。
 
     python build_release_zip.py --verify <zipパス>
 
-    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.3.4-release.zip
+    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.3.5-release.zip
 
-v1.3.4 の release zip は Python GUI版の source 構成に加えて `Font/` を同梱できます。Font フォルダが同梱されている release zip では、別コピー手順は不要です。source-only 配布に切り替える場合は、対応するフォント本体と `LICENSE_OFL.txt` の扱いを合わせてください。
+v1.3.5 の release zip は Python GUI版の source 構成に加えて `Font/` を同梱できます。Font フォルダが同梱されている release zip では、別コピー手順は不要です。source-only 配布に切り替える場合は、対応するフォント本体と `LICENSE_OFL.txt` の扱いを合わせてください。
 
 ## GitHub Release での公開方針
 
-v1.3.4 は、GitHub 上では以下の扱いで公開します。
+v1.3.5 は、GitHub 上では以下の扱いで公開します。
 
-- Release tag: `v1.3.4`
-- Release title: `v1.3.4`
-- Previous tag: `v1.3.3`
-- 添付ファイル: `tategaki-xtc-gui-studio_v1.3.4-release.zip`
+- Release tag: `v1.3.5`
+- Release title: `v1.3.5`
+- Previous tag: `v1.3.4`
+- 添付ファイル: `tategaki-xtc-gui-studio_v1.3.5-release.zip`
 
-Release 本文には `RELEASE_NOTES_v1_3_4.md` の内容を使用します。
+Release 本文には `RELEASE_NOTES_v1_3_5.md` の内容を使用します。
 
 開発用の `.venv/` や `node_modules/` は release 対象外です。
 
 ## 公開対象について
 
-v1.3.4 の公開対象は **Python GUI版のみ**です。
+v1.3.5 の公開対象は **Python GUI版のみ**です。
 
 以下の旧ローカル Web 試作版関連ファイルは、公開用 payload / release 検査の対象外です。
 
