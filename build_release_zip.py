@@ -907,7 +907,21 @@ def natural_sort_key(value: str) -> list[object]:
 
 
 def _normalized_relative_path(path: Path, root: Path) -> Path:
-    return path.resolve().relative_to(root.resolve())
+    """Return a stable relative path even on Windows CI short-name paths.
+
+    GitHub Actions Windows runners can expose the same temporary directory as
+    both ``C:/Users/runneradmin`` and ``C:/Users/RUNNER~1``.  In that
+    situation ``Path.relative_to()`` may raise ``ValueError`` even though the
+    paths point to the same tree.  Use ``os.path.realpath``/``relpath`` as a
+    fallback so release hygiene checks stay deterministic across local Windows
+    and CI runners.
+    """
+    path_real = Path(os.path.realpath(path))
+    root_real = Path(os.path.realpath(root))
+    try:
+        return path_real.relative_to(root_real)
+    except ValueError:
+        return Path(os.path.relpath(str(path_real), str(root_real)))
 
 
 
@@ -1290,7 +1304,7 @@ def iter_bundled_font_files(root: Path) -> Iterator[Path]:
         if _is_release_directory(path) and _is_bundled_font_dir_name(path.name)
     ]
     for font_dir in sorted(font_dirs, key=lambda p: natural_sort_key(p.name)):
-        for path in sorted(font_dir.rglob('*'), key=lambda p: natural_sort_key(str(p.relative_to(root)).replace('\\', '/'))):
+        for path in sorted(font_dir.rglob('*'), key=lambda p: natural_sort_key(_normalized_relative_path(p, root).as_posix())):
             if _is_release_regular_file(path) and path.suffix.lower() in BUNDLED_FONT_SUFFIXES:
                 yield path
 
@@ -1310,7 +1324,7 @@ def _tree_required_bundled_font_license_issue(root: Path) -> str:
     matched = [
         path
         for path in candidates
-        if _is_required_bundled_font_license_parts(path.relative_to(root).parts)
+        if _is_required_bundled_font_license_parts(_normalized_relative_path(path, root).parts)
     ]
     if not matched:
         return _required_bundled_font_license_missing_reason()
@@ -1598,7 +1612,7 @@ def _tree_untracked_regression_test_files(root: Path) -> list[str]:
     for path in sorted(tests_dir.glob('test_*.py'), key=lambda p: natural_sort_key(p.name)):
         if not _is_release_regular_file(path):
             continue
-        rel_name = path.relative_to(root).as_posix()
+        rel_name = _normalized_relative_path(path, root).as_posix()
         if not should_include_path(path, root):
             continue
         if _required_release_member_key(rel_name) not in required:
