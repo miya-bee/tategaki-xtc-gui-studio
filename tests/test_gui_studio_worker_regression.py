@@ -217,6 +217,22 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIn('return self._schedule_live_preview_refresh(reset_page=False)', source)
         self.assertFalse(hasattr(self.studio.MainWindow, '_has_active_preview_for_margin_refresh'))
 
+    def test_cancel_pending_settings_live_preview_refresh_bumps_generation_and_clears_flags(self):
+        window = self.studio.MainWindow.__new__(self.studio.MainWindow)
+        window._settings_preview_refresh_generation = 3
+        window._settings_preview_refresh_pending = True
+        window._settings_preview_refresh_pending_reset_page = True
+        window._settings_preview_refresh_scheduled = True
+        window._settings_preview_refresh_deferred_until_preview_finished = True
+
+        self.studio.MainWindow._cancel_pending_settings_live_preview_refresh(window)
+
+        self.assertEqual(window._settings_preview_refresh_generation, 4)
+        self.assertFalse(window._settings_preview_refresh_pending)
+        self.assertFalse(window._settings_preview_refresh_pending_reset_page)
+        self.assertFalse(window._settings_preview_refresh_scheduled)
+        self.assertFalse(window._settings_preview_refresh_deferred_until_preview_finished)
+
 
     def test_page_input_runtime_range_is_read_from_layout_plan(self):
         source = inspect.getsource(self.studio.MainWindow._reset_xtc_page_input)
