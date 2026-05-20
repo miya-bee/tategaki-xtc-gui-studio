@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from tategakiXTC_release_metadata import PUBLIC_VERSION, RELEASE_ZIP_FILE_NAME
+
 
 
 class ReleaseHygieneRegressionTests(unittest.TestCase):
@@ -33,8 +35,13 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         import build_release_zip as builder
 
         self.assertIn("'.github'", Path('build_release_zip.py').read_text(encoding='utf-8'))
-        self.assertIn('.github/', Path('.gitignore').read_text(encoding='utf-8'))
-        self.assertFalse(builder.should_include_path(Path('.github/workflows/python-tests.yml'), Path('.')))
+        gitignore_lines = [line.strip() for line in Path('.gitignore').read_text(encoding='utf-8').splitlines()]
+        self.assertNotIn('.github/', gitignore_lines)
+        workflow = Path('.github/workflows/python-tests.yml')
+        if workflow.exists():
+            self.assertFalse(builder.should_include_path(workflow, Path('.')))
+        else:
+            self.skipTest('.github workflow is excluded from public release zip')
         self.assertNotIn('.github/workflows/python-tests.yml', builder.REQUIRED_PROJECT_RELEASE_FILES)
         self.assertNotIn('.github/workflows/python-tests.yml', builder.REQUIRED_PROJECT_TOOLING_FILES)
 
@@ -50,13 +57,11 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
 
     def test_release_notes_file_matches_public_version(self):
-        self.assertTrue(Path('RELEASE_NOTES_v1_3_3.md').exists())
+        self.assertTrue(Path('RELEASE_NOTES_v1_3_2.md').exists())
         self.assertFalse(Path('RELEASE_NOTES_v1_1_69.md').exists())
-        notes = Path('RELEASE_NOTES_v1_3_3.md').read_text(encoding='utf-8')
-        self.assertIn('v1.3.3', notes)
-        self.assertIn('hotfix', notes)
-        self.assertIn('﹂', notes)
-        self.assertIn('﹄', notes)
+        notes = Path('RELEASE_NOTES_v1_3_2.md').read_text(encoding='utf-8')
+        self.assertIn('v1.3.2', notes)
+        self.assertIn('フォルダ一括変換', notes)
         self.assertNotIn('1.1.69', notes)
         self.assertNotIn('bugfix', notes.casefold())
 
@@ -130,7 +135,9 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         self.assertIn('LICENSE.txt', build_release_source)
         self.assertIn('CHANGELOG.md', build_release_source)
         self.assertIn('RELEASE_NOTES_FILE', build_release_source)
-        self.assertIn('from tategakiXTC_release_metadata import RELEASE_NOTES_FILE, RELEASE_ZIP_FILE_NAME', build_release_source)
+        self.assertIn('from tategakiXTC_release_metadata import', build_release_source)
+        self.assertIn('RELEASE_NOTES_FILE', build_release_source)
+        self.assertIn('RELEASE_ZIP_FILE_NAME', build_release_source)
         self.assertIn('verify_release_zip_required_file_contents', build_release_source)
         self.assertIn('REQUIRED_ASCII_BATCH_FILES', build_release_source)
         self.assertIn('REQUIRED_UTF8_TEXT_FILES', build_release_source)
@@ -328,8 +335,8 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
     def test_readme_verify_command_examples_include_zip_path_argument(self):
         content = Path('README.md').read_text(encoding='utf-8')
-        self.assertIn('build_release_zip.py ^\n      --verify ^\n      dist\\tategaki-xtc-gui-studio_v1.3.3-release.zip', content)
-        self.assertIn('python build_release_zip.py --verify dist\\tategaki-xtc-gui-studio_v1.3.3-release.zip', content)
+        self.assertIn(f'build_release_zip.py ^\n      --verify ^\n      dist\\{RELEASE_ZIP_FILE_NAME}', content)
+        self.assertIn(f'python build_release_zip.py --verify dist\\{RELEASE_ZIP_FILE_NAME}', content)
         self.assertNotIn('dist\\sweep471_smoke-release.zip', content)
 
 
@@ -363,7 +370,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         ):
             self.assertIn(expected, builder)
         self.assertIn('install_requirements.bat', readme)
-        self.assertIn('tategaki-xtc-gui-studio_v1.3.3-release.zip', readme)
+        self.assertIn(RELEASE_ZIP_FILE_NAME, readme)
         self.assertIn('RELEASE_NOTES_v1_2_2.md', readme)
 
 

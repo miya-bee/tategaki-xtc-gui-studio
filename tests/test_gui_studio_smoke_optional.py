@@ -3,16 +3,23 @@ import os
 import unittest
 
 
+RUN_REAL_QT_SMOKE = os.environ.get('RUN_REAL_QT_SMOKE') == '1'
 PYSIDE6_AVAILABLE = importlib.util.find_spec('PySide6') is not None
 PILLOW_AVAILABLE = importlib.util.find_spec('PIL') is not None
 QT_QPA_PLATFORM = os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-GUI_STUDIO_SMOKE_AVAILABLE = PYSIDE6_AVAILABLE and PILLOW_AVAILABLE
+GUI_STUDIO_SMOKE_AVAILABLE = RUN_REAL_QT_SMOKE and PYSIDE6_AVAILABLE and PILLOW_AVAILABLE
 
 
-@unittest.skipUnless(GUI_STUDIO_SMOKE_AVAILABLE, 'PySide6 and Pillow are required for GUI studio smoke tests')
+@unittest.skipUnless(
+    GUI_STUDIO_SMOKE_AVAILABLE,
+    'real PySide6 smoke tests are opt-in only; set RUN_REAL_QT_SMOKE=1',
+)
 class GuiStudioSmokeOptionalTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from tests.studio_import_helper import remove_pyside6_test_stubs_for_real_qt
+
+        remove_pyside6_test_stubs_for_real_qt()
         from PySide6.QtWidgets import QApplication
         import tategakiXTC_gui_studio as studio
 

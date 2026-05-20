@@ -121,14 +121,17 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIn("self._plan_frame_shape_value(preview_panel_plan, 'font_scroll_frame_shape', 'no_frame')", source)
         self.assertIn("self._plan_bool_value(preview_panel_plan, 'device_scroll_widget_resizable', False)", source)
         self.assertIn("self._plan_frame_shape_value(preview_panel_plan, 'device_scroll_frame_shape', 'no_frame')", source)
+        self.assertIn("'device_scroll_horizontal_scroll_bar_policy'", source)
+        self.assertIn("'device_scroll_vertical_scroll_bar_policy'", source)
         self.assertIn("self._plan_focus_policy_value(preview_panel_plan, 'device_scroll_focus_policy', 'strong_focus')", source)
 
     def test_nav_bar_widget_identity_is_read_from_layout_plan(self):
         source = inspect.getsource(self.studio.MainWindow._add_nav_controls_to_layout)
+        nav_reverse_source = inspect.getsource(self.studio.MainWindow._ensure_nav_reverse_control)
 
         self.assertIn("nav_bar_plan.get('current_xtc_label_object_name', 'hintLabel')", source)
-        self.assertIn("nav_bar_plan.get('nav_reverse_object_name', 'navToggle')", source)
-        self.assertIn("self._plan_focus_policy_value(nav_bar_plan, 'nav_reverse_focus_policy', 'no_focus')", source)
+        self.assertIn("nav_bar_plan.get('nav_reverse_object_name', 'navToggle')", nav_reverse_source)
+        self.assertIn("self._plan_focus_policy_value(nav_bar_plan, 'nav_reverse_focus_policy', 'no_focus')", nav_reverse_source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_minimum', 0)", source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_maximum', 0)", source)
         self.assertIn("self._plan_spin_button_symbols_value(nav_bar_plan, 'page_input_button_symbols', 'no_buttons')", source)
@@ -136,7 +139,8 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIn("nav_bar_plan.get('page_total_label_object_name', 'hintLabel')", source)
         self.assertIn("nav_bar_plan.get('nav_button_object_name', 'navBtn')", source)
         self.assertIn("nav_bar_plan.get('nav_button_focus_policy', 'no_focus')", source)
-        self.assertIn("nav_bar_plan.get('nav_reverse_text', 'ボタン反転')", source)
+        self.assertIn('self._ensure_nav_reverse_control(nav_bar_plan)', source)
+        self.assertNotIn("lay.addWidget(self.nav_reverse_check)", source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'nav_button_side_spacing', 10)", source)
         self.assertIn("self._nav_section_separator(nav_bar_plan)", source)
 
@@ -158,7 +162,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIn('results_tab_plan = gui_layouts.build_results_tab_plan()', source)
         self.assertIn("self._plan_int_tuple_value(results_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4)", source)
         self.assertIn("self._plan_int_value(results_tab_plan, 'spacing', 4)", source)
-        self.assertIn("results_tab_plan.get('summary_label_object_name', 'hintLabel')", source)
+        self.assertIn("results_tab_plan.get('summary_label_object_name', 'resultsPlaceholderLabel')", source)
         self.assertIn("self._plan_bool_value(results_tab_plan, 'summary_label_word_wrap', True)", source)
         self.assertIn("self._plan_list_selection_mode_value(results_tab_plan, 'results_list_selection_mode', 'single_selection')", source)
         self.assertIn('self.results_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)', source)
@@ -1912,6 +1916,35 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         return self.studio.MainWindow.__new__(self.studio.MainWindow)
 
 
+    def test_conversion_completion_card_message_single_file(self):
+        window = self.make_window()
+        message = self.studio.MainWindow._build_conversion_completion_card_message(
+            window,
+            ['C:\\books\\sample.xtc'],
+            {'open_folder_target': 'C:\\books'},
+        )
+
+        self.assertIn('保存しました: sample.xtc', message)
+        self.assertIn(r'保存先: C:\books', message)
+        self.assertIn('保存先を開く', message)
+        self.assertIn('詳細は左下の「変換結果」タブ', message)
+
+    def test_conversion_completion_card_message_subfolders(self):
+        window = self.make_window()
+        message = self.studio.MainWindow._build_conversion_completion_card_message(
+            window,
+            ['C:\\out\\a\\one.xtc', 'C:\\out\\b\\two.xtc'],
+            {'open_folder_target': 'C:\\out'},
+        )
+
+        self.assertIn('保存しました: 2件', message)
+        self.assertIn('保存先: 複数フォルダ（2か所）', message)
+        self.assertIn(r'基準フォルダ: C:\out', message)
+        self.assertIn('サブフォルダ構造を保持して保存しました。', message)
+        self.assertIn('出力ファイル:', message)
+        self.assertIn(r'a\one.xtc', message)
+        self.assertIn(r'b\two.xtc', message)
+
     def test_load_xtc_from_bytes_preserves_previous_state_when_parse_fails(self):
         window = self.make_window()
         window.xtc_bytes = b'old-bytes'
@@ -3538,7 +3571,64 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(payload['target'], 'book.epub')
 
     def test_default_left_panel_width_matches_latest_initial_layout(self):
-        self.assertEqual(self.studio.DEFAULT_LEFT_PANEL_WIDTH, 620)
+        self.assertEqual(self.studio.DEFAULT_LEFT_PANEL_WIDTH, 600)
+
+    def test_restore_settings_migrates_previous_default_left_panel_width(self):
+        window = self.make_window()
+        window.settings_store = _SettingsStoreStub({'panel_button_visible': True})
+        self._prepare_restore_settings_window_stubs(window)
+        window._window_state_restore_payload = lambda: {
+            'geometry': None,
+            'window_width': 1600,
+            'window_height': 1000,
+            'is_maximized': False,
+            'left_panel_width': 800,
+            'left_splitter_state': None,
+            'left_splitter_sizes': [760, 140],
+            'left_panel_visible': True,
+        }
+
+        self.studio.MainWindow._restore_settings(window)
+
+        self.assertEqual(window._pending_left_panel_width, self.studio.DEFAULT_LEFT_PANEL_WIDTH)
+
+    def test_restore_settings_migrates_v13341_default_left_panel_width(self):
+        window = self.make_window()
+        window.settings_store = _SettingsStoreStub({'panel_button_visible': True})
+        self._prepare_restore_settings_window_stubs(window)
+        window._window_state_restore_payload = lambda: {
+            'geometry': None,
+            'window_width': 1600,
+            'window_height': 1000,
+            'is_maximized': False,
+            'left_panel_width': 820,
+            'left_splitter_state': None,
+            'left_splitter_sizes': [760, 140],
+            'left_panel_visible': True,
+        }
+
+        self.studio.MainWindow._restore_settings(window)
+
+        self.assertEqual(window._pending_left_panel_width, self.studio.DEFAULT_LEFT_PANEL_WIDTH)
+
+    def test_restore_settings_migrates_v13342_default_left_panel_width(self):
+        window = self.make_window()
+        window.settings_store = _SettingsStoreStub({'panel_button_visible': True})
+        self._prepare_restore_settings_window_stubs(window)
+        window._window_state_restore_payload = lambda: {
+            'geometry': None,
+            'window_width': 1600,
+            'window_height': 1000,
+            'is_maximized': False,
+            'left_panel_width': 760,
+            'left_splitter_state': None,
+            'left_splitter_sizes': [760, 140],
+            'left_panel_visible': True,
+        }
+
+        self.studio.MainWindow._restore_settings(window)
+
+        self.assertEqual(window._pending_left_panel_width, self.studio.DEFAULT_LEFT_PANEL_WIDTH)
 
     def test_restore_settings_keeps_hidden_left_panel_width_as_pending(self):
         window = self.make_window()
@@ -8297,7 +8387,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window._apply_preview_button_context({'button_enabled': True, 'button_text': 'プレビュー更新'})
 
         self.assertTrue(window.preview_update_btn.enabled)
-        self.assertEqual(window.preview_update_btn.text_value, '更新待ち…')
+        self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
         self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'pending')
 
     def test_apply_preview_progress_context_ignores_non_mapping_context_without_crashing(self):
@@ -12125,7 +12215,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(cfg['font_size'], 28)
         self.assertEqual(cfg['output_format'], 'xtch')
         self.assertEqual(cfg['output_conflict'], 'overwrite')
-        self.assertTrue(cfg['open_folder'])
+        self.assertFalse(cfg['open_folder'])
         self.assertEqual((cfg['width'], cfg['height']), (528, 792))
 
     def test_current_settings_dict_uses_profile_defaults_for_non_custom(self):
@@ -12789,7 +12879,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(window.device_view_btn.checked)
         self.assertIn('実機ビュー', window.view_help_btn.tooltip)
         self.assertEqual(nav_updates, ['font', 'device'])
-        self.assertEqual(timer_calls, [0])
+        self.assertEqual(timer_calls, [0, 0, 0, 50, 0, 0])
         self.assertEqual(window.viewer_widget.focus_reason, self.studio.Qt.OtherFocusReason)
         self.assertIn(('フォントビューに切り替えました。', 2000), status.messages)
         self.assertIn(('実機ビューに切り替えました。', 2000), status.messages)
@@ -12903,6 +12993,38 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.settings_store.values, {})
         self.assertFalse(window.settings_store.synced)
         self.assertIn(('プリセット保存の確認ダイアログを表示できませんでした。', 5000), status.messages)
+
+    def test_save_preset_verifies_readback_before_success_status(self):
+        window = self.make_window()
+        window.settings_store = _SettingsStoreStub()
+        window.preset_definitions = {'preset_1': {'button_text': 'プリセット1', 'name': 'P1', 'font_size': 28}}
+        window.current_preset_payload = lambda: {'font_size': 31, 'ruby_size': 13, 'line_spacing': 45}
+        window._live_preset_widget_payload = lambda: {}
+        window._preset_display_name = lambda preset: 'プリセット1 / P1'
+        window._preset_settings_prefix = lambda key: f'presets/{key}'
+        window._default_font_name = lambda: 'NotoSansJP-Regular.ttf'
+        window._preset_summary_plain_text = lambda payload: 'summary'
+        window._refresh_preset_ui = lambda: setattr(window, '_preset_ui_refreshed', True)
+        window._sync_selected_preset_summary = lambda key: setattr(window, '_synced_preset_key', key)
+        status_messages = []
+        window._show_ui_status_message_unless_render_failure_visible = lambda message, duration: status_messages.append((message, duration))
+        window._show_warning_dialog_with_status_fallback = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('should not warn'))
+
+        with mock.patch.object(
+            self.studio,
+            'QMessageBox',
+            types.SimpleNamespace(question=lambda *args, **kwargs: 1, Yes=1, No=0),
+        ):
+            window.save_preset('preset_1')
+
+        self.assertTrue(window.settings_store.synced)
+        self.assertEqual(window.settings_store.values['presets/preset_1/font_size'], 31)
+        self.assertEqual(window.settings_store.values['presets/preset_1/ruby_size'], 13)
+        self.assertEqual(window.settings_store.values['presets/preset_1/line_spacing'], 45)
+        self.assertEqual(window.preset_definitions['preset_1']['font_size'], 31)
+        self.assertTrue(getattr(window, '_preset_ui_refreshed', False))
+        self.assertEqual(getattr(window, '_synced_preset_key', None), 'preset_1')
+        self.assertEqual(status_messages, [('プリセット1 / P1 を保存しました', 4000)])
 
     def test_save_preset_keeps_visible_render_failure_status_message(self):
         window = self.make_window()
@@ -15115,15 +15237,15 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             scheduled[0][1]()
 
             self.assertEqual(refresh_calls, [])
-            self.assertEqual(len(scheduled), 2)
-            self.assertEqual(scheduled[1][0], 50)
+            self.assertEqual(len(scheduled), 1)
             self.assertTrue(getattr(window, '_settings_preview_refresh_pending', False))
+            self.assertTrue(getattr(window, '_settings_preview_refresh_deferred_until_preview_finished', False))
+            self.assertFalse(getattr(window, '_settings_preview_refresh_scheduled', False))
 
             window._preview_running = False
-            scheduled[1][1]()
 
-        self.assertFalse(getattr(window, '_settings_preview_refresh_pending', False))
-        self.assertEqual(refresh_calls, [{'reset_page': False}])
+        self.assertTrue(getattr(window, '_settings_preview_refresh_pending', False))
+        self.assertEqual(refresh_calls, [])
 
     def test_live_preview_refresh_debounces_setting_changes_to_latest_timer(self):
         window = self.make_window()
@@ -15142,7 +15264,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         self.assertEqual(len(scheduled), 2)
         self.assertEqual(dirty_marks, [True, True])
-        self.assertEqual(window.preview_update_btn.text_value, '更新待ち…')
+        self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
         self.assertTrue(window.preview_update_btn.enabled)
         self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'pending')
 
@@ -15170,7 +15292,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         self.assertEqual(dirty_marks, [True])
         self.assertEqual(len(scheduled), 1)
-        self.assertEqual(window.preview_update_btn.text_value, '更新待ち…')
+        self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
 
         scheduled[0][1]()
 
@@ -15212,6 +15334,32 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             {'refresh_preview': False},
             {'refresh_preview': False},
         ])
+
+    def test_ruby_hide_toggled_schedules_preview_refresh_without_page_reset(self):
+        window = self.make_window()
+        schedule_calls = []
+        finalize_calls = []
+        window._schedule_live_preview_refresh = lambda **kwargs: schedule_calls.append(kwargs) or True
+        window._finalize_setting_change = lambda **kwargs: finalize_calls.append(kwargs)
+
+        window.on_ruby_hide_toggled(True)
+
+        self.assertEqual(schedule_calls, [{'reset_page': False}])
+        self.assertEqual(finalize_calls, [{'refresh_preview': False}])
+
+    def test_dither_toggled_uses_debounced_preview_refresh_without_extra_dirty_finalize(self):
+        window = self.make_window()
+        window.threshold_spin = _SpinStub(128)
+        schedule_calls = []
+        finalize_calls = []
+        window._schedule_live_preview_refresh = lambda **kwargs: schedule_calls.append(kwargs) or True
+        window._finalize_setting_change = lambda **kwargs: finalize_calls.append(kwargs)
+
+        window.on_dither_toggled(True)
+
+        self.assertFalse(window.threshold_spin.enabled)
+        self.assertEqual(schedule_calls, [{'reset_page': False}])
+        self.assertEqual(finalize_calls, [{'refresh_preview': False}])
 
     def test_font_section_visual_controls_are_wired_to_live_preview_scheduler(self):
         source = inspect.getsource(self.studio.MainWindow._section_font)
@@ -16288,7 +16436,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         opener.assert_not_called()
 
 
-    def test_finished_conversion_open_folder_logs_when_shared_opener_returns_false(self):
+    def test_finished_conversion_open_folder_does_not_auto_open_explorer(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             window = self.make_window()
             with mock.patch.object(self.studio, '_open_path_in_file_manager', return_value=False) as opener, \
@@ -16297,9 +16445,9 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
                     'open_folder_requested': True,
                     'open_folder_target': str(Path(tmpdir)),
                 })
-        opener.assert_called_once_with(str(Path(tmpdir)))
-        self.assertEqual(warnings, [f'完了後フォルダを開けませんでした: {Path(tmpdir)}'])
-        warning.assert_any_call(f'完了後フォルダを開けませんでした: {Path(tmpdir)}')
+        opener.assert_not_called()
+        warning.assert_not_called()
+        self.assertEqual(warnings, [])
 
     def test_convert_open_folder_logs_when_target_resolution_raises(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -17194,7 +17342,9 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn("self._plan_bool_value(container_plan, 'splitter_children_collapsible', False)", source)
         self.assertIn("self._plan_bool_value(container_plan, 'scroll_widget_resizable', True)", source)
         self.assertIn("self._plan_frame_shape_value(container_plan, 'scroll_frame_shape', 'no_frame')", source)
-        self.assertIn("self._plan_scroll_bar_policy_value(container_plan, 'scroll_horizontal_scroll_bar_policy', 'always_off')", source)
+        self.assertIn("self._plan_scroll_bar_policy_value(container_plan, 'scroll_horizontal_scroll_bar_policy', 'as_needed')", source)
+        self.assertIn("self._plan_scroll_bar_policy_value(container_plan, 'scroll_vertical_scroll_bar_policy', 'as_needed')", source)
+        self.assertIn("container.setMinimumWidth(self._plan_int_value(container_plan, 'scroll_minimum_content_width', 760))", source)
         self.assertIn('lay.addWidget(self._build_left_settings_bottom_separator(container_plan))', source)
         self.assertNotIn('lay.addStretch(1)', source)
         self.assertIn("self._plan_int_value(container_plan, 'splitter_top_stretch_factor', 3)", source)
@@ -17483,7 +17633,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('build_file_viewer_section_plan()', viewer_source)
         self.assertIn("file_viewer_plan.get('open_xtc_button_text', 'XTC/XTCHを開く')", viewer_source)
         self.assertIn("file_viewer_plan.get('open_xtc_button_object_name', 'smallBtn')", viewer_source)
-        self.assertIn("self._plan_bool_value(file_viewer_plan, 'open_xtc_trailing_stretch', True)", viewer_source)
+        self.assertIn("file_viewer_plan, 'open_xtc_help_leading_spacing', 8", viewer_source)
+        self.assertIn("self._plan_bool_value(file_viewer_plan, 'open_xtc_help_trailing_stretch', True)", viewer_source)
         self.assertIn("'open_xtc_help_text'", viewer_source)
 
     def test_image_behavior_and_file_viewer_section_chrome_is_read_from_plan(self):
@@ -17495,11 +17646,12 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn("self._plan_int_value(image_plan, 'night_mode_spacing', 16)", image_source)
         self.assertIn("self._plan_bool_value(image_plan, 'dither_checked_default', False)", image_source)
         self.assertIn("self._plan_int_value(image_plan, 'dither_spacing', 16)", image_source)
+        self.assertNotIn("ruby_hide_help_text", image_source)
         self.assertIn("self._plan_int_value(image_plan, 'threshold_help_spacing', 6)", image_source)
         self.assertIn("image_plan.get('help_text'", image_source)
         self.assertIn("self._plan_bool_value(image_plan, 'trailing_stretch', True)", image_source)
-        self.assertIn("self._plan_bool_value(behavior_plan, 'open_folder_checked_default', True)", ensure_source)
-        self.assertIn("self._plan_bool_value(behavior_plan, 'open_folder_row_stretch', True)", behavior_source)
+        self.assertIn("self._plan_bool_value(behavior_plan, 'open_folder_checked_default', False)", ensure_source)
+        self.assertIn('変換完了後のフォルダ自動オープンは廃止', behavior_source)
         self.assertIn("behavior_plan.get('output_conflict_help_text'", behavior_source)
 
     def test_view_and_actual_size_help_are_separated_in_right_toolbar(self):
@@ -17721,7 +17873,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         size = viewer.sizeHint()
 
-        self.assertEqual((size.width(), size.height()), (660, 860))
+        self.assertEqual((size.width(), size.height()), (547, 860))
 
     def test_xtc_viewer_size_hint_applies_zoom_when_actual_size_is_off(self):
         viewer = self.studio.XtcViewerWidget()
@@ -17730,7 +17882,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         size = viewer.sizeHint()
 
-        self.assertEqual((size.width(), size.height()), (942, 1242))
+        self.assertEqual((size.width(), size.height()), (764, 1234))
 
     def test_xtc_viewer_size_hint_uses_calibration_when_actual_size_is_on(self):
         viewer = self.studio.XtcViewerWidget()
@@ -17752,7 +17904,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         size = viewer.sizeHint()
 
-        self.assertEqual((size.width(), size.height()), (396, 546))
+        self.assertEqual((size.width(), size.height()), (364, 514))
 
     def test_sync_viewer_size_applies_preview_zoom_to_device_viewer(self):
         window = self.make_window()
@@ -17764,6 +17916,31 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertAlmostEqual(window.viewer_widget.preview_zoom_factor, 1.5)
         self.assertEqual(window.viewer_widget.minimum_size, (420, 650))
         self.assertEqual(window.viewer_widget.resize_calls[-1], (420, 650))
+
+    def test_sync_viewer_size_keeps_scroll_area_left_aligned_for_smooth_zoom(self):
+        import inspect
+
+        source = inspect.getsource(self.studio.MainWindow._sync_viewer_size)
+
+        self.assertIn("getattr(Qt, 'AlignLeft', None)", source)
+        self.assertIn("set_alignment(align_left | align_top)", source)
+        self.assertIn('_set_horizontal_scrollbar_to_zoom_bias_later', source)
+        self.assertIn('preview_leading_gap', source)
+        self.assertNotIn('viewer_scroll.setAlignment(Qt.AlignCenter)', source)
+
+    def test_xtc_viewer_calculate_rects_shrinks_inner_margin_as_zoom_increases(self):
+        viewer = self.studio.XtcViewerWidget()
+
+        viewer.set_preview_zoom_factor(1.0)
+        base_margin = viewer._zoom_scaled_margin(34, minimum=4)
+        viewer.set_preview_zoom_factor(1.5)
+        zoomed_margin = viewer._zoom_scaled_margin(34, minimum=4)
+        viewer.set_preview_zoom_factor(3.0)
+        max_zoom_margin = viewer._zoom_scaled_margin(34, minimum=4)
+
+        self.assertLess(zoomed_margin, base_margin)
+        self.assertLessEqual(max_zoom_margin, zoomed_margin)
+        self.assertGreaterEqual(max_zoom_margin, 4)
 
     def test_xtc_viewer_calculate_rects_applies_zoom_after_auto_fit(self):
         viewer = self.studio.XtcViewerWidget()
@@ -17783,10 +17960,10 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             viewer.set_preview_zoom_factor(1.5)
             body_zoomed, screen_zoomed = viewer._calculate_rects()
 
-        self.assertEqual(round(body_zoomed.width()), round(body_base.width() * 1.5))
-        self.assertEqual(round(body_zoomed.height()), round(body_base.height() * 1.5))
-        self.assertLessEqual(abs(round(screen_zoomed.width()) - round(screen_base.width() * 1.5)), 1)
-        self.assertLessEqual(abs(round(screen_zoomed.height()) - round(screen_base.height() * 1.5)), 1)
+        self.assertGreater(round(body_zoomed.width()), round(body_base.width()))
+        self.assertGreater(round(body_zoomed.height()), round(body_base.height()))
+        self.assertGreater(round(screen_zoomed.width()), round(screen_base.width()))
+        self.assertGreater(round(screen_zoomed.height()), round(screen_base.height()))
 
     def test_xtc_viewer_calculate_rects_applies_zoom_after_actual_size(self):
         viewer = self.studio.XtcViewerWidget()
@@ -17807,10 +17984,10 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             viewer.set_preview_zoom_factor(1.5)
             body_zoomed, screen_zoomed = viewer._calculate_rects()
 
-        self.assertEqual(round(body_zoomed.width()), round(body_base.width() * 1.5))
-        self.assertEqual(round(body_zoomed.height()), round(body_base.height() * 1.5))
-        self.assertLessEqual(abs(round(screen_zoomed.width()) - round(screen_base.width() * 1.5)), 1)
-        self.assertLessEqual(abs(round(screen_zoomed.height()) - round(screen_base.height() * 1.5)), 1)
+        self.assertGreater(round(body_zoomed.width()), round(body_base.width()))
+        self.assertGreater(round(body_zoomed.height()), round(body_base.height()))
+        self.assertGreater(round(screen_zoomed.width()), round(screen_base.width()))
+        self.assertGreater(round(screen_zoomed.height()), round(screen_base.height()))
 
     def test_on_profile_changed_refreshes_font_view_preview_before_rebuild(self):
         window = self.make_window()
@@ -18043,6 +18220,18 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(renders, [2])
 
 
+    def test_font_section_keeps_browse_button_nearer_left(self):
+        source = inspect.getsource(self.studio.MainWindow._section_font)
+
+        self.assertIn('font_row.addWidget(self.font_combo, 2)', source)
+        browse_index = source.index('font_row.addWidget(browse_btn)')
+        stretch_index = source.index('font_row.addStretch(1)')
+        layout_index = source.index('lay.addLayout(font_row)')
+        self.assertLess(browse_index, stretch_index)
+        self.assertLess(stretch_index, layout_index)
+        self.assertNotIn('font_row.addWidget(self.font_combo, 1)', source)
+
+
     def test_font_section_places_output_format_profile_and_kinsoku_on_trial_row(self):
         source = inspect.getsource(self.studio.MainWindow._section_font)
 
@@ -18077,9 +18266,15 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn("image_glyph_position_row.addWidget(self.punctuation_position_combo)", image_source)
         self.assertIn("image_glyph_position_row.addWidget(self._dim_label('漢数字 一'))", image_source)
         self.assertIn("image_glyph_position_row.addWidget(self.ichi_position_combo)", image_source)
+        self.assertIn("image_glyph_position_row.addWidget(self._dim_label('半角数字'))", image_source)
+        self.assertIn("image_glyph_position_row.addWidget(self.halfwidth_digit_position_combo)", image_source)
+        first_row_source = image_source.split("lay.addLayout(image_glyph_position_row)", 1)[0]
+        self.assertNotIn("image_glyph_position_row.addWidget(self._dim_label('下鍵括弧'))", first_row_source)
         self.assertIn("lay.addLayout(image_glyph_position_row)", image_source)
         self.assertIn("image_wave_dash_row = self._make_hbox_layout_from_plan(", image_source)
         self.assertIn("gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))", image_source)
+        self.assertIn("image_wave_dash_row.addWidget(self._dim_label('下鍵括弧'))", image_source)
+        self.assertIn("image_wave_dash_row.addWidget(self.lower_closing_bracket_position_combo)", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self._dim_label('波線描画'))", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self._dim_label('波線位置'))", image_source)

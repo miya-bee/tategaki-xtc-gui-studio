@@ -89,12 +89,14 @@ class CoreOptionalImportRegressionTest(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / 'tests' / 'test_gui_studio_smoke_optional.py').read_text(encoding='utf-8')
         pre_class = source[:source.index('class GuiStudioSmokeOptionalTests')]
 
+        self.assertIn("RUN_REAL_QT_SMOKE = os.environ.get('RUN_REAL_QT_SMOKE') == '1'", pre_class)
         self.assertIn("PYSIDE6_AVAILABLE = importlib.util.find_spec('PySide6') is not None", pre_class)
         self.assertIn("PILLOW_AVAILABLE = importlib.util.find_spec('PIL') is not None", pre_class)
         self.assertIn("QT_QPA_PLATFORM = os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')", pre_class)
         self.assertLess(pre_class.index("os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')"), pre_class.index('GUI_STUDIO_SMOKE_AVAILABLE'))
-        self.assertIn('GUI_STUDIO_SMOKE_AVAILABLE = PYSIDE6_AVAILABLE and PILLOW_AVAILABLE', pre_class)
-        self.assertIn("@unittest.skipUnless(GUI_STUDIO_SMOKE_AVAILABLE, 'PySide6 and Pillow are required for GUI studio smoke tests')", pre_class)
+        self.assertIn('GUI_STUDIO_SMOKE_AVAILABLE = RUN_REAL_QT_SMOKE and PYSIDE6_AVAILABLE and PILLOW_AVAILABLE', pre_class)
+        self.assertIn('@unittest.skipUnless(', pre_class)
+        self.assertIn('real PySide6 smoke tests are opt-in only; set RUN_REAL_QT_SMOKE=1', pre_class)
         self.assertNotIn("@unittest.skipUnless(PYSIDE6_AVAILABLE, 'PySide6 is not installed in this environment')", pre_class)
 
 

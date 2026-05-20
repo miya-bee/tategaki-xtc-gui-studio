@@ -149,6 +149,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
 
     def test_navigation_widget_identity_is_owned_by_nav_bar_plan(self):
         source = _method_source(STUDIO_SOURCE, '_add_nav_controls_to_layout')
+        nav_reverse_source = _method_source(STUDIO_SOURCE, '_ensure_nav_reverse_control')
         self.assertIn("'current_xtc_label_object_name'", LAYOUTS_SOURCE)
         self.assertIn("'current_xtc_label_min_width': 0", LAYOUTS_SOURCE)
         self.assertIn("'nav_reverse_object_name'", LAYOUTS_SOURCE)
@@ -165,9 +166,9 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
         self.assertIn("'nav_button_focus_policy'", LAYOUTS_SOURCE)
         self.assertIn("nav_bar_plan.get('current_xtc_label_object_name', 'hintLabel')", source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'current_xtc_label_min_width', 0)", source)
-        self.assertIn("nav_bar_plan.get('nav_reverse_object_name', 'navToggle')", source)
-        self.assertIn("self._plan_focus_policy_value(nav_bar_plan, 'nav_reverse_focus_policy', 'no_focus')", source)
-        self.assertNotIn("str(nav_bar_plan.get('nav_reverse_focus_policy', 'no_focus')).strip().lower()", source)
+        self.assertIn("nav_bar_plan.get('nav_reverse_object_name', 'navToggle')", nav_reverse_source)
+        self.assertIn("self._plan_focus_policy_value(nav_bar_plan, 'nav_reverse_focus_policy', 'no_focus')", nav_reverse_source)
+        self.assertNotIn("str(nav_bar_plan.get('nav_reverse_focus_policy', 'no_focus')).strip().lower()", nav_reverse_source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_minimum', 0)", source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_maximum', 0)", source)
         self.assertIn("self._plan_spin_button_symbols_value(nav_bar_plan, 'page_input_button_symbols', 'no_buttons')", source)

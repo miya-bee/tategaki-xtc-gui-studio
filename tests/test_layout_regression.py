@@ -19,13 +19,20 @@ class LayoutRegressionTests(unittest.TestCase):
         text = '2025年AI!?ABCD'
         self.assertEqual(
             core._tokenize_vertical_text(text),
-            ['2025', '年', 'AI', '!?', 'A', 'B', 'C', 'D'],
+            ['2025', '年', 'A', 'I', '!', '?', 'A', 'B', 'C', 'D'],
         )
 
     def test_tokenize_vertical_text_keeps_three_ascii_chars_together(self):
         self.assertEqual(core._tokenize_vertical_text('ver2'), ['v', 'e', 'r', '2'])
         self.assertEqual(core._tokenize_vertical_text('123'), ['123'])
-        self.assertEqual(core._tokenize_vertical_text('ABC'), ['ABC'])
+        self.assertEqual(core._tokenize_vertical_text('ABC'), ['A', 'B', 'C'])
+
+    def test_tokenize_vertical_text_honors_tatechuyoko_digit_mode(self):
+        text = '12年123年2025年AI'
+        self.assertEqual(core._tokenize_vertical_text(text, '4'), ['12', '年', '123', '年', '2025', '年', 'A', 'I'])
+        self.assertEqual(core._tokenize_vertical_text(text, '3'), ['12', '年', '123', '年', '2', '0', '2', '5', '年', 'A', 'I'])
+        self.assertEqual(core._tokenize_vertical_text(text, '2'), ['12', '年', '1', '2', '3', '年', '2', '0', '2', '5', '年', 'A', 'I'])
+        self.assertEqual(core._tokenize_vertical_text(text, 'none'), ['1', '2', '年', '1', '2', '3', '年', '2', '0', '2', '5', '年', 'A', 'I'])
 
     def test_choose_vertical_layout_action_advances_before_line_end_forbidden(self):
         action = core._choose_vertical_layout_action(

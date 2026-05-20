@@ -14,6 +14,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'font_file': 'font.ttf',
                 'font_size': 28,
                 'ruby_size': 12,
+                'ruby_hide': True,
                 'line_spacing': 44,
                 'margin_t': 10,
                 'margin_b': 12,
@@ -25,6 +26,8 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'kinsoku_mode': 'standard',
                 'punctuation_position_mode': 'down_weak',
                 'ichi_position_mode': 'up_weak',
+                'halfwidth_digit_position_mode': 'down_strong',
+                'tatechuyoko_digit_mode': '3文字',
                 'lower_closing_bracket_position_mode': 'up_strong',
                 'wave_dash_drawing_mode': 'separate',
                 'wave_dash_position_mode': 'down_weak',
@@ -44,9 +47,12 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['file_b64'], 'data:image/png;base64,AAAA')
         self.assertEqual(payload['max_pages'], 1)
         self.assertEqual(payload['night_mode'], 'true')
+        self.assertEqual(payload['ruby_hide'], 'true')
         self.assertEqual(payload['dither'], 'false')
         self.assertEqual(payload['punctuation_position_mode'], 'down_weak')
         self.assertEqual(payload['ichi_position_mode'], 'up_weak')
+        self.assertEqual(payload['halfwidth_digit_position_mode'], 'down_strong')
+        self.assertEqual(payload['tatechuyoko_digit_mode'], '3')
         self.assertEqual(payload['lower_closing_bracket_position_mode'], 'up_strong')
         self.assertEqual(payload['wave_dash_drawing_mode'], 'separate')
         self.assertEqual(payload['wave_dash_position_mode'], 'down_weak')
@@ -59,6 +65,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'font_file': 'font.ttf',
                 'font_size': 28,
                 'ruby_size': 12,
+                'ruby_hide': 'on',
                 'line_spacing': 44,
                 'margin_t': 10,
                 'margin_b': 12,
@@ -154,6 +161,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'font_file': 'font.ttf',
                 'font_size': 28,
                 'ruby_size': 12,
+                'ruby_hide': 'on',
                 'line_spacing': 44,
                 'margin_t': 10,
                 'margin_b': 12,
@@ -176,6 +184,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
 
         self.assertEqual(payload['dither'], 'false')
         self.assertEqual(payload['night_mode'], 'false')
+        self.assertEqual(payload['ruby_hide'], 'true')
 
     def test_build_preview_request_plan_overrides_output_format_and_normalizes_limit(self):
         plan = preview_controller.build_preview_request_plan(

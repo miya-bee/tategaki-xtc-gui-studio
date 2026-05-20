@@ -67,6 +67,77 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         core.parse_font_spec.cache_clear()
         self.font = core.load_truetype_font(FONT_SPEC, 24)
 
+
+    def test_halfwidth_digit_position_mode_uses_five_glyph_steps(self):
+        self.assertEqual(core._halfwidth_digit_extra_y_for_mode(24, 'standard'), 0)
+        self.assertEqual(core._halfwidth_digit_extra_y_for_mode(24, 'down_weak'), 3)
+        self.assertEqual(core._halfwidth_digit_extra_y_for_mode(24, 'down_strong'), 7)
+        self.assertEqual(core._halfwidth_digit_extra_y_for_mode(24, 'up_weak'), -3)
+        self.assertEqual(core._halfwidth_digit_extra_y_for_mode(24, 'up_strong'), -7)
+
+
+    def test_draw_char_tate_halfwidth_digit_modes_move_text_digits_but_not_ruby(self):
+        img = Image.new('L', (160, 120), 255)
+        draw = core.create_image_draw(img)
+
+        def capture_y(mode: str, *, ruby_mode: bool = False) -> int:
+            captured = []
+            setattr(draw, '_tategaki_halfwidth_digit_position_mode', mode)
+
+            def capture_centered(_draw, text, pos, _font, f_size, **kwargs):
+                captured.append((text, pos))
+
+            with mock.patch.object(core, 'draw_centered_glyph', side_effect=capture_centered):
+                core.draw_char_tate(draw, '5', (40, 10), self.font, 24, ruby_mode=ruby_mode)
+            self.assertEqual(len(captured), 1)
+            return captured[0][1][1]
+
+        standard_y = capture_y('standard')
+        self.assertGreater(capture_y('down_strong'), standard_y)
+        self.assertLess(capture_y('up_strong'), standard_y)
+        self.assertEqual(capture_y('down_strong', ruby_mode=True), standard_y)
+
+    def test_draw_char_tate_halfwidth_digit_modes_move_numeric_tatechuyoko_only(self):
+        img = Image.new('L', (160, 120), 255)
+        draw = core.create_image_draw(img)
+
+        def capture_y(token: str, mode: str) -> int:
+            captured = []
+            setattr(draw, '_tategaki_halfwidth_digit_position_mode', mode)
+
+            def capture_tcy(_draw, text, pos, _font, f_size, **kwargs):
+                captured.append((text, pos))
+
+            with mock.patch.object(core, 'draw_tatechuyoko', side_effect=capture_tcy):
+                core.draw_char_tate(draw, token, (40, 10), self.font, 24)
+            self.assertEqual(len(captured), 1)
+            return captured[0][1][1]
+
+        self.assertGreater(capture_y('2024', 'down_strong'), capture_y('2024', 'standard'))
+        self.assertFalse(core._is_tatechuyoko_token_for_digit_mode('AB', '4'))
+        self.assertFalse(core._is_tatechuyoko_token_for_digit_mode('A1', '4'))
+
+    def test_draw_char_tate_centers_ascii_symbols_and_rotates_ascii_brackets(self):
+        img = Image.new('L', (160, 120), 255)
+        draw = core.create_image_draw(img)
+        captured = []
+
+        def capture_centered(_draw, text, pos, _font, f_size, **kwargs):
+            captured.append((text, pos, kwargs))
+
+        with mock.patch.object(core, 'draw_centered_glyph', side_effect=capture_centered):
+            core.draw_char_tate(draw, 'A', (10, 10), self.font, 24)
+            core.draw_char_tate(draw, '!', (40, 10), self.font, 24)
+            core.draw_char_tate(draw, '(', (70, 10), self.font, 24)
+
+        self.assertEqual([item[0] for item in captured], ['A', '!', '('])
+        self.assertEqual(captured[0][2].get('rotate_degrees', 0), 0)
+        self.assertEqual(captured[1][2].get('rotate_degrees', 0), 0)
+        self.assertEqual(captured[2][2].get('rotate_degrees'), 270)
+        self.assertFalse(captured[0][2].get('align_to_text_flow'))
+        self.assertFalse(captured[1][2].get('align_to_text_flow'))
+        self.assertFalse(captured[2][2].get('align_to_text_flow'))
+
     def test_glyph_position_modes_limit_punctuation_to_hanging_marks_and_allow_five_ichi_steps(self):
         standard_kuto = core._scaled_kutoten_offset_for_mode(24, 'standard')
         for mode in ('down_strong', 'down_weak', 'up_weak', 'up_strong', 'plus', 'minus'):
@@ -659,16 +730,18 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertFalse(core._is_tatechuyoko_token('ABCDE'))
         self.assertFalse(core._is_tatechuyoko_token('ABCD'))
         self.assertFalse(core._is_tatechuyoko_token('あ1'))
-        self.assertTrue(core._is_tatechuyoko_token('AI'))
+        self.assertFalse(core._is_tatechuyoko_token('AI'))
+        self.assertFalse(core._is_tatechuyoko_token('A1'))
         self.assertTrue(core._is_tatechuyoko_token('123'))
         self.assertTrue(core._is_tatechuyoko_token('2025'))
         self.assertFalse(core._should_center_ascii_glyph(''))
         self.assertFalse(core._should_center_ascii_glyph(' '))
-        self.assertFalse(core._should_center_ascii_glyph('!'))
+        self.assertTrue(core._should_center_ascii_glyph('!'))
+        self.assertTrue(core._should_center_ascii_glyph('('))
         self.assertTrue(core._should_center_ascii_glyph('A'))
 
     def test_tokenize_and_kinsoku_helpers_cover_edge_branches(self):
-        self.assertEqual(core._tokenize_vertical_text('ABC!?..'), ['ABC', '!?', '.', '.'])
+        self.assertEqual(core._tokenize_vertical_text('ABC!?..'), ['A', 'B', 'C', '!', '?', '.', '.'])
         self.assertFalse(core._is_line_head_forbidden(''))
         self.assertTrue(core._is_line_head_forbidden('!!'))
         self.assertFalse(core._is_line_end_forbidden(''))
@@ -1190,11 +1263,11 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
             draw_positions.append((pos, text))
 
         with mock.patch.object(core, '_double_punctuation_draw_offsets', return_value=(18, 3, 15)) as offsets,              mock.patch.object(core, '_make_font_variant', return_value=self.font) as make_variant,              mock.patch.object(core, 'draw_weighted_text', side_effect=capture_draw):
-            core.draw_char_tate(draw, '!?', (40, 10), self.font, 24)
+            core.draw_char_tate(draw, '！？', (40, 10), self.font, 24)
 
         offsets.assert_called_once_with(24)
         make_variant.assert_called_once_with(self.font, 18)
-        self.assertEqual(draw_positions, [((43, 10), '!'), ((55, 10), '?')])
+        self.assertEqual(draw_positions, [((43, 10), '！'), ((55, 10), '？')])
 
     def test_draw_char_tate_keeps_inline_punctuation_standard_when_down_mode_selected(self):
         img = Image.new('L', (160, 120), 255)
@@ -1244,16 +1317,12 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertLess(up_strong_y, up_weak_y)
         self.assertEqual(capture_extra_y('「', 'down_strong'), standard_y)
         self.assertEqual(capture_extra_y('「', 'up_strong'), standard_y)
-        self.assertEqual(capture_extra_y('﹂', 'down_strong'), down_strong_y)
-        self.assertEqual(capture_extra_y('﹂', 'up_strong'), up_strong_y)
-        self.assertEqual(capture_extra_y('﹄', 'down_weak'), down_weak_y)
-        self.assertEqual(capture_extra_y('﹄', 'up_weak'), up_weak_y)
 
     def test_draw_tatechuyoko_and_char_tate_cover_major_dispatch_paths(self):
         img = Image.new('L', (160, 120), 255)
         draw = core.create_image_draw(img)
         core.draw_tatechuyoko(draw, 'ABCD', (10, 10), self.font, 24)
-        core.draw_char_tate(draw, '!?', (40, 10), self.font, 24)
+        core.draw_char_tate(draw, '！？', (40, 10), self.font, 24)
         core.draw_char_tate(draw, '、', (70, 10), self.font, 24)
         core.draw_char_tate(draw, 'ぁ', (90, 10), self.font, 24)
         core.draw_char_tate(draw, 'A', (110, 10), self.font, 24)

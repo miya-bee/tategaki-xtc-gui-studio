@@ -175,7 +175,45 @@ class _QMessageBox(_QtDummy):
         return None
 
 
-def _install_pyside6_stubs() -> None:
+_PYSIDE6_STUB_MODULE_NAMES = (
+    'PySide6',
+    'PySide6.QtCore',
+    'PySide6.QtGui',
+    'PySide6.QtWidgets',
+)
+
+
+def _pyside6_modules_are_test_stubs() -> bool:
+    module = sys.modules.get('PySide6')
+    return bool(getattr(module, '__tategaki_test_stub__', False))
+
+
+def _remove_pyside6_modules() -> None:
+    for name in _PYSIDE6_STUB_MODULE_NAMES:
+        sys.modules.pop(name, None)
+
+
+def _remove_pyside6_test_stubs() -> None:
+    if _pyside6_modules_are_test_stubs():
+        _remove_pyside6_modules()
+
+
+def remove_pyside6_test_stubs_for_real_qt() -> None:
+    """Remove test stubs before optional smoke tests import real PySide6.
+
+    Unit tests loaded through :func:`load_studio_module` intentionally prefer
+    lightweight stubs even on developer machines that have PySide6 installed.
+    Optional smoke tests that construct a real ``QApplication`` must opt out
+    explicitly and start from a clean module cache.
+    """
+    restore_qt_test_state()
+    _remove_tategaki_qt_bound_modules()
+    _remove_pyside6_test_stubs()
+
+
+def _install_pyside6_stubs(force_reset: bool = False, prefer_test_stubs: bool = True) -> None:
+    if force_reset or (prefer_test_stubs and not _pyside6_modules_are_test_stubs()):
+        _remove_pyside6_modules()
     if 'PySide6' in sys.modules:
         return
 
@@ -233,11 +271,85 @@ def _install_pyside6_stubs() -> None:
     pyside6.QtGui = qtgui
     pyside6.QtWidgets = qtwidgets
 
+    for module in (pyside6, qtcore, qtgui, qtwidgets):
+        module.__tategaki_test_stub__ = True
+
     sys.modules['PySide6'] = pyside6
     sys.modules['PySide6.QtCore'] = qtcore
     sys.modules['PySide6.QtGui'] = qtgui
     sys.modules['PySide6.QtWidgets'] = qtwidgets
 
+
+
+_TATEGAKI_QT_BOUND_MODULE_NAMES = (
+    'tategakiXTC_gui_studio',
+    'tategakiXTC_gui_studio_ui_helpers',
+    'tategakiXTC_gui_studio_widgets',
+    'tategakiXTC_gui_studio_worker',
+    'tategakiXTC_gui_studio_xtc_io',
+    'tategakiXTC_folder_batch_dialog',
+)
+
+
+def _remove_tategaki_qt_bound_modules() -> None:
+    for name in _TATEGAKI_QT_BOUND_MODULE_NAMES:
+        sys.modules.pop(name, None)
+
+
+_QTIMER_SINGLESHOT_SENTINEL = object()
+_QTIMER_BASELINE_SINGLESHOT_BY_CLASS: dict[type, Any] = {}
+
+
+def _iter_loaded_qtimer_classes():
+    """Yield currently loaded QTimer class objects without importing PySide6.
+
+    Real PySide6 exposes QTimer as one process-global class object.  Tests that
+    assign to ``QTimer.singleShot`` therefore mutate a shared class, and
+    ``importlib.reload(tategakiXTC_gui_studio)`` cannot undo that mutation.  The
+    helper keeps a per-class baseline so force_reload and an autouse fixture can
+    restore the class explicitly in both real-PySide6 and stub environments.
+    """
+    seen: set[int] = set()
+    module_names = ('PySide6.QtCore',) + _TATEGAKI_QT_BOUND_MODULE_NAMES
+    for module_name in module_names:
+        module = sys.modules.get(module_name)
+        qtimer = getattr(module, 'QTimer', None) if module is not None else None
+        if isinstance(qtimer, type) and id(qtimer) not in seen:
+            seen.add(id(qtimer))
+            yield qtimer
+
+
+def _capture_qtimer_single_shot_baselines() -> None:
+    for qtimer in _iter_loaded_qtimer_classes():
+        if qtimer not in _QTIMER_BASELINE_SINGLESHOT_BY_CLASS:
+            _QTIMER_BASELINE_SINGLESHOT_BY_CLASS[qtimer] = getattr(
+                qtimer,
+                'singleShot',
+                _QTIMER_SINGLESHOT_SENTINEL,
+            )
+
+
+def restore_qt_test_state() -> None:
+    """Restore mutable Qt class-level state touched by GUI tests.
+
+    This is intentionally explicit rather than relying on module reloads.  In a
+    real PySide6 environment the Qt modules remain cached and return the same
+    C++ wrapper class objects, so class-level monkey patches can leak across
+    tests unless we save and restore them ourselves.
+    """
+    _capture_qtimer_single_shot_baselines()
+    for qtimer, original in list(_QTIMER_BASELINE_SINGLESHOT_BY_CLASS.items()):
+        if original is _QTIMER_SINGLESHOT_SENTINEL:
+            if hasattr(qtimer, 'singleShot'):
+                try:
+                    delattr(qtimer, 'singleShot')
+                except (AttributeError, TypeError):
+                    pass
+        else:
+            try:
+                setattr(qtimer, 'singleShot', original)
+            except (AttributeError, TypeError):
+                pass
 
 def _install_pillow_stub() -> None:
     if 'PIL' in sys.modules:
@@ -252,9 +364,15 @@ def _install_pillow_stub() -> None:
     sys.modules['PIL'] = pillow
 
 
-def load_studio_module(force_reload: bool = False):
-    _install_pyside6_stubs()
+def load_studio_module(force_reload: bool = False, *, use_test_stubs: bool = True):
+    if force_reload or use_test_stubs:
+        restore_qt_test_state()
+        _remove_tategaki_qt_bound_modules()
+    if use_test_stubs:
+        _install_pyside6_stubs(force_reset=force_reload, prefer_test_stubs=True)
+    else:
+        _remove_pyside6_test_stubs()
     _install_pillow_stub()
-    if force_reload:
-        sys.modules.pop('tategakiXTC_gui_studio', None)
-    return importlib.import_module('tategakiXTC_gui_studio')
+    module = importlib.import_module('tategakiXTC_gui_studio')
+    _capture_qtimer_single_shot_baselines()
+    return module

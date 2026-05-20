@@ -58,18 +58,34 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
         changelog = Path('CHANGELOG.md').read_text(encoding='utf-8')
         self.assertTrue(changelog.startswith('# CHANGELOG\n'))
         self.assertEqual(changelog.count('# CHANGELOG'), 1)
+        import tategakiXTC_release_metadata as release_metadata
+
+        self.assertIn(f'## v{release_metadata.PUBLIC_VERSION}', changelog)
+        self.assertIn(f'## v{release_metadata.PREVIOUS_PUBLIC_VERSION}', changelog)
+        self.assertIn('## v1.3.3.26', changelog)
+        self.assertIn('## v1.3.3.25', changelog)
+        self.assertIn('## v1.3.3.24', changelog)
+        self.assertIn('## v1.3.3.23', changelog)
+        self.assertIn('## v1.3.3.22', changelog)
+        self.assertIn('## v1.3.3.21', changelog)
+        self.assertIn('## v1.3.3.20', changelog)
+        self.assertIn('## v1.3.3.3', changelog)
+        self.assertIn('## v1.3.3.2', changelog)
+        self.assertIn('## v1.3.3.1', changelog)
+        self.assertIn('## v1.3.3.0', changelog)
         self.assertIn('## v1.2.2', changelog)
         self.assertIn('v1.2.2 は、v1.2.1 を基準に、波ダッシュ・チルダ類の縦書き表示調整を追加した安定版です。', changelog)
         self.assertIn('## v1.1.0', changelog)
         self.assertIn('v1.0.2 の次の正式版 v1.1.0', changelog)
 
     def test_release_notes_exist_for_current_public_version(self) -> None:
-        notes = Path('RELEASE_NOTES_v1_3_3.md').read_text(encoding='utf-8')
-        self.assertIn('v1.3.3', notes)
-        self.assertIn('hotfix', notes)
-        self.assertIn('﹂', notes)
-        self.assertIn('﹄', notes)
-        self.assertIn('README', notes)
+        import tategakiXTC_release_metadata as release_metadata
+
+        notes_path = Path(release_metadata.RELEASE_NOTES_FILE)
+        self.assertTrue(notes_path.exists(), release_metadata.RELEASE_NOTES_FILE)
+        notes = notes_path.read_text(encoding='utf-8')
+        self.assertIn(f'v{release_metadata.PUBLIC_VERSION}', notes)
+        self.assertIn('CHANGELOG', notes)
 
 
     def test_docs_treat_v1_1_0_as_next_after_v1_0_2(self) -> None:
@@ -85,17 +101,41 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
         studio = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
         constants = Path('tategakiXTC_gui_studio_constants.py').read_text(encoding='utf-8')
         metadata = Path('tategakiXTC_release_metadata.py').read_text(encoding='utf-8')
+        import tategakiXTC_release_metadata as release_metadata
+
         self.assertIn('APP_VERSION,', studio)
         self.assertIn('from tategakiXTC_release_metadata import', constants)
-        self.assertIn("APP_VERSION = '1.3.3'", metadata)
+        self.assertIn(f"APP_VERSION = '{release_metadata.APP_VERSION}'", metadata)
+
+
+    def test_preview_high_zoom_eases_left_shift(self) -> None:
+        studio = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        self.assertIn('_last_font_preview_scaled_size', studio)
+        self.assertIn('_preview_zoom_left_bias', studio)
+        self.assertIn('_font_preview_leading_gap', studio)
+        self.assertIn('setContentsMargins(leading_gap, 0, 0, 0)', studio)
+        self.assertIn('_set_horizontal_scrollbar_to_zoom_bias_later', studio)
+        self.assertIn('v1.3.3.22: the previous 100%->200% smoothstep', studio)
+        self.assertIn('end = 3.0', studio)
+        self.assertIn('eased = t * t * t * (t * (t * 6.0 - 15.0) + 10.0)', studio)
+        self.assertIn('v1.3.3.21: use the same placement model as the font view', studio)
+        self.assertIn('_viewer_preview_leading_gap', studio)
+        self.assertIn('set_preview_leading_gap', studio)
+        self.assertIn("getattr(Qt, 'AlignLeft', None)", studio)
+        self.assertIn('set_alignment(align_left | align_top)', studio)
+        self.assertNotIn('viewer_scroll.setAlignment(Qt.AlignCenter)', studio)
+        self.assertIn('_resync_device_preview_layout_now_and_later', studio)
+        self.assertIn('v1.3.3.23: when switching from font view to device view immediately', studio)
+        self.assertIn('for delay_ms in (0, 50):', studio)
+        self.assertIn('self._resync_device_preview_layout_now_and_later()', studio)
 
     def test_v1_3_0_support_docs_exist(self) -> None:
         for relative in (
             'WINDOWS_SETUP.md',
             'FAQ.md',
             'KNOWN_LIMITATIONS.md',
-            'RELEASE_NOTES_v1_3_3.md',
-            'PUBLISH_CHECKLIST_v1_3_3.md',
+            'RELEASE_NOTES_v1_3_2.md',
+            'PUBLISH_CHECKLIST_v1_3_2.md',
         ):
             self.assertTrue(Path(relative).exists(), relative)
 

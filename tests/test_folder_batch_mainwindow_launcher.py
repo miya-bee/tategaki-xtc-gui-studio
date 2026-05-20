@@ -324,13 +324,54 @@ class FolderBatchMainWindowLauncherTests(unittest.TestCase):
         mw = FakeMainWindow()
         mw._folder_batch_running = True
         mw._folder_batch_cancel_requested = False
+        mw._folder_batch_progress_index = 2
+        mw._folder_batch_progress_total = 5
+        mw.progress_bar.setRange(0, 0)
+        mw.progress_bar.setValue(0)
 
         request_folder_batch_cancel_best_effort(mw)
 
         self.assertTrue(should_cancel_folder_batch_from_mainwindow(mw))
         self.assertFalse(mw.stop_btn.enabled)
         self.assertIn('現在のファイルが終わりしだい', mw.progress_label.text)
+        self.assertEqual(mw.busy_badge.text, '中止中')
+        self.assertEqual(mw.progress_bar.range, (0, 5))
+        self.assertEqual(mw.progress_bar.value, 2)
         self.assertTrue(any('停止要求' in line for line in mw.logs))
+
+    def test_folder_batch_inner_progress_after_cancel_does_not_restart_running_status(self) -> None:
+        mw = FakeMainWindow()
+        mw._folder_batch_running = True
+        mw._folder_batch_cancel_requested = False
+        mw._folder_batch_progress_index = 1
+        mw._folder_batch_progress_total = 3
+
+        request_folder_batch_cancel_best_effort(mw)
+        make_folder_batch_inner_progress_callback(mw)(4, 10, 'ページ生成中')
+
+        self.assertIn('中止中', mw.progress_label.text)
+        self.assertNotIn('フォルダ一括変換中', mw.progress_label.text)
+        self.assertNotIn('ページ生成中', mw.progress_label.text)
+        self.assertEqual(mw.progress_bar.range, (0, 3))
+        self.assertEqual(mw.progress_bar.value, 1)
+
+    def test_folder_batch_outer_progress_after_cancel_does_not_restart_running_status(self) -> None:
+        mw = FakeMainWindow()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'input'
+            out = Path(tmp) / 'out'
+            root.mkdir()
+            (root / 'book.txt').write_text('hello', encoding='utf-8')
+            plan = build_folder_batch_plan(root, out)
+            item = plan.items[0]
+
+            make_folder_batch_before_execute_callback(mw)(plan)
+            request_folder_batch_cancel_best_effort(mw)
+            make_folder_batch_progress_callback(mw)(1, 1, item)
+
+        self.assertIn('中止中', mw.progress_label.text)
+        self.assertNotIn('フォルダ一括変換中', mw.progress_label.text)
+        self.assertEqual(mw.busy_badge.text, '中止中')
 
     def test_folder_batch_after_execute_stopped_reports_pending_count(self) -> None:
         class Result:

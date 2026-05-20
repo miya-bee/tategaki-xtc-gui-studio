@@ -469,7 +469,7 @@ class SettingsControllerRegressionTests(unittest.TestCase):
     def test_build_preset_selection_status_message_uses_button_label(self):
         self.assertEqual(
             controller.build_preset_selection_status_message('プリセット4'),
-            'プリセット4 の詳細表示を更新しました。適用する場合は［プリセット適用］を押してください。',
+            'プリセット4 の詳細表示を更新しました。適用する場合は［プリセット読込］を押してください。',
         )
 
     def test_build_preset_apply_context_combines_selection_payload_and_status(self):

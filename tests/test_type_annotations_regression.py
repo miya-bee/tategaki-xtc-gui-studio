@@ -234,10 +234,10 @@ class TypeAnnotationRegressionTests(unittest.TestCase):
         self.assertEqual(
             worker_logic.WorkerConversionSettings.__optional_keys__,
             {
-                'target', 'font_file', 'font_size', 'ruby_size', 'line_spacing',
+                'target', 'font_file', 'font_size', 'ruby_size', 'ruby_hide', 'line_spacing',
                 'margin_t', 'margin_b', 'margin_r', 'margin_l', 'dither',
-                'threshold', 'night_mode', 'kinsoku_mode',
-                'punctuation_position_mode', 'ichi_position_mode',
+                'threshold', 'night_mode', 'kinsoku_mode', 'tatechuyoko_digit_mode',
+                'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode',
                 'lower_closing_bracket_position_mode', 'wave_dash_drawing_mode',
                 'wave_dash_position_mode', 'output_format',
                 'output_conflict', 'output_name', 'open_folder', 'width', 'height',

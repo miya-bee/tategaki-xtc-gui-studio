@@ -2306,7 +2306,7 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
                     'WINDOWS_SETUP.md (required for project release archives)',
                     'FAQ.md (required for project release archives)',
                     'KNOWN_LIMITATIONS.md (required for project release archives)',
-                    'PUBLISH_CHECKLIST_v1_3_3.md (required for project release archives)',
+                    f'PUBLISH_CHECKLIST_v{rel.PUBLIC_VERSION_TAG.replace(".", "_")}.md (required for project release archives)',
                     f'{rel.RELEASE_NOTES_FILE} (required for project release archives)',
                 ],
             )
@@ -2619,7 +2619,7 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
                 issues,
                 [
                     'tests/studio_import_helper.py (test support file is missing required regression-test markers: '
-                    'load_studio_module, _install_pyside6_stubs, tategakiXTC_gui_studio)',
+                    'load_studio_module, _install_pyside6_stubs, restore_qt_test_state, tategakiXTC_gui_studio)',
                 ],
             )
 

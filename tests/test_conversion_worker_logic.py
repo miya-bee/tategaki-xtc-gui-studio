@@ -25,6 +25,8 @@ class ConversionWorkerLogicTests(unittest.TestCase):
         self.assertEqual(args.output_format, 'xtch')
         self.assertEqual(args.punctuation_position_mode, 'standard')
         self.assertEqual(args.ichi_position_mode, 'standard')
+        self.assertEqual(args.halfwidth_digit_position_mode, 'standard')
+        self.assertEqual(args.tatechuyoko_digit_mode, '2')
         self.assertEqual(args.lower_closing_bracket_position_mode, 'standard')
         self.assertEqual(args.wave_dash_drawing_mode, 'rotate')
         self.assertEqual(args.wave_dash_position_mode, 'standard')
@@ -34,6 +36,8 @@ class ConversionWorkerLogicTests(unittest.TestCase):
             'output_format': 'xtc',
             'punctuation_position_mode': 'down_weak',
             'ichi_position_mode': 'up_strong',
+            'halfwidth_digit_position_mode': 'down_strong',
+            'tatechuyoko_digit_mode': '3文字',
             'lower_closing_bracket_position_mode': 'up_weak',
             'wave_dash_drawing_mode': 'separate',
             'wave_dash_position_mode': 'down_strong',
@@ -41,6 +45,8 @@ class ConversionWorkerLogicTests(unittest.TestCase):
 
         self.assertEqual(args.punctuation_position_mode, 'down_weak')
         self.assertEqual(args.ichi_position_mode, 'up_strong')
+        self.assertEqual(args.halfwidth_digit_position_mode, 'down_strong')
+        self.assertEqual(args.tatechuyoko_digit_mode, '3')
         self.assertEqual(args.lower_closing_bracket_position_mode, 'up_weak')
         self.assertEqual(args.wave_dash_drawing_mode, 'separate')
         self.assertEqual(args.wave_dash_position_mode, 'down_strong')
@@ -344,7 +350,7 @@ class ConversionWorkerLogicTests(unittest.TestCase):
             out_dir = root / 'exports'
             out_dir.mkdir()
             target = worker_logic.resolve_open_folder_target(src, [out_dir / 'book.xtc'])
-        self.assertEqual(target, out_dir)
+        self.assertEqual(target, root)
 
     def test_resolve_open_folder_target_falls_back_to_input_parent_for_multiple_output_dirs(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -532,8 +538,8 @@ class ConversionWorkerLogicTests(unittest.TestCase):
             single_target = worker_logic.resolve_open_folder_target(src, b'exports/book.xtc')
             listed_target = worker_logic.resolve_open_folder_target(src, [b'exports/book.xtc', bytearray(b'exports/other.xtc')])
 
-        self.assertEqual(single_target, root / 'exports')
-        self.assertEqual(listed_target, root / 'exports')
+        self.assertEqual(single_target, root)
+        self.assertEqual(listed_target, root)
 
     def test_build_conversion_summary_covers_remaining_message_branches(self):
         msg1, lines1 = worker_logic.build_conversion_summary(
@@ -640,7 +646,7 @@ class ConversionWorkerLogicTests(unittest.TestCase):
                 src,
                 [' "exports/book.xtc" ', " 'exports/other.xtc' "],
             )
-        self.assertEqual(target, root / 'exports')
+        self.assertEqual(target, root)
 
     def test_resolve_open_folder_target_strips_wrapping_quotes_from_windows_like_paths(self):
         src = Path('C:/src/book.epub')
@@ -659,7 +665,7 @@ class ConversionWorkerLogicTests(unittest.TestCase):
             out_dir = root / 'exports'
             out_dir.mkdir()
             target = worker_logic.resolve_open_folder_target(src, str(out_dir / 'book.xtc'))
-        self.assertEqual(target, out_dir)
+        self.assertEqual(target, root)
 
     def test_resolve_open_folder_target_accepts_single_pathlike_object(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -669,7 +675,7 @@ class ConversionWorkerLogicTests(unittest.TestCase):
             out_dir = root / 'exports'
             out_dir.mkdir()
             target = worker_logic.resolve_open_folder_target(src, PurePosixPath(str(out_dir / 'book.xtc')))
-        self.assertEqual(target, out_dir)
+        self.assertEqual(target, root)
 
     def test_resolve_open_folder_target_normalizes_parent_dot_segments(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -683,7 +689,7 @@ class ConversionWorkerLogicTests(unittest.TestCase):
                 src,
                 [out_dir / 'one.xtc', nested / '..' / 'two.xtc'],
             )
-        self.assertEqual(target, out_dir)
+        self.assertEqual(target, root)
 
     def test_resolve_open_folder_target_normalizes_windows_like_parent_keys(self):
         src = Path('C:/src/book.epub')
@@ -711,6 +717,18 @@ class ConversionWorkerLogicTests(unittest.TestCase):
             target = worker_logic.resolve_open_folder_target(src, ['exports/one.xtc', 'exports/two.xtc'])
         self.assertEqual(target, out_dir)
 
+    def test_resolve_open_folder_target_for_single_file_ignores_external_output_parent(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            src_dir = root / 'source'
+            src_dir.mkdir()
+            src = src_dir / 'book.epub'
+            src.write_text('x', encoding='utf-8')
+            out_dir = root / 'downloads'
+            out_dir.mkdir()
+            target = worker_logic.resolve_open_folder_target(src, [out_dir / 'book.xtc'])
+        self.assertEqual(target, src_dir)
+
 
 
     def test_resolve_open_folder_target_uses_input_base_for_relative_windows_subdirs(self):
@@ -719,7 +737,7 @@ class ConversionWorkerLogicTests(unittest.TestCase):
             src = root / 'book.epub'
             src.write_text('x', encoding='utf-8')
             target = worker_logic.resolve_open_folder_target(src, [r'exports\one.xtc', r'exports\two.xtc'])
-        self.assertEqual(target, root / 'exports')
+        self.assertEqual(target, root)
     def test_normalize_path_match_key_casefolds_windows_like_paths_without_host_os_help(self):
         self.assertEqual(
             worker_logic._normalize_path_match_key(r'C:\Exports\Result.XTC'),
@@ -742,7 +760,7 @@ class ConversionWorkerLogicTests(unittest.TestCase):
                 src,
                 [r'exports/sub\one.xtc', r'exports\sub/two.xtc'],
             )
-        self.assertEqual(target, root / 'exports' / 'sub')
+        self.assertEqual(target, root)
 
     def test_build_conversion_summary_decodes_bytes_inside_error_mappings(self):
         msg, summary_lines = worker_logic.build_conversion_summary(

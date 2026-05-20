@@ -622,6 +622,30 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertNotIn('波線描画:', summary)
         self.assertNotIn('波線位置:', summary)
 
+
+    def test_build_preset_summary_text_uses_top_bottom_left_right_margin_order(self):
+        summary = logic.build_preset_summary_text(
+            {
+                'button_text': 'プリセット',
+                'profile': 'x4',
+                'output_format': 'xtc',
+                'font_size': 26,
+                'ruby_size': 12,
+                'line_spacing': 44,
+                'margin_t': 1,
+                'margin_b': 2,
+                'margin_l': 3,
+                'margin_r': 4,
+            },
+            font_text='NotoSansJP-Regular.ttf',
+            device_profile_keys={'x4'},
+            kinsoku_mode_labels={'standard': '標準'},
+            output_format_labels={'xtc': 'XTC'},
+            include_name_line=False,
+        )
+        self.assertIn('余白: 上 1 下 2 左 3 右 4', summary)
+        self.assertNotIn('余白: 上 1 下 2 右 4 左 3', summary)
+
     def test_build_preset_summary_text_for_dialog(self):
         preset = {
             'button_text': 'プリセット4',
@@ -651,7 +675,7 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         )
         self.assertIn('プリセット4 / 標準', summary)
         self.assertIn('機種: X4 / 出力形式: XTCH / 本文: 26 / ルビ: 12 / 行間: 41', summary)
-        self.assertIn('余白: 上 12 下 14 右 12 左 12 / 白黒反転: OFF / ディザ: OFF / しきい値: 128 / 禁則: 標準', summary)
+        self.assertIn('余白: 上 12 下 14 左 12 右 12 / 白黒反転: OFF / ディザ: OFF / しきい値: 128 / 禁則: 標準', summary)
         self.assertIn('フォント: NotoSerifJP-Medium.ttf', summary)
         self.assertNotIn('波線描画:', summary)
         self.assertNotIn('波線位置:', summary)
