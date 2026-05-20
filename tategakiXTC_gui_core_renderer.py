@@ -92,10 +92,39 @@ def _draw_glyph_position_mode(draw: Any, attr_name: str) -> str:
     return _glyph_position_mode(getattr(draw, attr_name, 'standard'))
 
 
+@lru_cache(maxsize=32)
+def _cached_tatechuyoko_digit_mode(value: str) -> str:
+    normalized = str(value or '2').strip().lower()
+    compact = normalized.replace(' ', '').replace('　', '').replace('-', '_')
+    aliases = {
+        '4': {'4', '4文字', '4桁', 'four', 'max4'},
+        '3': {'3', '3文字', '3桁', 'three', 'max3'},
+        '2': {'2', '2文字', '2桁', 'two', 'max2'},
+        'none': {'none', 'no', 'off', '0', '無し', 'なし', '無効'},
+    }
+    for key, values in aliases.items():
+        if compact in values:
+            return key
+    return compact if compact in {'4', '3', '2', 'none'} else '2'
+
+
+def _normalize_tatechuyoko_digit_mode(value: object) -> str:
+    return _cached_tatechuyoko_digit_mode(_mode_cache_key(value, '2'))
+
+
+def _tatechuyoko_digit_max_len(mode: object) -> int:
+    normalized = _normalize_tatechuyoko_digit_mode(mode)
+    if normalized == 'none':
+        return 0
+    return int(normalized)
+
+
 def _apply_draw_glyph_position_modes(draw: Any, args: Any) -> Any:
     try:
         setattr(draw, '_tategaki_punctuation_position_mode', _glyph_position_mode(getattr(args, 'punctuation_position_mode', 'standard')))
         setattr(draw, '_tategaki_ichi_position_mode', _glyph_position_mode(getattr(args, 'ichi_position_mode', 'standard')))
+        setattr(draw, '_tategaki_halfwidth_digit_position_mode', _glyph_position_mode(getattr(args, 'halfwidth_digit_position_mode', 'standard')))
+        setattr(draw, '_tategaki_tatechuyoko_digit_mode', _normalize_tatechuyoko_digit_mode(getattr(args, 'tatechuyoko_digit_mode', '2')))
         setattr(draw, '_tategaki_lower_closing_bracket_position_mode', _glyph_position_mode(getattr(args, 'lower_closing_bracket_position_mode', 'standard')))
         setattr(draw, '_tategaki_wave_dash_drawing_mode', _wave_dash_drawing_mode(getattr(args, 'wave_dash_drawing_mode', 'rotate')))
         setattr(draw, '_tategaki_wave_dash_position_mode', _wave_dash_position_mode(getattr(args, 'wave_dash_position_mode', 'standard')))
@@ -175,6 +204,37 @@ def _ichi_extra_y_for_mode(f_size: int, position_mode: str) -> int:
         return -_ichi_adjusted_raise(f_size)
     return 0
 
+
+
+@lru_cache(maxsize=64)
+def _halfwidth_digit_adjusted_drop(f_size: int, *, weak: bool = False) -> int:
+    # v1.3.3.26: 半角数字だけ、フォント差に対する縦位置補正を少し強める。
+    # 句読点 / 漢数字 一 / 下鍵括弧 / 波線の補正量は変更しない。
+    factor = 0.14 if weak else 0.28
+    return max(3 if weak else 4, int(round(f_size * factor)))
+
+
+@lru_cache(maxsize=64)
+def _halfwidth_digit_extra_y_for_mode(f_size: int, position_mode: str) -> int:
+    mode = _glyph_position_mode(position_mode)
+    if mode == 'down_strong':
+        return _halfwidth_digit_adjusted_drop(f_size)
+    if mode == 'down_weak':
+        return _halfwidth_digit_adjusted_drop(f_size, weak=True)
+    if mode == 'up_weak':
+        return -_halfwidth_digit_adjusted_drop(f_size, weak=True)
+    if mode == 'up_strong':
+        return -_halfwidth_digit_adjusted_drop(f_size)
+    return 0
+
+
+def _is_single_halfwidth_digit(token: str) -> bool:
+    return isinstance(token, str) and len(token) == 1 and token.isascii() and token.isdigit()
+
+
+def _is_halfwidth_digit_tatechuyoko_token(token: str) -> bool:
+    return isinstance(token, str) and bool(token) and token.isascii() and token.isdigit()
+
 @lru_cache(maxsize=64)
 def _small_kana_offset(f_size: int) -> tuple[int, int]:
     off_x = max(1, int(round(f_size * 0.08)))
@@ -184,11 +244,11 @@ def _small_kana_offset(f_size: int) -> tuple[int, int]:
 
 @lru_cache(maxsize=64)
 def _kagikakko_extra_y(original_char: str, f_size: int) -> int:
-    if original_char in {'「', '『', '﹁', '﹃'}:
+    if original_char in {'「', '『'}:
         # sweep317: sweep316 ではフォントによって開き鉤括弧が下寄りに
         # 見えるケースがあったため、下げ量を少し弱める。
         return max(1, int(round(f_size * 0.18)))
-    if original_char in {'」', '』', '﹂', '﹄'}:
+    if original_char in {'」', '』'}:
         # sweep341: 閉じ鉤括弧は一部フォントで水平画が下に沈むため、
         # 通常描画側も少し強めに上げる。ぶら下げ時の bbox 補正とは
         # 独立させ、通常位置の見え方だけを微調整する。
@@ -253,22 +313,33 @@ def _side_line_horizontal_extent(font_size: int, line_kind: str, width: int) -> 
 
 
 @lru_cache(maxsize=512)
+def _is_ascii_rotated_bracket_char(char: str) -> bool:
+    return len(char) == 1 and char in ASCII_ROTATED_BRACKET_CHARS
+
+
+def _is_ascii_center_glyph_char(char: str) -> bool:
+    return len(char) == 1 and char.isascii() and (not char.isspace())
+
+
+@lru_cache(maxsize=512)
 def _classify_tate_draw_char(char: str) -> str:
     if not char:
         return 'default'
-    if len(char) == 2:
+    if len(char) == 2 and char in DOUBLE_PUNCT_TOKENS and (not char.isascii()):
         return 'double_punct'
     if char == '一':
         return 'ichi'
     if char in {'ー', '－'}:
         return 'long_vowel'
-    if char in HORIZONTAL_BRACKET_ORIGINAL_CHARS or char in LOWER_CLOSING_KAGIKAKKO_POSITION_CHARS:
+    if _is_ascii_rotated_bracket_char(char):
+        return 'ascii_rotated_bracket'
+    if char in HORIZONTAL_BRACKET_ORIGINAL_CHARS:
         return 'horizontal_bracket'
     if char in {'、', '。', '，', '．', '､', '｡'}:
         return 'punctuation'
     if char in SMALL_KANA_CHARS:
         return 'small_kana'
-    if len(char) == 1 and char.isascii() and (not char.isspace()) and char.isalnum():
+    if _is_ascii_center_glyph_char(char):
         return 'ascii_center'
     return 'default'
 
@@ -762,6 +833,8 @@ def _should_rotate_to_horizontal(font: Any, char: str, *, is_bold: bool = False,
         rotation_cache[cache_key] = result
     return result
 
+
+ASCII_ROTATED_BRACKET_CHARS = frozenset({'(', ')', '[', ']', '{', '}', '<', '>'})
 
 HORIZONTAL_BRACKET_ORIGINAL_CHARS = frozenset({
     '「', '」', '『', '』', '【', '】', '〈', '〉', '［', '］', '[', ']',
@@ -1351,13 +1424,16 @@ def draw_ink_centered_glyph(
 def _is_tatechuyoko_token(token: str) -> bool:
     if not token or len(token) < 2 or len(token) > 4:
         return False
-    if not token.isascii() or not token.isalnum():
+    text = str(token)
+    return text.isascii() and text.isdigit()
+
+
+def _is_tatechuyoko_token_for_digit_mode(token: str, mode: object = '4') -> bool:
+    text = str(token)
+    if not _is_tatechuyoko_token(text):
         return False
-    if len(token) == 2:
-        return True
-    if len(token) == 3:
-        return True
-    return token.isdigit()
+    max_len = _tatechuyoko_digit_max_len(mode)
+    return max_len >= 2 and len(text) <= max_len
 
 
 @lru_cache(maxsize=16)
@@ -1594,14 +1670,15 @@ def draw_tatechuyoko(draw: Any, text: str, pos_tuple: tuple[int, int], font: Any
 
 
 def _should_center_ascii_glyph(char: str) -> bool:
-    return _classify_tate_draw_char(char) == 'ascii_center'
+    return _classify_tate_draw_char(char) in {'ascii_center', 'ascii_rotated_bracket'}
 
 
-def _tokenize_vertical_text_impl(text: str) -> list[str]:
+def _tokenize_vertical_text_impl(text: str, tatechuyoko_digit_mode: object = '4') -> list[str]:
     tokens: list[str] = []
+    digit_mode = _normalize_tatechuyoko_digit_mode(tatechuyoko_digit_mode)
     i = 0
     while i < len(text):
-        if i + 1 < len(text) and text[i] in '！？!?' and text[i + 1] in '！？!?':
+        if i + 1 < len(text) and text[i] in '！？' and text[i + 1] in '！？':
             token = text[i:i + 2]
             if token in DOUBLE_PUNCT_TOKENS:
                 tokens.append(token)
@@ -1612,7 +1689,7 @@ def _tokenize_vertical_text_impl(text: str) -> list[str]:
             while j < len(text) and text[j].isascii() and text[j].isalnum():
                 j += 1
             run = text[i:j]
-            if _is_tatechuyoko_token(run):
+            if _is_tatechuyoko_token_for_digit_mode(run, digit_mode):
                 tokens.append(run)
             else:
                 tokens.extend(list(run))
@@ -1623,13 +1700,13 @@ def _tokenize_vertical_text_impl(text: str) -> list[str]:
     return tokens
 
 
-@lru_cache(maxsize=512)
-def _tokenize_vertical_text_cached(text: str) -> tuple[str, ...]:
-    return tuple(_tokenize_vertical_text_impl(text))
+@lru_cache(maxsize=1024)
+def _tokenize_vertical_text_cached(text: str, tatechuyoko_digit_mode: object = '4') -> tuple[str, ...]:
+    return tuple(_tokenize_vertical_text_impl(text, tatechuyoko_digit_mode))
 
 
-def _tokenize_vertical_text(text: str) -> list[str]:
-    return list(_tokenize_vertical_text_cached(str(text or '')))
+def _tokenize_vertical_text(text: str, tatechuyoko_digit_mode: object = '4') -> list[str]:
+    return list(_tokenize_vertical_text_cached(str(text or ''), tatechuyoko_digit_mode))
 
 
 def _is_line_head_forbidden(token: str) -> bool:
@@ -2790,8 +2867,12 @@ def draw_char_tate(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, 
         draw_vertical_wave_dash(draw, char, (curr_x, curr_y), font, f_size, is_bold=is_bold, is_italic=is_italic)
         return
 
-    if _is_tatechuyoko_token(char):
-        draw_tatechuyoko(draw, char, (curr_x, curr_y), font, f_size, is_bold=is_bold, is_italic=is_italic)
+    if _is_tatechuyoko_token_for_digit_mode(char, getattr(draw, '_tategaki_tatechuyoko_digit_mode', '4')):
+        extra_y = 0
+        if (not ruby_mode) and _is_halfwidth_digit_tatechuyoko_token(char):
+            digit_position_mode = _draw_glyph_position_mode(draw, '_tategaki_halfwidth_digit_position_mode')
+            extra_y = _halfwidth_digit_extra_y_for_mode(f_size, digit_position_mode)
+        draw_tatechuyoko(draw, char, (curr_x, curr_y + extra_y), font, f_size, is_bold=is_bold, is_italic=is_italic)
         return
 
     original_char = char
@@ -2825,9 +2906,20 @@ def draw_char_tate(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, 
         return
 
     if draw_kind == 'ascii_center':
+        extra_y = 0
+        if (not ruby_mode) and _is_single_halfwidth_digit(original_char):
+            digit_position_mode = _draw_glyph_position_mode(draw, '_tategaki_halfwidth_digit_position_mode')
+            extra_y = _halfwidth_digit_extra_y_for_mode(f_size, digit_position_mode)
+        draw_centered(
+            draw, original_char, (curr_x, curr_y + extra_y), font, f_size,
+            is_bold=is_bold, align_to_text_flow=False, is_italic=is_italic,
+        )
+        return
+
+    if draw_kind == 'ascii_rotated_bracket':
         draw_centered(
             draw, original_char, (curr_x, curr_y), font, f_size,
-            is_bold=is_bold, align_to_text_flow=False, is_italic=is_italic,
+            is_bold=is_bold, rotate_degrees=270, align_to_text_flow=False, is_italic=is_italic,
         )
         return
 
@@ -3309,6 +3401,36 @@ def _mapping_get_bool(mapping: Mapping[str, object], key: str, default: bool) ->
 _PREVIEW_BUNDLE_CACHE: OrderedDict[tuple[object, ...], dict[str, object]] = OrderedDict()
 
 
+
+def _should_hide_ruby(args: object) -> bool:
+    """Return True when the render input should omit ruby metadata."""
+    return bool(getattr(args, 'ruby_hide', False))
+
+
+def _initial_text_column_x(args: ConversionArgs) -> int:
+    """Return the rightmost base-text column x coordinate.
+
+    Normal rendering reserves a ruby lane to the right of the base text.  When
+    ruby_hide is enabled, ruby metadata is already stripped before drawing, so
+    the first base-text column can safely use that space instead of leaving a
+    blank strip on the page's right side.
+    """
+    ruby_lane_width = 0 if _should_hide_ruby(args) else (args.ruby_size + 4)
+    return args.width - args.font_size - ruby_lane_width - args.margin_r
+
+
+def _runs_without_ruby(runs: Sequence[TextRun]) -> list[TextRun]:
+    """Return a shallow run copy with ruby metadata cleared, preserving base text."""
+    cleaned: list[TextRun] = []
+    for run in runs:
+        if not isinstance(run, Mapping):
+            continue
+        copied = dict(run)
+        copied['ruby'] = ''
+        cleaned.append(cast(TextRun, copied))
+    return cleaned
+
+
 def _preview_path_signature(path: Path) -> tuple[str, int, int]:
     try:
         stat = path.stat()
@@ -3325,10 +3447,11 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
     dither = _mapping_get_bool(args, 'dither', False)
     threshold = _mapping_get_int(args, 'threshold', 128)
     night_mode = _mapping_get_bool(args, 'night_mode', False)
+    ruby_hide = _mapping_get_bool(args, 'ruby_hide', False)
     output_format = _normalize_output_format(args.get('output_format', 'xtc'))
     max_pages = max(1, _mapping_get_int(args, 'max_pages', PREVIEW_PAGE_LIMIT))
 
-    common = (mode, width, height, dither, threshold, night_mode, output_format, max_pages)
+    common = (mode, width, height, dither, threshold, night_mode, ruby_hide, output_format, max_pages)
     if mode == 'image':
         file_b64 = args.get('file_b64')
         digest = hashlib.sha1(file_b64.encode('utf-8')).hexdigest() if isinstance(file_b64, str) and file_b64 else '<default-gradient>'
@@ -3347,6 +3470,8 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
         _normalize_kinsoku_mode(args.get('kinsoku_mode', 'standard')),
         _glyph_position_mode(args.get('punctuation_position_mode', 'standard')),
         _glyph_position_mode(args.get('ichi_position_mode', 'standard')),
+        _glyph_position_mode(args.get('halfwidth_digit_position_mode', 'standard')),
+        _normalize_tatechuyoko_digit_mode(args.get('tatechuyoko_digit_mode', '2')),
         _glyph_position_mode(args.get('lower_closing_bracket_position_mode', 'standard')),
         _wave_dash_drawing_mode(args.get('wave_dash_drawing_mode', 'rotate')),
         _wave_dash_position_mode(args.get('wave_dash_position_mode', 'standard')),
@@ -3493,6 +3618,7 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
                 height=h,
                 font_size=_mapping_get_int(_args, 'font_size', 26),
                 ruby_size=_mapping_get_int(_args, 'ruby_size', 12),
+                ruby_hide=_mapping_get_bool(_args, 'ruby_hide', False),
                 line_spacing=_mapping_get_int(_args, 'line_spacing', 44),
                 margin_t=_mapping_get_int(_args, 'margin_t', 12),
                 margin_b=_mapping_get_int(_args, 'margin_b', 14),
@@ -3504,6 +3630,8 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
                 kinsoku_mode=kinsoku_mode,
                 punctuation_position_mode=_glyph_position_mode(_args.get('punctuation_position_mode', 'standard')),
                 ichi_position_mode=_glyph_position_mode(_args.get('ichi_position_mode', 'standard')),
+                halfwidth_digit_position_mode=_glyph_position_mode(_args.get('halfwidth_digit_position_mode', 'standard')),
+                tatechuyoko_digit_mode=_normalize_tatechuyoko_digit_mode(_args.get('tatechuyoko_digit_mode', '2')),
                 lower_closing_bracket_position_mode=_glyph_position_mode(_args.get('lower_closing_bracket_position_mode', 'standard')),
                 wave_dash_drawing_mode=_wave_dash_drawing_mode(_args.get('wave_dash_drawing_mode', 'rotate')),
                 wave_dash_position_mode=_wave_dash_position_mode(_args.get('wave_dash_position_mode', 'standard')),
@@ -3873,7 +4001,7 @@ class _VerticalPageRenderer:
         self.img = Image.new('L', (self.args.width, self.args.height), 255)
         self.draw = _apply_draw_glyph_position_modes(create_image_draw(self.img), self.args)
         self._page_draw_cache.clear()
-        self.curr_x = self.args.width - self.args.font_size - (self.args.ruby_size + 4) - self.args.margin_r
+        self.curr_x = _initial_text_column_x(self.args)
         self.curr_y = self.args.margin_t
         self.has_drawn_on_page = False
 
@@ -5111,12 +5239,13 @@ class _VerticalPageRenderer:
         wrap_indent_step = self._indent_step_height(wrap_indent_chars)
         build_single_hints = _build_single_token_vertical_layout_hints
         tokenize_vertical_text = _tokenize_vertical_text_cached
+        tatechuyoko_digit_mode = _normalize_tatechuyoko_digit_mode(getattr(self.args, 'tatechuyoko_digit_mode', '2'))
         build_layout_hints = _build_vertical_layout_hints
         if len(text) == 1:
             tokens = (text,)
             layout_hints = build_single_hints(text)
         else:
-            tokens = tokenize_vertical_text(text)
+            tokens = tokenize_vertical_text(text, tatechuyoko_digit_mode)
             layout_hints = build_layout_hints(tokens)
         capture_mask = (
             (4 if segment_infos is not None else 0)
@@ -5293,6 +5422,7 @@ class _VerticalPageRenderer:
         draw_text_run_overlay_only = self._draw_text_run_overlay_only
         build_single_hints = _build_single_token_vertical_layout_hints
         tokenize_vertical_text = _tokenize_vertical_text_cached
+        tatechuyoko_digit_mode = _normalize_tatechuyoko_digit_mode(getattr(self.args, 'tatechuyoko_digit_mode', '2'))
         build_layout_hints_cached = _build_vertical_layout_hints_cached
         draw_split_ruby_groups = self.draw_split_ruby_groups
         draw_emphasis_marks_cells = self.draw_emphasis_marks_cells
@@ -5308,7 +5438,7 @@ class _VerticalPageRenderer:
         overlay_cells: list[OverlayCell]
         if repeated_medium_texts:
             for repeated_text in repeated_medium_texts:
-                repeated_tokens = tokenize_vertical_text(repeated_text)
+                repeated_tokens = tokenize_vertical_text(repeated_text, tatechuyoko_digit_mode)
                 local_run_layout_cache_set(repeated_text, (repeated_tokens, build_layout_hints_cached(repeated_tokens)))
         for run in runs or ():
             raise_if_cancelled(should_cancel)
@@ -5344,7 +5474,7 @@ class _VerticalPageRenderer:
                         tokens = (seg_text,)
                         layout_hints = build_single_hints(seg_text)
                     else:
-                        tokens = tokenize_vertical_text(seg_text)
+                        tokens = tokenize_vertical_text(seg_text, tatechuyoko_digit_mode)
                         layout_hints = build_layout_hints_cached(tokens)
                     local_run_layout_cache_set(seg_text, (tokens, layout_hints))
                 else:
@@ -5929,7 +6059,8 @@ def _render_text_blocks_to_page_entries(blocks: Sequence[TextBlock], font_value:
 
     def draw_runs(runs: Sequence[TextRun], wrap_indent_chars: int = 0) -> None:
         _raise_if_cancelled(should_cancel)
-        renderer.draw_runs(runs, default_font=font, wrap_indent_chars=wrap_indent_chars)
+        render_runs = _runs_without_ruby(runs) if _should_hide_ruby(args) else runs
+        renderer.draw_runs(render_runs, default_font=font, wrap_indent_chars=wrap_indent_chars)
 
     has_renderable_after_index = [False] * (len(blocks) + 1)
     seen_renderable = False

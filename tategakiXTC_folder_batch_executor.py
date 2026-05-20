@@ -50,6 +50,10 @@ class FolderBatchExecutionItem:
     def failed(self) -> bool:
         return self.status == 'error'
 
+    @property
+    def cancelled(self) -> bool:
+        return self.status == 'cancelled'
+
 
 @dataclass(frozen=True)
 class FolderBatchExecutionResult:
@@ -68,6 +72,10 @@ class FolderBatchExecutionResult:
     @property
     def failed_count(self) -> int:
         return sum(1 for item in self.items if item.failed)
+
+    @property
+    def cancelled_count(self) -> int:
+        return sum(1 for item in self.items if item.cancelled)
 
     @property
     def attempted_count(self) -> int:
@@ -109,6 +117,10 @@ class FolderBatchExecutionResult:
     def failed_items(self) -> tuple[FolderBatchExecutionItem, ...]:
         return tuple(item for item in self.items if item.failed)
 
+    @property
+    def cancelled_items(self) -> tuple[FolderBatchExecutionItem, ...]:
+        return tuple(item for item in self.items if item.cancelled)
+
     def failure_summary_lines(
         self,
         *,
@@ -147,8 +159,39 @@ class FolderBatchExecutionResult:
         return lines
 
     def summary_lines(self) -> list[str]:
+        if self.stopped:
+            lines = [
+                'フォルダ一括変換を中止しました。',
+                f'保存済み: {self.success_count} 件',
+                f'スキップ: {self.skipped_count} 件',
+                f'失敗: {self.failed_count} 件',
+                f'処理済み: {self.processed_count} / {self.plan.total_count} 件',
+                f'未処理: {self.stopped_pending_count} 件',
+                f'出力先: {self.plan.output_root}',
+            ]
+            if self.cancelled_items:
+                cancelled = self.cancelled_items[0]
+                lines.append(f'中止したファイル: {cancelled.relative_source_path}')
+            if self.success_count:
+                if self.success_count == 1:
+                    first_success = next((item for item in self.items if item.success and item.output_path is not None), None)
+                    if first_success is not None and first_success.output_path is not None:
+                        lines.append(f'保存済みファイル: {Path(first_success.output_path).name}')
+                else:
+                    lines.append(f'保存済みファイル: {self.success_count} 件')
+                    if self.plan.include_subfolders and self.plan.preserve_structure:
+                        lines.append('サブフォルダ構造を保持して保存済みです。')
+            lines.append('停止要求により、現在のファイル完了後に一括変換を停止しました。')
+            lines.append('以降の未処理ファイルは変換していません。')
+            if self.skipped_count:
+                lines.append('変換前に判定済みのスキップ項目は集計に含めています。')
+            if self.failed_count:
+                lines.extend(self.failure_summary_lines())
+                lines.append('失敗したファイルはログ欄の [ERROR] 行を確認してください。')
+            return lines
+
         lines = [
-            'フォルダ一括変換が完了しました。' if not self.stopped else 'フォルダ一括変換を停止しました。',
+            'フォルダ一括変換が完了しました。',
             f'成功: {self.success_count} 件',
             f'スキップ: {self.skipped_count} 件',
             f'失敗: {self.failed_count} 件',
@@ -166,11 +209,21 @@ class FolderBatchExecutionResult:
             skip_reasons.append(f'同名衝突 {self.duplicate_skip_count} 件')
         if skip_reasons:
             lines.append('スキップ内訳: ' + ' / '.join(skip_reasons))
-        if self.stopped:
-            lines.append(f'未処理: {self.stopped_pending_count} 件')
-            lines.append('停止要求により、現在のファイル完了後に一括変換を停止しました。')
-            if self.skipped_count:
-                lines.append('変換前に判定済みのスキップ項目は集計に含めています。')
+        if self.success_count == 1:
+            first_success = next((item for item in self.items if item.success and item.output_path is not None), None)
+            lines.append('完了確認: 単独ファイルを保存しました。')
+            if first_success is not None and first_success.output_path is not None:
+                lines.append(f'出力ファイル: {Path(first_success.output_path).name}')
+        elif self.success_count > 1:
+            lines.append(f'完了確認: {self.success_count}件のファイルを保存しました。')
+            if self.plan.include_subfolders and self.plan.preserve_structure:
+                lines.append('サブフォルダ確認: フォルダ構造を保持して保存しました。')
+            elif self.plan.include_subfolders:
+                lines.append('サブフォルダ確認: サブフォルダ内の対象もまとめて保存しました。')
+            else:
+                lines.append('確認対象: 複数ファイルをまとめて保存しました。')
+        if self.success_count:
+            lines.append('次の操作: 出力先フォルダを開くか、同じ設定で別フォルダを変換できます。')
         if self.failed_count:
             lines.extend(self.failure_summary_lines())
             lines.append('失敗したファイルはログ欄の [ERROR] 行を確認してください。')
@@ -211,6 +264,14 @@ def _compact_failure_message(message: object, *, max_chars: int = 120) -> str:
     if len(text) <= limit:
         return text
     return text[: max(1, limit - 1)].rstrip() + '…'
+
+
+def _is_cancellation_exception(exc: BaseException) -> bool:
+    cls_name = exc.__class__.__name__.lower()
+    if 'cancel' in cls_name or 'cancelled' in cls_name:
+        return True
+    message = str(exc).strip()
+    return '停止' in message or '中止' in message or 'cancel' in message.lower()
 
 
 def execute_folder_batch_plan(
@@ -266,8 +327,26 @@ def execute_folder_batch_plan(
         try:
             item.output_path.parent.mkdir(parents=True, exist_ok=True)
             converter(item.source_path, item.output_path, item)
-        except Exception as exc:  # intentionally continue with the next file
+        except Exception as exc:  # intentionally continue with the next file unless it was cancelled
             message = _safe_message(exc)
+            if _is_cancellation_exception(exc):
+                stopped = True
+                result_items.append(
+                    FolderBatchExecutionItem(
+                        source_path=item.source_path,
+                        desired_output_path=item.desired_output_path,
+                        output_path=item.output_path,
+                        relative_source_path=item.relative_source_path,
+                        status='cancelled',
+                        message=message or '中止しました。',
+                        existing_output=item.existing_output,
+                        renamed=item.renamed,
+                        overwritten=item.overwritten,
+                        duplicate_in_batch=item.duplicate_in_batch,
+                    )
+                )
+                _emit_log(log_cb, f'[STOP] {item.relative_source_path} — {message or "中止しました。"}')
+                break
             result_items.append(
                 FolderBatchExecutionItem(
                     source_path=item.source_path,

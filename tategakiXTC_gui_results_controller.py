@@ -153,6 +153,92 @@ def build_results_entries(paths: object) -> list[tuple[str, str]]:
 
 
 
+
+def _result_parent_display_text(raw: object) -> str:
+    path_text = worker_logic._normalized_path_text(raw).strip()
+    if not path_text:
+        return ''
+    try:
+        if worker_logic._is_windows_like_path(path_text):
+            parent = ntpath.dirname(ntpath.normpath(path_text))
+            return parent or ''
+        return str(Path(path_text).parent) if str(Path(path_text).parent) != '.' else ''
+    except Exception:
+        return ''
+
+
+def _unique_result_parent_display_texts(paths: Sequence[object]) -> list[str]:
+    parents: list[str] = []
+    seen: set[str] = set()
+    for raw in paths:
+        parent = _result_parent_display_text(raw).strip()
+        if not parent:
+            continue
+        key = normalize_results_path_key(parent) or parent.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        parents.append(parent)
+    return parents
+
+
+def build_conversion_completion_guidance_lines(
+    paths: object,
+    *,
+    open_folder_target: object = '',
+    stopped: object = False,
+) -> list[str]:
+    """Return user-facing completion guidance for converted result paths.
+
+    The normal summary lines say how many files were saved.  These lines add the
+    post-conversion orientation: where the files are, how to inspect them, and
+    what to do next.  Keep this helper Qt-free so single-file, folder, and
+    subfolder-preserving cases can be regression-tested cheaply.
+    """
+
+    raw_paths = coerce_result_path_list(paths)
+    if not raw_paths:
+        if bool(stopped):
+            return ['確認: 途中停止のため保存ファイルはありません。ログ欄を確認してください。']
+        return []
+
+    parents = _unique_result_parent_display_texts(raw_paths)
+    target_text = worker_logic._normalized_path_text(open_folder_target).strip()
+    lines: list[str] = ['【変換完了】保存結果を確認できます。']
+    count = len(raw_paths)
+    if count == 1:
+        lines.append('種類: 単独ファイル変換')
+        display_name = studio_logic.build_result_display_name(raw_paths[0])
+        if display_name:
+            lines.append(f'出力ファイル: {display_name}')
+        destination = parents[0] if parents else target_text
+        if destination:
+            lines.append(f'保存先: {destination}')
+    else:
+        lines.append(f'保存件数: {count}件')
+        if len(parents) == 1:
+            lines.append('種類: 複数ファイル変換')
+            lines.append(f'保存先: {parents[0]}')
+            lines.append('確認対象: 下の一覧からファイルを選べます。')
+        else:
+            lines.append('種類: サブフォルダ込み一括変換')
+            lines.append(f'保存先: 複数フォルダ（{len(parents)}か所）')
+            if target_text:
+                lines.append(f'基準フォルダ: {target_text}')
+            lines.append('確認対象: フォルダ構造を保った保存結果を、下の一覧から選べます。')
+    lines.append('操作: ［保存先を開く］で出力フォルダを開けます。')
+    lines.append('操作: 一覧のファイルを選び［実機ビューで確認］またはダブルクリックで確認できます。')
+    return studio_logic.merge_unique_message_values([], lines)
+
+
+def build_completion_summary_text(lines: object, entry_count: int = 0) -> str:
+    normalized = coerce_summary_line_list(lines)
+    if not normalized and entry_count > 0:
+        normalized = ['【変換完了】保存結果を確認できます。', f'保存ファイル: {entry_count} 件']
+    if not normalized:
+        return ''
+    return '\n'.join(normalized)
+
 def build_results_view_state(paths: object, summary_lines: object = None) -> dict[str, Any]:
     entries = build_results_entries(paths)
     normalized_summary_lines = coerce_summary_line_list(summary_lines)

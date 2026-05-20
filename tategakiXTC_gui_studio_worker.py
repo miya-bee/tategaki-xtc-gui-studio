@@ -422,6 +422,11 @@ class ConversionWorker(QObject):
         postprocess_warnings: list[str] = []
         open_folder_target = ''
         open_folder_requested = worker_logic._bool_config_value(cfg, 'open_folder', True) and bool(converted)
+        if stopped and not converted:
+            try:
+                open_folder_target = str(tp if tp.is_dir() else tp.parent)
+            except Exception:
+                open_folder_target = ''
         if open_folder_requested:
             try:
                 tgt = self._resolve_open_folder_target(tp, converted)

@@ -303,6 +303,8 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
         if archive_path.suffix.lower() in ('.zip', '.cbz'):
             try:
                 direct_zip_infos, traversal_skipped = _safe_zip_archive_image_infos(archive_path, should_cancel=should_cancel)
+            except ConversionCancelled:
+                raise
             except Exception:
                 direct_zip_infos = None
                 traversal_skipped = 0
@@ -330,6 +332,8 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
                                 if first_exc is None:
                                     first_exc = ValueError(f'cannot identify image file: {display_name}')
                                 conversion_fail_count += 1
+                        except ConversionCancelled:
+                            raise
                         except Exception as e:
                             LOGGER.warning('画像スキップ (%s): %s', display_name, e)
                             if first_exc is None:
@@ -337,6 +341,8 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
                             last_exc = e
                             conversion_fail_count += 1
                             continue
+            except ConversionCancelled:
+                raise
             except Exception as e:
                 report = build_conversion_error_report(archive_path, e, stage='アーカイブ展開')
                 raise RuntimeError(report['display']) from e
@@ -345,6 +351,8 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
                 tmpdir_path = Path(tmpdir)
                 try:
                     archive_document = _load_archive_input_document_compat(archive_path, tmpdir_path, should_cancel=should_cancel)
+                except ConversionCancelled:
+                    raise
                 except Exception as e:
                     report = build_conversion_error_report(archive_path, e, stage='アーカイブ展開')
                     raise RuntimeError(report['display']) from e
@@ -380,6 +388,8 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
                             if first_exc is None:
                                 first_exc = ValueError(f'cannot identify image file: {img_p.name}')
                             conversion_fail_count += 1
+                    except ConversionCancelled:
+                        raise
                     except Exception as e:
                         LOGGER.warning('画像スキップ (%s): %s', img_p.name, e)
                         if first_exc is None:

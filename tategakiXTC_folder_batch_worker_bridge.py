@@ -32,6 +32,8 @@ WorkerSettings = dict[str, Any]
 SettingsGetter = Callable[[Path, Path, FolderBatchPlanItem], Mapping[str, Any]]
 InnerProgressCallback = Callable[[int, int, str], None]
 LogCallback = Callable[[str], None]
+CancelCallback = Callable[[], bool]
+ActiveWorkerCallback = Callable[[object | None], None]
 
 
 MAINWINDOW_WORKER_SETTINGS_GETTERS: tuple[str, ...] = (
@@ -187,6 +189,8 @@ def make_worker_bridge_converter(
     worker_cls: type[Any] | None = None,
     inner_progress_cb: InnerProgressCallback | None = None,
     log_cb: LogCallback | None = None,
+    should_cancel_cb: CancelCallback | None = None,
+    active_worker_cb: ActiveWorkerCallback | None = None,
 ) -> FolderBatchConvertCallback:
     """Build a folder-batch converter using ``ConversionWorker._process_target``.
 
@@ -201,16 +205,45 @@ def make_worker_bridge_converter(
         settings = build_worker_settings_for_folder_batch_item(base_settings, source, output)
         actual_worker_cls = worker_cls or _import_default_worker_class()
         worker = actual_worker_cls(settings)
-        args = _build_args_with_worker(worker, settings)
-        process_target = getattr(worker, '_process_target', None)
-        if not callable(process_target):
-            raise RuntimeError('ConversionWorker._process_target が見つかりません。')
-        output.parent.mkdir(parents=True, exist_ok=True)
-        font_value = str(settings.get('font_file', '') or '')
-        if log_cb is not None:
-            log_cb(f'[WORKER] {item.relative_source_path} -> {output}')
-        saved = process_target(source, font_value, args, output, progress_cb=inner_progress_cb)
-        return Path(saved or output)
+        if active_worker_cb is not None:
+            try:
+                active_worker_cb(worker)
+            except Exception:
+                pass
+        try:
+            if should_cancel_cb is not None and should_cancel_cb():
+                stopper = getattr(worker, 'stop', None)
+                if callable(stopper):
+                    stopper()
+            args = _build_args_with_worker(worker, settings)
+            process_target = getattr(worker, '_process_target', None)
+            if not callable(process_target):
+                raise RuntimeError('ConversionWorker._process_target が見つかりません。')
+            output.parent.mkdir(parents=True, exist_ok=True)
+            font_value = str(settings.get('font_file', '') or '')
+            if log_cb is not None:
+                log_cb(f'[WORKER] {item.relative_source_path} -> {output}')
+
+            def bridged_progress(current: int, total: int, message: str) -> None:
+                if should_cancel_cb is not None and should_cancel_cb():
+                    stopper = getattr(worker, 'stop', None)
+                    if callable(stopper):
+                        stopper()
+                if inner_progress_cb is not None:
+                    inner_progress_cb(current, total, message)
+                if should_cancel_cb is not None and should_cancel_cb():
+                    stopper = getattr(worker, 'stop', None)
+                    if callable(stopper):
+                        stopper()
+
+            saved = process_target(source, font_value, args, output, progress_cb=bridged_progress)
+            return Path(saved or output)
+        finally:
+            if active_worker_cb is not None:
+                try:
+                    active_worker_cb(None)
+                except Exception:
+                    pass
 
     return _convert
 
@@ -221,6 +254,7 @@ def make_mainwindow_worker_bridge_converter(
     worker_cls: type[Any] | None = None,
     inner_progress_cb: InnerProgressCallback | None = None,
     log_cb: LogCallback | None = None,
+    should_cancel_cb: CancelCallback | None = None,
 ) -> FolderBatchConvertCallback:
     """Build a real converter from MainWindow settings + existing worker route.
 
@@ -240,11 +274,19 @@ def make_mainwindow_worker_bridge_converter(
     def _settings_getter(source: Path, output: Path, item: FolderBatchPlanItem) -> Mapping[str, Any]:
         return collect_worker_settings_from_mainwindow(main_window, source, output, item)
 
+    def _set_active_worker(worker: object | None) -> None:
+        try:
+            setattr(main_window, '_folder_batch_active_worker', worker)
+        except Exception:
+            pass
+
     return make_worker_bridge_converter(
         _settings_getter,
         worker_cls=worker_cls,
         inner_progress_cb=inner_progress_cb,
         log_cb=log_cb,
+        should_cancel_cb=should_cancel_cb,
+        active_worker_cb=_set_active_worker,
     )
 
 

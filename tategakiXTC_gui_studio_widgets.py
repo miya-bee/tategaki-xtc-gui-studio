@@ -11,11 +11,12 @@ import math
 import sys
 from typing import Any, Callable
 
-from PySide6.QtCore import Qt, QPoint, QRect, QRectF, QSize, QTimer
+from PySide6.QtCore import Qt, QPoint, QRect, QRectF, QSize, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap, QPolygon
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QLineEdit,
     QSpinBox,
     QStyle,
     QStyleOptionSpinBox,
@@ -82,6 +83,100 @@ def _scroll_combo_popup_to_top_now(combo: object) -> None:
             set_value(minimum_value)
         except Exception:
             pass
+
+
+def _first_local_path_from_drop_event(event: object) -> str:
+    """Return the first local path carried by a Qt drag/drop event."""
+    mime_getter = getattr(event, 'mimeData', None)
+    if not callable(mime_getter):
+        return ''
+    try:
+        mime = mime_getter()
+    except Exception:
+        return ''
+    if mime is None:
+        return ''
+
+    urls_getter = getattr(mime, 'urls', None)
+    if callable(urls_getter):
+        try:
+            urls = list(urls_getter() or [])
+        except Exception:
+            urls = []
+        for url in urls:
+            local_getter = getattr(url, 'toLocalFile', None)
+            if not callable(local_getter):
+                continue
+            try:
+                local_path = str(local_getter() or '').strip()
+            except Exception:
+                local_path = ''
+            if local_path:
+                return local_path
+
+    text_getter = getattr(mime, 'text', None)
+    if callable(text_getter):
+        try:
+            text = str(text_getter() or '').strip().strip('"')
+        except Exception:
+            text = ''
+        if text:
+            return text
+    return ''
+
+
+class SourceDropLineEdit(QLineEdit):
+    """Line edit that accepts a dropped source file/folder path."""
+
+    sourcePathDropped = Signal(str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        try:
+            self.setAcceptDrops(True)
+        except Exception:
+            pass
+
+    def _drop_path_from_event(self, event: object) -> str:
+        return _first_local_path_from_drop_event(event)
+
+    def dragEnterEvent(self, event: object) -> None:
+        if self._drop_path_from_event(event):
+            accept = getattr(event, 'acceptProposedAction', None)
+            if callable(accept):
+                accept()
+                return
+        try:
+            super().dragEnterEvent(event)
+        except Exception:
+            pass
+
+    def dragMoveEvent(self, event: object) -> None:
+        if self._drop_path_from_event(event):
+            accept = getattr(event, 'acceptProposedAction', None)
+            if callable(accept):
+                accept()
+                return
+        try:
+            super().dragMoveEvent(event)
+        except Exception:
+            pass
+
+    def dropEvent(self, event: object) -> None:
+        path = self._drop_path_from_event(event)
+        if not path:
+            try:
+                super().dropEvent(event)
+            except Exception:
+                pass
+            return
+        accept = getattr(event, 'acceptProposedAction', None)
+        if callable(accept):
+            try:
+                accept()
+            except Exception:
+                pass
+        self.sourcePathDropped.emit(path)
 
 
 class FontPopupTopComboBox(QComboBox):
@@ -168,6 +263,7 @@ class XtcViewerWidget(QWidget):
         self.guide_margins = (0, 0, 0, 0)
         self.calibration = 1.0
         self.preview_zoom_factor = 1.0
+        self.preview_leading_gap = 0
         self.page_image: QImage | None = None
         self.ui_theme = 'light'
         self.setFocusPolicy(Qt.StrongFocus)
@@ -246,6 +342,24 @@ class XtcViewerWidget(QWidget):
         self.updateGeometry()
         self.update()
 
+    def set_preview_leading_gap(self: XtcViewerWidget, value: object) -> None:
+        try:
+            gap = int(round(float(value)))
+        except Exception:
+            gap = 0
+        gap = max(0, min(gap, 4096))
+        if int(getattr(self, 'preview_leading_gap', 0) or 0) == gap:
+            return
+        self.preview_leading_gap = gap
+        self.updateGeometry()
+        self.update()
+
+    def _preview_leading_gap(self: XtcViewerWidget) -> int:
+        try:
+            return max(0, min(int(getattr(self, 'preview_leading_gap', 0) or 0), 4096))
+        except Exception:
+            return 0
+
     def _preview_zoom_factor(self: XtcViewerWidget) -> float:
         try:
             zoom = float(getattr(self, 'preview_zoom_factor', 1.0))
@@ -268,23 +382,75 @@ class XtcViewerWidget(QWidget):
         dpi = screen.logicalDotsPerInch() if screen else 96
         return max(1.0, dpi / 25.4) * self.calibration
 
-    def sizeHint(self: XtcViewerWidget) -> QSize:
-        margin = 48
+    def _zoom_scaled_margin(self: XtcViewerWidget, base: int, *, minimum: int = 4) -> int:
         zoom = self._preview_zoom_factor()
-        if self.actual_size:
-            px = self._px_per_mm()
-            body_w = int(round(float(self.profile.body_w_mm) * px * zoom))
-            body_h = int(round(float(self.profile.body_h_mm) * px * zoom))
-            return QSize(
-                max(1, body_w) + margin * 2,
-                max(1, body_h) + margin * 2,
-            )
+        if zoom <= 0:
+            zoom = 1.0
+        return max(int(minimum), int(round(float(base) / zoom)))
+
+    def _base_auto_fit_body_size(self: XtcViewerWidget) -> tuple[int, int]:
+        """Return the 100% logical device-body size used by the non-actual-size view.
+
+        v1.3.3.17: the previous high-zoom sizeHint scaled a full canvas, while
+        _calculate_rects painted only the device body inside that canvas. That left
+        a large unpainted band on the splitter side even though the inner margin
+        itself was shrinking. Keep sizeHint and painting on the same body-sized
+        geometry so the horizontal scrollbar tracks the visible device instead of
+        unused background.
+        """
         base_w, base_h = 660, 860
-        content_w = max(1, base_w - margin * 2)
-        content_h = max(1, base_h - margin * 2)
+        base_margin = 34
+        body_w_mm = max(1.0, float(getattr(self.profile, 'body_w_mm', 1.0) or 1.0))
+        body_h_mm = max(1.0, float(getattr(self.profile, 'body_h_mm', 1.0) or 1.0))
+        available_w = max(1.0, float(base_w - base_margin * 2))
+        available_h = max(1.0, float(base_h - base_margin * 2))
+        scale = max(0.01, min(available_w / body_w_mm, available_h / body_h_mm))
+        return (
+            max(1, int(round(body_w_mm * scale))),
+            max(1, int(round(body_h_mm * scale))),
+        )
+
+    def _target_body_size(self: XtcViewerWidget) -> tuple[int, int, float]:
+        """Return the zoomed device body size and logical px/mm ratio."""
+        zoom = self._preview_zoom_factor()
+        body_w_mm = max(1.0, float(getattr(self.profile, 'body_w_mm', 1.0) or 1.0))
+        body_h_mm = max(1.0, float(getattr(self.profile, 'body_h_mm', 1.0) or 1.0))
+        if self.actual_size:
+            px = max(0.01, self._px_per_mm())
+            base_body_w = max(1, min(int(round(body_w_mm * px)), 8192))
+            base_body_h = max(1, min(int(round(body_h_mm * px)), 8192))
+        else:
+            base_body_w, base_body_h = self._base_auto_fit_body_size()
+            px = max(0.01, float(base_body_w) / body_w_mm)
+        body_w = max(1, min(int(round(base_body_w * zoom)), 8192))
+        body_h = max(1, min(int(round(base_body_h * zoom)), 8192))
+        return body_w, body_h, px * zoom
+
+    def _device_body_margin(self: XtcViewerWidget) -> int:
+        # v1.3.3.21: keep sizeHint() and _calculate_rects() on the same
+        # outer-margin rule for both device view and actual-size approximation.
+        # A previous split used 48px in actual-size sizeHint() but 34px while
+        # painting, leaving extra scroll-area background that made the three
+        # preview modes drift differently.
+        return (
+            self._zoom_scaled_margin(48, minimum=8)
+            if self.actual_size
+            else self._zoom_scaled_margin(34, minimum=4)
+        )
+
+    def baseSizeHint(self: XtcViewerWidget) -> QSize:
+        margin = self._device_body_margin()
+        body_w, body_h, _scaled_px = self._target_body_size()
         return QSize(
-            margin * 2 + max(1, int(round(content_w * zoom))),
-            margin * 2 + max(1, int(round(content_h * zoom))),
+            max(1, body_w) + margin * 2,
+            max(1, body_h) + margin * 2,
+        )
+
+    def sizeHint(self: XtcViewerWidget) -> QSize:
+        base = self.baseSizeHint()
+        return QSize(
+            max(1, int(base.width())) + self._preview_leading_gap(),
+            max(1, int(base.height())),
         )
 
     def paintEvent(self: XtcViewerWidget, event: object) -> None:
@@ -407,34 +573,28 @@ class XtcViewerWidget(QWidget):
                 pass
 
     def _calculate_rects(self: XtcViewerWidget) -> tuple[QRectF, QRectF]:
-        margin = 34
+        # v1.3.3.17: sizeHint と描画サイズを同じ device-body 基準に揃える。
+        # v1.3.3.17 の inner margin 縮小だけでは、QScrollArea 上の未描画背景が
+        # splitter 側に残り、見た目の余白が縮まらなかったため。
+        margin = self._device_body_margin()
         rect = self.rect()
         qrectf_cls = _qrectf_class()
-        if rect.width() <= margin * 2 + 2 or rect.height() <= margin * 2 + 2:
+        leading_gap = self._preview_leading_gap()
+        content_rect = rect.adjusted(leading_gap, 0, 0, 0)
+        if content_rect.width() <= margin * 2 + 2 or content_rect.height() <= margin * 2 + 2:
             return qrectf_cls(0, 0, 0, 0), qrectf_cls(0, 0, 0, 0)
 
-        c = rect.adjusted(margin, margin, -margin, -margin)
+        c = content_rect.adjusted(margin, margin, -margin, -margin)
         available_w = max(1.0, float(c.width()))
         available_h = max(1.0, float(c.height()))
-        zoom = self._preview_zoom_factor()
         body_w_mm = max(1.0, float(getattr(self.profile, 'body_w_mm', 1.0) or 1.0))
         body_h_mm = max(1.0, float(getattr(self.profile, 'body_h_mm', 1.0) or 1.0))
         screen_w_mm = max(1.0, float(getattr(self.profile, 'screen_w_mm', body_w_mm) or body_w_mm))
         screen_h_mm = max(1.0, float(getattr(self.profile, 'screen_h_mm', body_h_mm) or body_h_mm))
 
-        if self.actual_size:
-            px = max(0.01, self._px_per_mm())
-            base_body_w = max(1, min(int(round(body_w_mm * px)), 8192))
-            base_body_h = max(1, min(int(round(body_h_mm * px)), 8192))
-        else:
-            scale = min(available_w / body_w_mm, available_h / body_h_mm)
-            px = max(0.01, min(float(scale), 128.0))
-            base_body_w = max(1, min(int(round(body_w_mm * px)), int(max(1.0, available_w))))
-            base_body_h = max(1, min(int(round(body_h_mm * px)), int(max(1.0, available_h))))
-
-        body_w = max(1, min(int(round(base_body_w * zoom)), 8192))
-        body_h = max(1, min(int(round(base_body_h * zoom)), 8192))
-        scaled_px = px * zoom
+        target_body_w, target_body_h, scaled_px = self._target_body_size()
+        body_w = max(1, min(int(target_body_w), int(max(1.0, available_w))))
+        body_h = max(1, min(int(target_body_h), int(max(1.0, available_h))))
 
         x = float(c.x()) + max(0.0, (available_w - float(body_w)) / 2.0)
         y = float(c.y()) + max(0.0, (available_h - float(body_h)) / 2.0)

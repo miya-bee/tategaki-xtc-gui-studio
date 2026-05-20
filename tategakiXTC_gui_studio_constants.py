@@ -28,7 +28,7 @@ SETTINGS_SCHEMA_VERSION = 2
 SETTINGS_FILE = Path(__file__).with_name('tategakiXTC_gui_studio.ini')
 DEFAULT_WINDOW_WIDTH = 1600
 DEFAULT_WINDOW_HEIGHT = 1000
-DEFAULT_LEFT_PANEL_WIDTH = 620
+DEFAULT_LEFT_PANEL_WIDTH = 600
 DEFAULT_STARTUP_PRESET_KEY = 'preset_4'
 DEFAULT_TOP_PATH_BUTTON_WIDTH = 128
 DEFAULT_LEFT_SPLITTER_TOP = 760
@@ -53,6 +53,7 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'font_file': 'NotoSansJP-SemiBold.ttf',
     'font_size': 26,
     'ruby_size': 12,
+    'ruby_hide': False,
     'line_spacing': 44,
     'margin_t': 12,
     'margin_b': 14,
@@ -62,8 +63,10 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'dither': False,
     'threshold': 128,
     'kinsoku_mode': 'standard',
+    'tatechuyoko_digit_mode': '2',
     'punctuation_position_mode': 'standard',
     'ichi_position_mode': 'standard',
+    'halfwidth_digit_position_mode': 'standard',
     'lower_closing_bracket_position_mode': 'standard',
     'wave_dash_drawing_mode': 'rotate',
     'wave_dash_position_mode': 'standard',
@@ -156,10 +159,11 @@ DEFAULT_PRESET_DEFINITIONS = {
 
 PRESET_FIELDS = [
     'profile', 'width', 'height', 'font_file',
-    'font_size', 'ruby_size', 'line_spacing',
+    'font_size', 'ruby_size', 'ruby_hide', 'line_spacing',
     'margin_t', 'margin_b', 'margin_r', 'margin_l',
     'night_mode', 'dither', 'threshold', 'kinsoku_mode',
-    'punctuation_position_mode', 'ichi_position_mode', 'lower_closing_bracket_position_mode',
+    'tatechuyoko_digit_mode',
+    'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'lower_closing_bracket_position_mode',
     'wave_dash_drawing_mode', 'wave_dash_position_mode', 'output_format',
 ]
 
@@ -169,6 +173,13 @@ KINSOKU_MODE_OPTIONS = [
     ('standard', '標準'),
 ]
 KINSOKU_MODE_LABELS = {key: label for key, label in KINSOKU_MODE_OPTIONS}
+TATECHUYOKO_DIGIT_MODE_OPTIONS = [
+    ('4', '4文字'),
+    ('3', '3文字'),
+    ('2', '2文字'),
+    ('none', '無し'),
+]
+TATECHUYOKO_DIGIT_MODE_LABELS = {key: label for key, label in TATECHUYOKO_DIGIT_MODE_OPTIONS}
 GLYPH_POSITION_MODE_OPTIONS = [
     ('down_strong', '下補正 強'),
     ('down_weak', '下補正 弱'),
@@ -250,6 +261,8 @@ __all__ = [
     'PRESET_FIELDS',
     'KINSOKU_MODE_OPTIONS',
     'KINSOKU_MODE_LABELS',
+    'TATECHUYOKO_DIGIT_MODE_OPTIONS',
+    'TATECHUYOKO_DIGIT_MODE_LABELS',
     'GLYPH_POSITION_MODE_OPTIONS',
     'GLYPH_POSITION_MODE_LABELS',
     'CLOSING_BRACKET_POSITION_MODE_OPTIONS',

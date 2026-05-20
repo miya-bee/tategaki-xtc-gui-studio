@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Callable, Iterable, Iterator
 
-from tategakiXTC_release_metadata import RELEASE_NOTES_FILE, RELEASE_ZIP_FILE_NAME
+from tategakiXTC_release_metadata import APP_VERSION, PUBLIC_VERSION_TAG, RELEASE_NOTES_FILE, RELEASE_ZIP_FILE_NAME
 
 DEFAULT_EXCLUDED_DIR_NAMES = {
     '__pycache__',
@@ -32,6 +32,12 @@ DEFAULT_EXCLUDED_DIR_NAMES = {
     'dist',
     'release_build',
 }
+
+# GitHub repository source archives should keep workflow files, while public
+# end-user release zips intentionally exclude .github/.  Keep the rules
+# separated so source-only handoff artifacts do not accidentally reuse public
+# release exclusions.
+SOURCE_ONLY_EXCLUDED_DIR_NAMES = DEFAULT_EXCLUDED_DIR_NAMES - {'.github'}
 
 DEFAULT_EXCLUDED_FILE_NAMES = {
     '.coverage',
@@ -124,7 +130,7 @@ REQUIRED_PUBLIC_DOC_FILES = (
     'WINDOWS_SETUP.md',
     'FAQ.md',
     'KNOWN_LIMITATIONS.md',
-    'PUBLISH_CHECKLIST_v1_3_3.md',
+    f'PUBLISH_CHECKLIST_v{PUBLIC_VERSION_TAG.replace(".", "_")}.md',
     RELEASE_NOTES_FILE,
 )
 REQUIRED_PROJECT_APP_MODULE_FILES = (
@@ -227,6 +233,7 @@ REQUIRED_PROJECT_GUI_ASSET_FILES = (
 )
 REQUIRED_PROJECT_TEST_SUPPORT_FILES = (
     'tests/__init__.py',
+    'tests/conftest.py',
     'tests/font_test_helper.py',
     'tests/generate_golden_images.py',
     'tests/golden_regression_tools.py',
@@ -280,6 +287,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_api_safety_regression.py',
     'tests/test_archive_error_regression.py',
     'tests/test_archive_regression.py',
+    'tests/test_cancel_stop_ui_regression_v13351.py',
     'tests/test_conversion_diagnostics.py',
     'tests/test_conversion_worker_logic.py',
     'tests/test_core_optional_import_regression.py',
@@ -312,14 +320,20 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_golden_workflow_regression.py',
     'tests/test_gui_image_atomic_write_regression.py',
     'tests/test_gui_layouts_regression.py',
+    'tests/test_gui_margin_layout_regression.py',
+    'tests/test_gui_image_section_layout_regression.py',
+    'tests/test_gui_help_text_linebreak_regression.py',
     'tests/test_gui_preview_controller_regression.py',
     'tests/test_gui_results_controller_regression.py',
+    'tests/test_gui_ruby_hide_layout_regression.py',
     'tests/test_gui_settings_controller_regression.py',
     'tests/test_gui_studio_logic_regression.py',
     'tests/test_gui_studio_logging_regression.py',
     'tests/test_gui_studio_smoke_optional.py',
+    'tests/test_source_drop_line_edit_regression.py',
     'tests/test_gui_studio_worker_regression.py',
     'tests/test_gui_widget_factory_regression.py',
+    'tests/test_studio_import_helper_isolation.py',
     'tests/test_ichi_centering_regression.py',
     'tests/test_image_golden_regression.py',
     'tests/test_input_pipeline_regression.py',
@@ -335,6 +349,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_release_docs_regression.py',
     'tests/test_release_hygiene_regression.py',
     'tests/test_renderer_api_regression.py',
+    'tests/test_ruby_hide_mode_regression.py',
     'tests/test_ruby_renderer_helper_regression.py',
     'tests/test_sample_fixture_regression.py',
     'tests/test_sweep368_layout_contract_regression.py',
@@ -374,7 +389,7 @@ REQUIRED_UTF8_TEXT_FILES = tuple(
 )
 REQUIRED_APP_CONTENT_MARKERS = {
     'tategakiXTC_release_metadata.py': (
-        "APP_VERSION = '1.3.3'",
+        f"APP_VERSION = '{APP_VERSION}'",
         'RELEASE_NOTES_FILE',
         'RELEASE_ZIP_FILE_NAME',
     ),
@@ -699,9 +714,14 @@ REQUIRED_TEST_SUPPORT_CONTENT_MARKERS = {
         'fixture_path',
         'chapter1.xhtml',
     ),
+    'tests/conftest.py': (
+        'restore_mutable_qt_test_state',
+        'restore_qt_test_state',
+    ),
     'tests/studio_import_helper.py': (
         'load_studio_module',
         '_install_pyside6_stubs',
+        'restore_qt_test_state',
         'tategakiXTC_gui_studio',
     ),
     'tests/fixtures/README.md': (
@@ -2579,16 +2599,117 @@ def build_release_zip(root: Path, output_path: Path) -> Path:
 
 
 
+def source_archive_member_should_be_included(member_name: str, *, is_dir: bool = False) -> bool:
+    """Return whether a member belongs in the GitHub/source-only archive.
+
+    The source-only archive is intended for repository publication and should keep
+    tracked CI workflow files under .github/.  It still excludes generated logs,
+    handoff memos, caches, binary archives, and other local build artifacts.
+    """
+    if '\\' in member_name:
+        return False
+    normalized = member_name.strip('/')
+    if not normalized or normalized.startswith('/') or re.match(r'^[A-Za-z]:', normalized):
+        return False
+    parts = normalized.split('/')
+    if any(_is_windows_unsafe_path_part(part) for part in parts):
+        return False
+    if _is_prohibited_web_release_path(normalized):
+        return False
+    return _relative_path_should_be_included(
+        Path(normalized),
+        is_dir=is_dir,
+        excluded_dir_names=SOURCE_ONLY_EXCLUDED_DIR_NAMES,
+    )
+
+
+def iter_source_only_files(root: Path, *, excluded_paths: Iterable[Path] | None = None) -> Iterator[Path]:
+    """Return files for a GitHub/source-only archive in stable order."""
+    root = root.resolve()
+    excluded_resolved = {path.resolve() for path in (excluded_paths or ())}
+
+    for current_root, dirs, files in os.walk(root):
+        current_path = Path(current_root)
+        try:
+            rel_current = _normalized_relative_path(current_path, root)
+        except Exception:
+            dirs[:] = []
+            continue
+
+        dirs[:] = sorted(
+            (
+                d for d in dirs
+                if source_archive_member_should_be_included((rel_current / d).as_posix(), is_dir=True)
+            ),
+            key=natural_sort_key,
+        )
+
+        for filename in sorted(files, key=natural_sort_key):
+            candidate = current_path / filename
+            try:
+                candidate_resolved = candidate.resolve()
+            except Exception:
+                continue
+            if candidate_resolved in excluded_resolved:
+                continue
+            try:
+                rel_path = _normalized_relative_path(candidate, root)
+            except Exception:
+                continue
+            if source_archive_member_should_be_included(rel_path.as_posix(), is_dir=False):
+                yield candidate
+
+
+def build_source_only_zip(root: Path, output_path: Path) -> Path:
+    """Build a repository/source-only archive for GitHub publication.
+
+    Unlike the public release zip, this archive keeps .github/workflows so a
+    repository restored from the archive retains CI configuration.  It excludes
+    the same local/generated artifacts that .gitignore excludes, notably logs/
+    and internal *handoff*.md files.
+    """
+    root = root.resolve()
+    output_path = output_path.resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for file_path in iter_source_only_files(root, excluded_paths=(output_path,)):
+            if not file_path.is_file():
+                continue
+            try:
+                archive_name = _normalized_relative_path(file_path, root).as_posix()
+            except Exception:
+                continue
+            if not source_archive_member_should_be_included(archive_name, is_dir=False):
+                continue
+            zf.write(file_path, archive_name)
+
+    integrity_issues = verify_release_zip_integrity(output_path)
+    if integrity_issues:
+        try:
+            output_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise RuntimeError(f'source-only zip failed integrity check: {integrity_issues}')
+    return output_path
+
+
 def default_release_output_path(root: Path) -> Path:
     """Return the versioned default release zip path for a project root."""
     return root / 'dist' / RELEASE_ZIP_FILE_NAME
 
 
+def default_source_only_output_path(root: Path) -> Path:
+    """Return the versioned default GitHub/source-only zip path."""
+    return root / 'dist' / f'tategaki-xtc-gui-studio_v{PUBLIC_VERSION_TAG}-source-only.zip'
+
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description='開発用生成物を除外した release zip を作成または検査します。')
+    parser = argparse.ArgumentParser(description='開発用生成物を除外した release/source-only zip を作成または検査します。')
     parser.add_argument('--root', default='.', help='対象ルートフォルダ')
     parser.add_argument('--output', default='', help=f'出力 zip パス。未指定時は dist/{RELEASE_ZIP_FILE_NAME}')
     parser.add_argument('--verify', default='', metavar='ZIP_PATH', help='既存 zip を検査する場合の zip パス')
+    parser.add_argument('--source-only', action='store_true', help='GitHub公開向け source-only zip を作成する')
     return parser.parse_args()
 
 
@@ -2606,9 +2727,14 @@ def main() -> int:
         return 0
 
     root = Path(args.root).resolve()
-    default_output = default_release_output_path(root)
-    output_path = Path(args.output).resolve() if args.output else default_output
-    created = build_release_zip(root, output_path)
+    if args.source_only:
+        default_output = default_source_only_output_path(root)
+        output_path = Path(args.output).resolve() if args.output else default_output
+        created = build_source_only_zip(root, output_path)
+    else:
+        default_output = default_release_output_path(root)
+        output_path = Path(args.output).resolve() if args.output else default_output
+        created = build_release_zip(root, output_path)
     print(created)
     return 0
 

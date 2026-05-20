@@ -35,6 +35,7 @@ class WorkerConversionSettings(TypedDict, total=False):
     font_file: str
     font_size: ConfigScalar
     ruby_size: ConfigScalar
+    ruby_hide: ConfigScalar
     line_spacing: ConfigScalar
     margin_t: ConfigScalar
     margin_b: ConfigScalar
@@ -44,8 +45,10 @@ class WorkerConversionSettings(TypedDict, total=False):
     threshold: ConfigScalar
     night_mode: ConfigScalar
     kinsoku_mode: str
+    tatechuyoko_digit_mode: str
     punctuation_position_mode: str
     ichi_position_mode: str
+    halfwidth_digit_position_mode: str
     lower_closing_bracket_position_mode: str
     wave_dash_drawing_mode: str
     wave_dash_position_mode: str
@@ -257,6 +260,7 @@ def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
         height=_int_config_value(cfg, 'height', 800),
         font_size=_int_config_value(cfg, 'font_size', 26),
         ruby_size=_int_config_value(cfg, 'ruby_size', 12),
+        ruby_hide=_bool_config_value(cfg, 'ruby_hide', False),
         line_spacing=_int_config_value(cfg, 'line_spacing', 44),
         margin_t=_int_config_value(cfg, 'margin_t', 12),
         margin_b=_int_config_value(cfg, 'margin_b', 14),
@@ -266,8 +270,10 @@ def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
         night_mode=_bool_config_value(cfg, 'night_mode', False),
         threshold=_int_config_value(cfg, 'threshold', 128),
         kinsoku_mode=_str_config_value(cfg, 'kinsoku_mode', 'standard'),
+        tatechuyoko_digit_mode=core._normalize_tatechuyoko_digit_mode(_str_config_value(cfg, 'tatechuyoko_digit_mode', '2')),
         punctuation_position_mode=_str_config_value(cfg, 'punctuation_position_mode', 'standard'),
         ichi_position_mode=_str_config_value(cfg, 'ichi_position_mode', 'standard'),
+        halfwidth_digit_position_mode=_str_config_value(cfg, 'halfwidth_digit_position_mode', 'standard'),
         lower_closing_bracket_position_mode=_str_config_value(cfg, 'lower_closing_bracket_position_mode', 'standard'),
         wave_dash_drawing_mode=core._wave_dash_drawing_mode(_str_config_value(cfg, 'wave_dash_drawing_mode', 'rotate')),
         wave_dash_position_mode=core._wave_dash_position_mode(_str_config_value(cfg, 'wave_dash_position_mode', 'standard')),
@@ -548,14 +554,19 @@ def resolve_open_folder_target(
     input_path: Path,
     converted_files: Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes]] | str | bytes | os.PathLike[str] | os.PathLike[bytes] | None = None,
 ) -> Path | None:
+    # Single-file conversion should return the source file folder.
+    # This keeps the post-conversion Explorer target aligned with the user's
+    # current source context even when the actual output path is redirected or
+    # auto-renamed elsewhere. Folder-batch conversion keeps the older output
+    # parent resolution below.
+    if input_path.is_file():
+        return input_path.parent
     if isinstance(converted_files, (str, bytes, bytearray, os.PathLike)):
         converted_items: Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes]] = [converted_files]
     else:
         converted_items = converted_files or []
     base_dir: Path | None = None
-    if input_path.is_file():
-        base_dir = input_path.parent
-    elif input_path.is_dir():
+    if input_path.is_dir():
         base_dir = input_path
     parents_by_key: dict[str, Path] = {}
     for item in converted_items:

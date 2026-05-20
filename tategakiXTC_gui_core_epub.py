@@ -1213,7 +1213,7 @@ def _render_epub_chapter_pages_from_html(html_content: str | bytes, doc_file_nam
             return
         renderer.apply_pending_paragraph_indent()
         renderer.draw_runs(
-            _epub_runs(rb, bold=node_bold, code=node_code, ruby=rt),
+            _epub_runs(rb, bold=node_bold, code=node_code, ruby='' if bool(getattr(args, 'ruby_hide', False)) else rt),
             default_font=font,
             wrap_indent_chars=wrap_indent_chars,
         )
@@ -1336,6 +1336,8 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
     _raise_if_cancelled(should_cancel)
     try:
         document = load_epub_input_document(epub_path)
+    except ConversionCancelled:
+        raise
     except Exception as exc:
         report = build_conversion_error_report(epub_path, exc, stage='EPUB読込')
         raise RuntimeError(report['display']) from exc
@@ -1343,6 +1345,8 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
     try:
         font = load_truetype_font(font_path, args.font_size)
         ruby_font = load_truetype_font(font_path, args.ruby_size)
+    except ConversionCancelled:
+        raise
     except Exception as exc:
         report = build_conversion_error_report(epub_path, exc, stage='フォント読込')
         raise RuntimeError(report['display']) from exc
@@ -1376,6 +1380,8 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
                 label = str(entry.get('label') or 'ページ')
                 try:
                     spooled_pages.add_blob(ensure_valid_xt_page_blob(page_image_to_xt_bytes(page_image, page_args.width, page_args.height, page_args), page_image, page_args.width, page_args.height, page_args))
+                except ConversionCancelled:
+                    raise
                 except Exception as exc:
                     raise _EpubChapterConvertError(str(exc)) from exc
                 chapter_page_count += 1
@@ -1404,6 +1410,8 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
                     page_created_cb=_page_created,
                     store_page_entries=False,
                 )
+            except ConversionCancelled:
+                raise
             except Exception as exc:
                 stage = f'章変換: {chapter_name}' if isinstance(exc, _EpubChapterConvertError) else f'章描画: {chapter_name}'
                 report = build_conversion_error_report(epub_path, exc, stage=stage)
@@ -1431,6 +1439,8 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
                     )
                     total_rendered_pages = spooled_pages.page_count
                     chapter_page_count = total_rendered_pages - prev_total
+                except ConversionCancelled:
+                    raise
                 except Exception as exc:
                     report = build_conversion_error_report(epub_path, exc, stage=f'章変換: {chapter_name}')
                     raise RuntimeError(report['display']) from exc
@@ -1445,6 +1455,8 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
         out_path = Path(output_path) if output_path else epub_path.with_suffix(ext)
         try:
             spooled_pages.finalize(out_path, args.width, args.height, getattr(args, 'output_format', 'xtc'), should_cancel=should_cancel, progress_cb=progress_cb)
+        except ConversionCancelled:
+            raise
         except Exception as exc:
             report = build_conversion_error_report(epub_path, exc, stage='出力書込')
             raise RuntimeError(report['display']) from exc

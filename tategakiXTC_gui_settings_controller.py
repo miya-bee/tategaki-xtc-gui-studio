@@ -33,6 +33,7 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('nav_buttons_reversed', _default_value('nav_buttons_reversed', False)),
     ('font_size', _default_value('font_size', 26)),
     ('ruby_size', _default_value('ruby_size', 12)),
+    ('ruby_hide', _default_value('ruby_hide', False)),
     ('line_spacing', _default_value('line_spacing', 44)),
     ('margin_t', _default_value('margin_t', 12)),
     ('margin_b', _default_value('margin_b', 14)),
@@ -47,8 +48,10 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('output_conflict', _default_value('output_conflict', 'rename')),
     ('output_format', _default_value('output_format', 'xtc')),
     ('kinsoku_mode', _default_value('kinsoku_mode', 'standard')),
+    ('tatechuyoko_digit_mode', _default_value('tatechuyoko_digit_mode', '2')),
     ('punctuation_position_mode', _default_value('punctuation_position_mode', 'standard')),
     ('ichi_position_mode', _default_value('ichi_position_mode', 'standard')),
+    ('halfwidth_digit_position_mode', _default_value('halfwidth_digit_position_mode', 'standard')),
     ('lower_closing_bracket_position_mode', _default_value('lower_closing_bracket_position_mode', 'standard')),
     ('wave_dash_drawing_mode', _default_value('wave_dash_drawing_mode', 'rotate')),
     ('wave_dash_position_mode', _default_value('wave_dash_position_mode', 'standard')),
@@ -147,6 +150,7 @@ def build_settings_ui_apply_defaults(
     nav_buttons_reversed: object,
     font_size: object,
     ruby_size: object,
+    ruby_hide: object = False,
     line_spacing: object,
     margin_t: object,
     margin_b: object,
@@ -160,8 +164,10 @@ def build_settings_ui_apply_defaults(
     output_conflict: object,
     output_format: object,
     kinsoku_mode: object,
+    tatechuyoko_digit_mode: object = '2',
     punctuation_position_mode: object = 'standard',
     ichi_position_mode: object = 'standard',
+    halfwidth_digit_position_mode: object = 'standard',
     lower_closing_bracket_position_mode: object = 'standard',
     wave_dash_drawing_mode: object = 'rotate',
     wave_dash_position_mode: object = 'standard',
@@ -174,6 +180,7 @@ def build_settings_ui_apply_defaults(
         'nav_buttons_reversed': studio_logic._config_bool_value(nav_buttons_reversed, False),
         'font_size': studio_logic._config_int_value(font_size, 0),
         'ruby_size': studio_logic._config_int_value(ruby_size, 0),
+        'ruby_hide': studio_logic._config_bool_value(ruby_hide, bool(_DEFAULT_RENDER_SETTINGS['ruby_hide'])),
         'line_spacing': studio_logic._config_int_value(line_spacing, 0),
         'margin_t': studio_logic._config_int_value(margin_t, 0),
         'margin_b': studio_logic._config_int_value(margin_b, 0),
@@ -187,8 +194,10 @@ def build_settings_ui_apply_defaults(
         'output_conflict': output_conflict,
         'output_format': output_format,
         'kinsoku_mode': kinsoku_mode,
+        'tatechuyoko_digit_mode': studio_logic.normalize_tatechuyoko_digit_mode(tatechuyoko_digit_mode),
         'punctuation_position_mode': punctuation_position_mode,
         'ichi_position_mode': ichi_position_mode,
+        'halfwidth_digit_position_mode': halfwidth_digit_position_mode,
         'lower_closing_bracket_position_mode': lower_closing_bracket_position_mode,
         'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(wave_dash_drawing_mode),
         'wave_dash_position_mode': studio_logic.normalize_wave_dash_position_mode(wave_dash_position_mode),
@@ -332,11 +341,14 @@ def build_current_preset_payload(
         'margin_l': studio_logic._config_int_value(render_settings.get('margin_l'), _DEFAULT_RENDER_SETTINGS['margin_l']),
         'threshold': studio_logic._config_int_value(render_settings.get('threshold'), _DEFAULT_RENDER_SETTINGS['threshold']),
         'night_mode': studio_logic._config_bool_value(render_settings.get('night_mode'), bool(_DEFAULT_RENDER_SETTINGS['night_mode'])),
+        'ruby_hide': studio_logic._config_bool_value(render_settings.get('ruby_hide'), bool(_DEFAULT_RENDER_SETTINGS['ruby_hide'])),
         'dither': studio_logic._config_bool_value(render_settings.get('dither'), bool(_DEFAULT_RENDER_SETTINGS['dither'])),
         'kinsoku_mode': str(render_settings.get('kinsoku_mode') or fallback_kinsoku_mode),
         'output_format': str(render_settings.get('output_format') or fallback_output_format),
+        'tatechuyoko_digit_mode': studio_logic.normalize_tatechuyoko_digit_mode(render_settings.get('tatechuyoko_digit_mode') or _DEFAULT_RENDER_SETTINGS.get('tatechuyoko_digit_mode', '2')),
         'punctuation_position_mode': str(render_settings.get('punctuation_position_mode') or _DEFAULT_RENDER_SETTINGS['punctuation_position_mode']),
         'ichi_position_mode': str(render_settings.get('ichi_position_mode') or _DEFAULT_RENDER_SETTINGS['ichi_position_mode']),
+        'halfwidth_digit_position_mode': str(render_settings.get('halfwidth_digit_position_mode') or _DEFAULT_RENDER_SETTINGS['halfwidth_digit_position_mode']),
         'lower_closing_bracket_position_mode': str(render_settings.get('lower_closing_bracket_position_mode') or _DEFAULT_RENDER_SETTINGS['lower_closing_bracket_position_mode']),
         'wave_dash_drawing_mode': str(render_settings.get('wave_dash_drawing_mode') or fallback_wave_dash_drawing_mode),
         'wave_dash_position_mode': str(render_settings.get('wave_dash_position_mode') or fallback_wave_dash_position_mode),
@@ -361,6 +373,7 @@ def build_live_preset_widget_payload(
     height: object,
     font_size: object,
     ruby_size: object,
+    ruby_hide: object = False,
     line_spacing: object,
     margin_t: object,
     margin_b: object,
@@ -371,8 +384,10 @@ def build_live_preset_widget_payload(
     dither: object,
     kinsoku_mode: object,
     output_format: object,
+    tatechuyoko_digit_mode: object = None,
     punctuation_position_mode: object = None,
     ichi_position_mode: object = None,
+    halfwidth_digit_position_mode: object = None,
     lower_closing_bracket_position_mode: object = None,
     wave_dash_drawing_mode: object = None,
     wave_dash_position_mode: object = None,
@@ -398,6 +413,8 @@ def build_live_preset_widget_payload(
         payload['font_size'] = studio_logic._config_int_value(font_size, _DEFAULT_RENDER_SETTINGS['font_size'])
     if ruby_size is not None:
         payload['ruby_size'] = studio_logic._config_int_value(ruby_size, _DEFAULT_RENDER_SETTINGS['ruby_size'])
+    if ruby_hide is not None:
+        payload['ruby_hide'] = studio_logic._config_bool_value(ruby_hide, bool(_DEFAULT_RENDER_SETTINGS['ruby_hide']))
     if line_spacing is not None:
         payload['line_spacing'] = studio_logic._config_int_value(line_spacing, _DEFAULT_RENDER_SETTINGS['line_spacing'])
     if margin_t is not None:
@@ -418,6 +435,11 @@ def build_live_preset_widget_payload(
         payload['kinsoku_mode'] = normalize_choice_value(kinsoku_mode, str(_DEFAULT_RENDER_SETTINGS['kinsoku_mode']), allowed_kinsoku_modes)
     if output_format is not None:
         payload['output_format'] = normalize_choice_value(output_format, str(_DEFAULT_RENDER_SETTINGS['output_format']), allowed_output_formats)
+    if tatechuyoko_digit_mode is not None:
+        payload['tatechuyoko_digit_mode'] = studio_logic.normalize_tatechuyoko_digit_mode(
+            tatechuyoko_digit_mode,
+            str(_DEFAULT_RENDER_SETTINGS.get('tatechuyoko_digit_mode', '2')),
+        )
     if punctuation_position_mode is not None:
         payload['punctuation_position_mode'] = normalize_choice_value(
             punctuation_position_mode,
@@ -428,6 +450,12 @@ def build_live_preset_widget_payload(
         payload['ichi_position_mode'] = normalize_choice_value(
             ichi_position_mode,
             str(_DEFAULT_RENDER_SETTINGS['ichi_position_mode']),
+            allowed_glyph_position_modes,
+        )
+    if halfwidth_digit_position_mode is not None:
+        payload['halfwidth_digit_position_mode'] = normalize_choice_value(
+            halfwidth_digit_position_mode,
+            str(_DEFAULT_RENDER_SETTINGS['halfwidth_digit_position_mode']),
             allowed_glyph_position_modes,
         )
     if lower_closing_bracket_position_mode is not None:
@@ -477,7 +505,7 @@ def resolve_preset_combo_index(
 
 def build_preset_selection_status_message(preset_button_text: object) -> str:
     button_text = str(preset_button_text or '').strip() or 'プリセット'
-    return f'{button_text} の詳細表示を更新しました。適用する場合は［プリセット適用］を押してください。'
+    return f'{button_text} の詳細表示を更新しました。適用する場合は［プリセット読込］を押してください。'
 
 
 def build_preset_apply_context(

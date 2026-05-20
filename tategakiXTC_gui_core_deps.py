@@ -106,6 +106,29 @@ def build_conversion_error_report(source_path: PathLike | None, exc: BaseExcepti
     headline = '変換に失敗しました。'
     hint = 'ログもあわせて確認してください。'
 
+    is_cancelled = False
+    try:
+        is_cancelled = isinstance(exc, ConversionCancelled)
+    except Exception:
+        is_cancelled = False
+    if is_cancelled or '変換を停止しました' in raw_detail or '停止要求' in raw_detail:
+        headline = '変換を停止しました。'
+        hint = 'ユーザー操作により停止しました。EPUB / HTML / CSS のエラーではありません。'
+        lines = []
+        if path:
+            lines.append(f'対象: {path.name}')
+        lines.append(f'内容: {headline}')
+        if stage:
+            lines.append(f'段階: {stage}')
+        lines.append(f'詳細: {_compact_error_text(raw_detail)}')
+        lines.append(f'確認: {hint}')
+        return {
+            'headline': headline,
+            'detail': _compact_error_text(raw_detail),
+            'hint': hint,
+            'display': '\n'.join(lines),
+        }
+
     if 'pip install' in raw_detail or '必要です。' in raw_detail or '不足しています' in raw_detail:
         headline = '必要なライブラリが不足しているため変換できませんでした。'
         hint = 'requirements.txt を使って依存ライブラリを入れ直してください。'

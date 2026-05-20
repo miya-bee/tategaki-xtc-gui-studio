@@ -192,6 +192,7 @@ def build_preview_payload(
         'font_file': render_settings_base['font_file'],
         'font_size': render_settings_base['font_size'],
         'ruby_size': render_settings_base['ruby_size'],
+        'ruby_hide': 'true' if studio_logic._config_bool_value(render_settings_base.get('ruby_hide'), False) else 'false',
         'line_spacing': render_settings_base['line_spacing'],
         'margin_t': render_settings_base['margin_t'],
         'margin_b': render_settings_base['margin_b'],
@@ -201,8 +202,12 @@ def build_preview_payload(
         'threshold': render_settings_base['threshold'],
         'night_mode': 'true' if studio_logic._config_bool_value(render_settings_base.get('night_mode'), False) else 'false',
         'kinsoku_mode': render_settings_base['kinsoku_mode'],
+        'tatechuyoko_digit_mode': studio_logic.normalize_tatechuyoko_digit_mode(
+            render_settings_base.get('tatechuyoko_digit_mode', '2')
+        ),
         'punctuation_position_mode': render_settings_base.get('punctuation_position_mode', 'standard'),
         'ichi_position_mode': render_settings_base.get('ichi_position_mode', 'standard'),
+        'halfwidth_digit_position_mode': render_settings_base.get('halfwidth_digit_position_mode', 'standard'),
         'lower_closing_bracket_position_mode': render_settings_base.get('lower_closing_bracket_position_mode', 'standard'),
         'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(
             render_settings_base.get('wave_dash_drawing_mode', 'rotate')

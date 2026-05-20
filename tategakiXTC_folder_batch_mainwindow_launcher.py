@@ -236,6 +236,49 @@ def _set_progress_bar(widget: object, current: int, total: int) -> None:
             pass
 
 
+def _read_progress_bar_value(widget: object, default: int = 0) -> int:
+    value_getter = getattr(widget, 'value', None)
+    if callable(value_getter):
+        try:
+            return int(value_getter())
+        except Exception:
+            pass
+    try:
+        value = getattr(widget, 'value')
+        if isinstance(value, int):
+            return int(value)
+    except Exception:
+        pass
+    return int(default)
+
+
+def _freeze_folder_batch_progress_bar_best_effort(main_window: object) -> None:
+    """Stop any busy animation and keep the batch progress bar at its current step."""
+
+    progress_bar = getattr(main_window, 'progress_bar', None)
+    try:
+        current = int(getattr(main_window, '_folder_batch_progress_index', 0) or 0)
+    except Exception:
+        current = 0
+    try:
+        total = int(getattr(main_window, '_folder_batch_progress_total', 1) or 1)
+    except Exception:
+        total = 1
+    if current <= 0:
+        current = _read_progress_bar_value(progress_bar, 0)
+    _set_progress_bar(progress_bar, current, max(1, total))
+
+
+def _folder_batch_cancel_requested(main_window: object) -> bool:
+    try:
+        return bool(getattr(main_window, '_folder_batch_cancel_requested', False))
+    except Exception:
+        return False
+
+
+def _folder_batch_cancel_waiting_message() -> str:
+    return '停止要求を受け付けました。フォルダ一括変換を中止中… 現在処理中のファイルに停止を伝えています。対応していない処理では現在のファイルが終わりしだい停止します。'
+
 
 def _compact_folder_batch_status_text(text: object, *, max_chars: int = 64) -> str:
     """Return a one-line, middle-truncated status fragment for compact labels."""
@@ -360,10 +403,19 @@ def request_folder_batch_cancel_best_effort(main_window: object) -> None:
         setattr(main_window, '_folder_batch_cancel_requested', True)
     except Exception:
         pass
+    active_worker = getattr(main_window, '_folder_batch_active_worker', None)
+    stopper = getattr(active_worker, 'stop', None)
+    if callable(stopper):
+        try:
+            stopper()
+        except Exception:
+            pass
     _set_widget_enabled(getattr(main_window, 'stop_btn', None), False)
-    message = '停止要求を受け付けました。現在のファイルが終わりしだい、フォルダ一括変換を停止します。'
+    _freeze_folder_batch_progress_bar_best_effort(main_window)
+    message = _folder_batch_cancel_waiting_message()
     append_log_best_effort(main_window, f'[STOP] {message}')
     _set_widget_text(getattr(main_window, 'progress_label', None), message)
+    _set_widget_text(getattr(main_window, 'busy_badge', None), '中止中')
     show_status_best_effort(main_window, message, 5000)
     process_gui_events_best_effort()
 
@@ -386,6 +438,86 @@ def make_folder_batch_before_execute_callback(main_window: object) -> Callable[[
             total=total,
         )
     return _before
+
+
+
+def _folder_batch_success_output_paths(result: object | None) -> list[str]:
+    if result is None:
+        return []
+    paths: list[str] = []
+    try:
+        items = tuple(getattr(result, 'items', ()) or ())
+    except Exception:
+        items = ()
+    for item in items:
+        try:
+            if not bool(getattr(item, 'success', False)):
+                continue
+            output_path = getattr(item, 'output_path', None)
+        except Exception:
+            continue
+        if output_path is None:
+            continue
+        text = str(output_path).strip()
+        if text:
+            paths.append(text)
+    return paths
+
+
+def reflect_folder_batch_results_best_effort(main_window: object, result: object | None) -> None:
+    """Reflect folder-batch completion in the normal results tab when possible."""
+
+    paths = _folder_batch_success_output_paths(result)
+    summary_lines: list[str] = []
+    if result is not None:
+        try:
+            summary_lines = list(result.summary_lines())
+        except Exception:
+            summary_lines = []
+    populate = _callable_attr(main_window, 'populate_results')
+    if populate is not None:
+        try:
+            populate(paths, summary_lines)
+            set_tab = _callable_attr(main_window, '_set_bottom_tab_index_with_fallback')
+            if set_tab is not None and paths:
+                try:
+                    set_tab(0)
+                except Exception:
+                    pass
+            return
+        except Exception as exc:
+            append_log_best_effort(main_window, f'[WARN] フォルダ一括変換結果一覧の反映に失敗しました: {exc}')
+    set_summary = _callable_attr(main_window, '_set_results_summary_text_with_fallback')
+    if set_summary is not None and summary_lines:
+        try:
+            set_summary(' / '.join(str(line).strip() for line in summary_lines if str(line).strip()))
+        except Exception:
+            pass
+
+def _show_folder_batch_completion_card_best_effort(main_window: object, result: object | None) -> None:
+    show_card = _callable_attr(main_window, '_show_conversion_completion_card')
+    if show_card is None or result is None:
+        return
+    paths = _folder_batch_success_output_paths(result)
+    plan = getattr(result, 'plan', None)
+    stopped = bool(getattr(result, 'stopped', False))
+    failed_count = int(getattr(result, 'failed_count', 0) or 0)
+    payload = {
+        'open_folder_target': str(getattr(plan, 'output_root', '') or ''),
+        'folder_batch': True,
+        'folder_batch_stopped': stopped,
+        'folder_batch_failed_count': failed_count,
+        'folder_batch_processed_count': int(getattr(result, 'processed_count', 0) or 0),
+        'folder_batch_total_count': int(getattr(plan, 'total_count', 0) or 0) if plan is not None else 0,
+        'folder_batch_pending_count': int(getattr(result, 'stopped_pending_count', 0) or 0),
+        'folder_batch_summary_lines': list(result.summary_lines()) if hasattr(result, 'summary_lines') else [],
+        'show_without_paths': stopped,
+        'completion_title': 'フォルダ一括変換を中止しました' if stopped else ('フォルダ一括変換が完了しました' if failed_count == 0 else 'フォルダ一括変換が完了しました（失敗あり）'),
+    }
+    try:
+        show_card(paths, payload)
+    except Exception as exc:
+        append_log_best_effort(main_window, f'[WARN] フォルダ一括変換カードの表示に失敗しました: {exc}')
 
 
 def make_folder_batch_after_execute_callback(main_window: object) -> Callable[[object | None], None]:
@@ -416,11 +548,14 @@ def make_folder_batch_after_execute_callback(main_window: object) -> Callable[[o
                 message = f'フォルダ一括変換が完了しました。{count_text}'
             else:
                 message = f'フォルダ一括変換が完了しました。{count_text}'
+        reflect_folder_batch_results_best_effort(main_window, result)
+        _show_folder_batch_completion_card_best_effort(main_window, result)
         set_folder_batch_running_state_best_effort(main_window, False, message=message, total=max(1, total_count))
         for name in (
             '_folder_batch_progress_index',
             '_folder_batch_progress_total',
             '_folder_batch_progress_item_text',
+            '_folder_batch_active_worker',
         ):
             try:
                 setattr(main_window, name, None)
@@ -451,6 +586,14 @@ def make_folder_batch_progress_callback(main_window: object) -> FolderBatchProgr
                 setattr(main_window, name, value)
             except Exception:
                 pass
+        if _folder_batch_cancel_requested(main_window):
+            _freeze_folder_batch_progress_bar_best_effort(main_window)
+            text = _folder_batch_cancel_waiting_message()
+            _set_widget_text(getattr(main_window, 'progress_label', None), text)
+            _set_widget_text(getattr(main_window, 'busy_badge', None), '中止中')
+            show_status_best_effort(main_window, text, 5000)
+            process_gui_events_best_effort()
+            return
         text = format_folder_batch_progress_text(current_value, total_value, item)
         _set_progress_bar(getattr(main_window, 'progress_bar', None), current_value, total_value)
         _set_widget_text(getattr(main_window, 'progress_label', None), text)
@@ -461,6 +604,14 @@ def make_folder_batch_progress_callback(main_window: object) -> FolderBatchProgr
 
 def make_folder_batch_inner_progress_callback(main_window: object) -> InnerProgressCallback:
     def _progress(index: int, total: int, text: str) -> None:
+        if _folder_batch_cancel_requested(main_window):
+            _freeze_folder_batch_progress_bar_best_effort(main_window)
+            status_text = _folder_batch_cancel_waiting_message()
+            _set_widget_text(getattr(main_window, 'progress_label', None), status_text)
+            _set_widget_text(getattr(main_window, 'busy_badge', None), '中止中')
+            show_status_best_effort(main_window, status_text, 5000)
+            process_gui_events_best_effort()
+            return
         detail_parts: list[str] = []
         try:
             inner_total = int(total)
@@ -620,6 +771,7 @@ def open_folder_batch_dialog_for_mainwindow_real_or_warn(
                 main_window,
                 inner_progress_cb=actual_inner_progress_cb,
                 log_cb=lambda line: append_log_best_effort(main_window, line),
+                should_cancel_cb=lambda: should_cancel_folder_batch_from_mainwindow(main_window),
             )
         except AttributeError as settings_exc:
             warning_dialog_best_effort(

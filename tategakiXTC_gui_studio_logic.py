@@ -31,6 +31,27 @@ WAVE_DASH_POSITION_MODES: dict[str, str] = {
     'down_weak': '下補正弱',
     'down_strong': '下補正強',
 }
+TATECHUYOKO_DIGIT_MODES: dict[str, str] = {
+    '4': '4文字',
+    '3': '3文字',
+    '2': '2文字',
+    'none': '無し',
+}
+
+
+def normalize_tatechuyoko_digit_mode(value: object, default: str = '2') -> str:
+    normalized = str(value if value is not None else default).strip().lower()
+    compact = normalized.replace(' ', '').replace('　', '').replace('-', '_')
+    aliases = {
+        '4': {'4', '4文字', '4桁', 'four', 'max4'},
+        '3': {'3', '3文字', '3桁', 'three', 'max3'},
+        '2': {'2', '2文字', '2桁', 'two', 'max2'},
+        'none': {'none', 'no', 'off', '0', '無し', 'なし', '無効'},
+    }
+    for key, values in aliases.items():
+        if compact in values:
+            return key
+    return compact if compact in TATECHUYOKO_DIGIT_MODES else str(default)
 
 
 def build_top_status_message(target_raw: str, profile_name: str, font_size: int, line_spacing: int) -> str:
@@ -326,6 +347,7 @@ def build_settings_restore_payload(
     allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
     allowed_wave_dash_drawing_modes = WAVE_DASH_DRAWING_MODES
     allowed_wave_dash_position_modes = WAVE_DASH_POSITION_MODES
+    allowed_tatechuyoko_digit_modes = TATECHUYOKO_DIGIT_MODES
     payload: dict[str, Any] = {}
     payload['profile'] = normalize_choice_value(raw_payload.get('profile'), 'x4', allowed_profiles)
     for key, default in (
@@ -334,6 +356,7 @@ def build_settings_restore_payload(
         ('nav_buttons_reversed', False),
         ('dither', False),
         ('night_mode', False),
+        ('ruby_hide', False),
         ('open_folder', True),
     ):
         payload[key] = _config_bool_value(raw_payload.get(key), default)
@@ -368,6 +391,10 @@ def build_settings_restore_payload(
         'standard',
         allowed_kinsoku_modes,
     )
+    payload['tatechuyoko_digit_mode'] = normalize_tatechuyoko_digit_mode(
+        raw_payload.get('tatechuyoko_digit_mode'),
+        '2',
+    )
     payload['punctuation_position_mode'] = normalize_choice_value(
         raw_payload.get('punctuation_position_mode'),
         'standard',
@@ -375,6 +402,11 @@ def build_settings_restore_payload(
     )
     payload['ichi_position_mode'] = normalize_choice_value(
         raw_payload.get('ichi_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['halfwidth_digit_position_mode'] = normalize_choice_value(
+        raw_payload.get('halfwidth_digit_position_mode'),
         'standard',
         allowed_glyph_position_modes,
     )
@@ -447,6 +479,7 @@ def build_settings_ui_apply_payload(
         ('nav_buttons_reversed', 'nav_buttons_reversed'),
         ('dither', 'dither'),
         ('night_mode', 'night_mode'),
+        ('ruby_hide', 'ruby_hide'),
         ('open_folder', 'open_folder'),
     ):
         if key in raw_payload:
@@ -489,7 +522,12 @@ def build_settings_ui_apply_payload(
             str(defaults.get('kinsoku_mode') or 'standard'),
             allowed_kinsoku_modes,
         )
-    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode'):
+    if 'tatechuyoko_digit_mode' in raw_payload:
+        plan['tatechuyoko_digit_mode'] = normalize_tatechuyoko_digit_mode(
+            raw_payload.get('tatechuyoko_digit_mode'),
+            str(defaults.get('tatechuyoko_digit_mode') or '2'),
+        )
+    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode'):
         if glyph_key in raw_payload:
             plan[glyph_key] = normalize_choice_value(
                 raw_payload.get(glyph_key),
@@ -580,6 +618,7 @@ def build_settings_save_payload(
     for key, default in (
         ('dither', False),
         ('night_mode', False),
+        ('ruby_hide', False),
         ('open_folder', False),
     ):
         payload[key] = _config_bool_value(raw_payload.get(key), default)
@@ -587,6 +626,10 @@ def build_settings_save_payload(
         raw_payload.get('kinsoku_mode'),
         'standard',
         allowed_kinsoku_modes,
+    )
+    payload['tatechuyoko_digit_mode'] = normalize_tatechuyoko_digit_mode(
+        raw_payload.get('tatechuyoko_digit_mode'),
+        '2',
     )
     payload['output_format'] = normalize_choice_value(
         raw_payload.get('output_format'),
@@ -600,6 +643,11 @@ def build_settings_save_payload(
     )
     payload['ichi_position_mode'] = normalize_choice_value(
         raw_payload.get('ichi_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['halfwidth_digit_position_mode'] = normalize_choice_value(
+        raw_payload.get('halfwidth_digit_position_mode'),
         'standard',
         allowed_glyph_position_modes,
     )
@@ -1886,9 +1934,11 @@ def _build_preset_summary_lines(
     margin_l = _config_int_value(preset.get('margin_l'), 12)
     threshold = _config_int_value(preset.get('threshold'), 128)
     out_fmt_text = output_format_labels.get(out_fmt, 'XTC')
+    tatechuyoko_mode = normalize_tatechuyoko_digit_mode(preset.get('tatechuyoko_digit_mode', '2'), '2')
+    tatechuyoko_text = TATECHUYOKO_DIGIT_MODES.get(tatechuyoko_mode, '2文字')
     name_line = preset_name
-    line1 = f'機種: {profile_text} / 出力形式: {out_fmt_text} / 本文: {font_size} / ルビ: {ruby_size} / 行間: {line_spacing}'
-    line2 = f'余白: 上 {margin_t} 下 {margin_b} 右 {margin_r} 左 {margin_l} / 白黒反転: {night_text} / ディザ: {dither_text} / しきい値: {threshold} / 禁則: {kinsoku_text}'
+    line1 = f'機種: {profile_text} / 出力形式: {out_fmt_text} / 本文: {font_size} / ルビ: {ruby_size} / 行間: {line_spacing} / 縦中横: {tatechuyoko_text}'
+    line2 = f'余白: 上 {margin_t} 下 {margin_b} 左 {margin_l} 右 {margin_r} / 白黒反転: {night_text} / ディザ: {dither_text} / しきい値: {threshold} / 禁則: {kinsoku_text}'
     line3 = f'フォント: {font_text}'
     return name_line, line1, line2, line3
 

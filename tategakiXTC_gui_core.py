@@ -280,6 +280,7 @@ class ConversionArgs:
     height: int = DEF_HEIGHT
     font_size: int = 26
     ruby_size: int = 12
+    ruby_hide: bool = False
     line_spacing: int = 44
     margin_t: int = 12
     margin_b: int = 14
@@ -289,8 +290,10 @@ class ConversionArgs:
     night_mode: bool = False
     threshold: int = 128
     kinsoku_mode: str = "standard"
+    tatechuyoko_digit_mode: str = "2"
     punctuation_position_mode: str = "standard"
     ichi_position_mode: str = "standard"
+    halfwidth_digit_position_mode: str = "standard"
     lower_closing_bracket_position_mode: str = "standard"
     wave_dash_drawing_mode: str = "rotate"
     wave_dash_position_mode: str = "standard"
@@ -317,11 +320,17 @@ class ConversionArgs:
                 raise ValueError(f'{margin_name} は 0 以上である必要があります。')
         self.threshold = min(255, max(0, self.threshold))
         self.kinsoku_mode = str(self.kinsoku_mode or 'standard')
+        try:
+            self.tatechuyoko_digit_mode = _normalize_tatechuyoko_digit_mode(getattr(self, 'tatechuyoko_digit_mode', '2'))
+        except Exception:
+            self.tatechuyoko_digit_mode = '2'
         self.punctuation_position_mode = str(self.punctuation_position_mode or 'standard')
         self.ichi_position_mode = str(self.ichi_position_mode or 'standard')
+        self.halfwidth_digit_position_mode = str(getattr(self, 'halfwidth_digit_position_mode', 'standard') or 'standard')
         self.lower_closing_bracket_position_mode = str(getattr(self, 'lower_closing_bracket_position_mode', 'standard') or 'standard')
         self.wave_dash_drawing_mode = str(getattr(self, 'wave_dash_drawing_mode', 'rotate') or 'rotate')
         self.wave_dash_position_mode = str(getattr(self, 'wave_dash_position_mode', 'standard') or 'standard')
+        self.ruby_hide = bool(getattr(self, 'ruby_hide', False))
         self.output_format = _normalize_output_format(getattr(self, 'output_format', 'xtc'))
 
 
@@ -897,6 +906,7 @@ from tategakiXTC_gui_core_renderer import (
     _scaled_kutoten_offset_for_mode,
     _punctuation_extra_y_for_mode,
     _ichi_extra_y_for_mode,
+    _halfwidth_digit_extra_y_for_mode,
     _lower_closing_bracket_extra_y_for_mode,
     _small_kana_offset,
     _kagikakko_extra_y,
@@ -962,6 +972,9 @@ from tategakiXTC_gui_core_renderer import (
     _get_ichi_visual_target_center_y,
     draw_ink_centered_glyph,
     _is_tatechuyoko_token,
+    _is_tatechuyoko_token_for_digit_mode,
+    _normalize_tatechuyoko_digit_mode,
+    _tatechuyoko_digit_max_len,
     _tatechuyoko_layout_limits,
     _cached_text_bbox,
     _cached_text_bbox_dims,

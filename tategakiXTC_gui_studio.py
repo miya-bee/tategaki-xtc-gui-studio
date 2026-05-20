@@ -268,6 +268,8 @@ from tategakiXTC_gui_studio_constants import (
     PRESET_FIELDS,
     KINSOKU_MODE_OPTIONS,
     KINSOKU_MODE_LABELS,
+    TATECHUYOKO_DIGIT_MODE_OPTIONS,
+    TATECHUYOKO_DIGIT_MODE_LABELS,
     GLYPH_POSITION_MODE_OPTIONS,
     GLYPH_POSITION_MODE_LABELS,
     CLOSING_BRACKET_POSITION_MODE_OPTIONS,
@@ -293,6 +295,7 @@ from tategakiXTC_gui_studio_xtc_io import (
 from tategakiXTC_gui_studio_widgets import (
     _scroll_combo_popup_to_top_now,
     FontPopupTopComboBox,
+    SourceDropLineEdit,
     VisibleArrowSpinBox,
     XtcViewerWidget,
 )
@@ -913,9 +916,9 @@ class MainWindow(QMainWindow):
             'profile_combo', 'actual_size_check', 'guides_check', 'calib_spin', 'preview_zoom_spin', 'nav_reverse_check',
             'font_combo', 'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'dither_check', 'night_check',
+            'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'ruby_hide_check', 'dither_check', 'night_check',
             'open_folder_check', 'output_conflict_combo', 'output_format_combo',
-            'kinsoku_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
+            'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
         )
 
     def _preset_apply_widgets(self: MainWindow) -> tuple[object, ...]:
@@ -923,7 +926,7 @@ class MainWindow(QMainWindow):
             'profile_combo', 'width_spin', 'height_spin', 'font_combo',
             'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'night_check', 'dither_check', 'kinsoku_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
+            'ruby_hide_check', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
         )
 
     def _apply_profile_dimensions_to_ui(
@@ -958,6 +961,7 @@ class MainWindow(QMainWindow):
             nav_buttons_reversed=getattr(self, 'nav_buttons_reversed', False),
             font_size=self._safe_widget_value('font_size_spin', 26),
             ruby_size=self._safe_widget_value('ruby_size_spin', 12),
+            ruby_hide=self._safe_widget_checked('ruby_hide_check'),
             line_spacing=self._safe_widget_value('line_spacing_spin', 44),
             margin_t=self._safe_widget_value('margin_t_spin', 12),
             margin_b=self._safe_widget_value('margin_b_spin', 14),
@@ -971,8 +975,10 @@ class MainWindow(QMainWindow):
             output_conflict=self._safe_combo_data('output_conflict_combo', 'rename'),
             output_format=self._safe_combo_data('output_format_combo', 'xtc'),
             kinsoku_mode=self._safe_combo_data('kinsoku_mode_combo', 'standard'),
+            tatechuyoko_digit_mode=self._safe_combo_data('tatechuyoko_digit_mode_combo', '2'),
             punctuation_position_mode=self._safe_combo_data('punctuation_position_combo', 'standard'),
             ichi_position_mode=self._safe_combo_data('ichi_position_combo', 'standard'),
+            halfwidth_digit_position_mode=self._safe_combo_data('halfwidth_digit_position_combo', 'standard'),
             lower_closing_bracket_position_mode=self._safe_combo_data('lower_closing_bracket_position_combo', 'standard'),
             wave_dash_drawing_mode=self._safe_combo_data('wave_dash_drawing_combo', 'rotate'),
             wave_dash_position_mode=self._safe_combo_data('wave_dash_position_combo', 'standard'),
@@ -1054,6 +1060,8 @@ class MainWindow(QMainWindow):
             if key in apply_plan and widget is not None:
                 widget.setValue(int(apply_plan[key]))
 
+        if 'ruby_hide' in apply_plan:
+            getattr(self, 'ruby_hide_check', None) is not None and self.ruby_hide_check.setChecked(bool(apply_plan['ruby_hide']))
         if 'dither' in apply_plan:
             getattr(self, 'dither_check', None) is not None and self.dither_check.setChecked(bool(apply_plan['dither']))
         self._apply_render_option_ui_state()
@@ -1067,10 +1075,14 @@ class MainWindow(QMainWindow):
             getattr(self, 'output_format_combo', None) is not None and self._set_combo_to_data(self.output_format_combo, str(apply_plan['output_format']))
         if 'kinsoku_mode' in apply_plan:
             getattr(self, 'kinsoku_mode_combo', None) is not None and self._set_combo_to_data(self.kinsoku_mode_combo, str(apply_plan['kinsoku_mode']))
+        if 'tatechuyoko_digit_mode' in apply_plan:
+            getattr(self, 'tatechuyoko_digit_mode_combo', None) is not None and self._set_combo_to_data(self.tatechuyoko_digit_mode_combo, str(apply_plan['tatechuyoko_digit_mode']))
         if 'punctuation_position_mode' in apply_plan:
             getattr(self, 'punctuation_position_combo', None) is not None and self._set_combo_to_data(self.punctuation_position_combo, str(apply_plan['punctuation_position_mode']))
         if 'ichi_position_mode' in apply_plan:
             getattr(self, 'ichi_position_combo', None) is not None and self._set_combo_to_data(self.ichi_position_combo, str(apply_plan['ichi_position_mode']))
+        if 'halfwidth_digit_position_mode' in apply_plan:
+            getattr(self, 'halfwidth_digit_position_combo', None) is not None and self._set_combo_to_data(self.halfwidth_digit_position_combo, str(apply_plan['halfwidth_digit_position_mode']))
         if 'lower_closing_bracket_position_mode' in apply_plan:
             getattr(self, 'lower_closing_bracket_position_combo', None) is not None and self._set_combo_to_data(self.lower_closing_bracket_position_combo, str(apply_plan['lower_closing_bracket_position_mode']))
         if 'wave_dash_drawing_mode' in apply_plan:
@@ -1533,8 +1545,9 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(*self._plan_int_tuple_value(top_bar_plan, 'contents_margins', (16, 0, 12, 0), expected_length=4))
         lay.setSpacing(self._plan_int_value(top_bar_plan, 'spacing', 10))
 
-        title = QLabel(APP_NAME)
-        title.setObjectName('appTitle')
+        title = QLabel(f'v{APP_VERSION}')
+        title.setObjectName('appVersionSubtle')
+        title.setToolTip(APP_NAME)
         lay.addWidget(title)
         lay.addWidget(self._v_sep())
 
@@ -1577,12 +1590,14 @@ class MainWindow(QMainWindow):
             title=str(top_bar_plan.get('top_buttons_help_title', '上部ボタンの使い分け')),
         ))
 
-        self.target_edit = QLineEdit()
+        self.target_edit = SourceDropLineEdit()
         self.target_edit.setObjectName('targetEdit')
         self.target_edit.setPlaceholderText(str(top_bar_plan.get('target_placeholder', 'EPUB / ZIP / CBZ / CBR / RAR / TXT / Markdown / 画像 / フォルダ')))
+        self.target_edit.setToolTip(str(top_bar_plan.get('target_tooltip', '変換対象のファイルまたはフォルダを入力します。ソースファイルはここへドラッグ＆ドロップできます。')))
         self.target_edit.editingFinished.connect(self._update_top_status)
         self.target_edit.editingFinished.connect(self.save_ui_state)
         self.target_edit.editingFinished.connect(self.on_target_editing_finished)
+        self.target_edit.sourcePathDropped.connect(self._apply_dropped_target_path)
         lay.addWidget(self.target_edit, 1)
 
         lay.addWidget(self._v_sep())
@@ -1670,11 +1685,15 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(self._plan_bool_value(container_plan, 'scroll_widget_resizable', True))
         scroll.setFrameShape(self._plan_frame_shape_value(container_plan, 'scroll_frame_shape', 'no_frame'))
         scroll.setHorizontalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(container_plan, 'scroll_horizontal_scroll_bar_policy', 'always_off')
+            self._plan_scroll_bar_policy_value(container_plan, 'scroll_horizontal_scroll_bar_policy', 'as_needed')
+        )
+        scroll.setVerticalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(container_plan, 'scroll_vertical_scroll_bar_policy', 'as_needed')
         )
 
         container = QWidget()
         container.setObjectName(str(container_plan.get('container_object_name', 'leftSettingsContainer')))
+        container.setMinimumWidth(self._plan_int_value(container_plan, 'scroll_minimum_content_width', 760))
         self.left_settings_container = container
         self.left_settings_scroll = scroll
         lay = QVBoxLayout(container)
@@ -1780,7 +1799,12 @@ class MainWindow(QMainWindow):
         self._populate_font_combo()
         self._apply_default_font_selection()
         self.font_combo.currentIndexChanged.connect(self.on_font_changed)
-        font_row.addWidget(self.font_combo, 1)
+        # v1.3.3.30: keep the font reference button closer to the font selector.
+        # The left pane top area can now scroll horizontally, but placing this
+        # button at the far right still made it feel detached in wide layouts.
+        # Give the selector roughly 2/3 of the row and leave flexible space on
+        # the right so the browse button sits nearer the center-left cluster.
+        font_row.addWidget(self.font_combo, 2)
         browse_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
                 font_plan.get('browse_button_text', '参照'),
@@ -1789,6 +1813,7 @@ class MainWindow(QMainWindow):
             self.select_font_file,
         )
         font_row.addWidget(browse_btn)
+        font_row.addStretch(1)
         lay.addLayout(font_row)
 
         self.font_size_spin = self._spin(18, 72, 26, compact=True, buttons=True)
@@ -1816,7 +1841,7 @@ class MainWindow(QMainWindow):
         self.output_format_combo.currentIndexChanged.connect(self._schedule_live_preview_refresh_from_signal)
         self.output_format_combo.currentIndexChanged.connect(lambda _i, self=self: self.save_ui_state())
         format_kinsoku_row.addWidget(self.output_format_combo)
-        format_kinsoku_row.addWidget(self._help_icon_button('XTC は 2 階調（白黒）、XTCH は 4 階調（白黒 4 段階）です。通常の白黒表示なら XTC、階調を残したい画像寄りの用途では XTCH を選びます。'))
+        format_kinsoku_row.addWidget(self._help_icon_button('XTC: 2 階調（白黒）で保存します。\nXTCH: 4 階調（白黒 4 段階）で保存します。\n使い分け: 通常の白黒表示なら XTC、階調を残したい画像寄りの用途では XTCH を選びます。'))
         format_kinsoku_row.addSpacing(10)
 
         # sweep366_layout_trial: 機種選択を試験的に「出力形式」と同じ左ペイン行へ移動する。
@@ -1828,15 +1853,25 @@ class MainWindow(QMainWindow):
         self.profile_combo.setMinimumWidth(self._plan_int_value(display_plan, 'profile_combo_min_width', 130))
         self.profile_combo.currentIndexChanged.connect(self.on_profile_changed)
         format_kinsoku_row.addWidget(self.profile_combo)
-        format_kinsoku_row.addWidget(self._help_icon_button('機種を選ぶと解像度が自動設定されます。Custom では手動で幅・高さを指定します。'))
+        format_kinsoku_row.addWidget(self._help_icon_button('機種: 選ぶと解像度が自動設定されます。\nCustom: 手動で幅・高さを指定します。'))
         format_kinsoku_row.addSpacing(10)
 
         self._ensure_behavior_controls()
         format_kinsoku_row.addWidget(self._dim_label('禁則処理'))
         format_kinsoku_row.addWidget(self.kinsoku_mode_combo)
-        format_kinsoku_row.addWidget(self._help_icon_button('オフ: 禁則処理を行わず機械的に流し込みます。簡易: 行頭禁則・行末禁則・句読点のぶら下げのみ行います。標準: 連続約物や閉じ括弧＋句読点のまとまりも含めて、現在の禁則処理を有効にします。'))
+        format_kinsoku_row.addWidget(self._help_icon_button('オフ: 禁則処理を行わず機械的に流し込みます。\n簡易: 行頭禁則・行末禁則・句読点のぶら下げのみ行います。\n標準: 連続約物や閉じ括弧＋句読点のまとまりも含めて、現在の禁則処理を有効にします。'))
         format_kinsoku_row.addStretch(1)
         lay.addLayout(format_kinsoku_row)
+
+        tatechuyoko_row = self._make_hbox_layout_from_plan(
+            gui_layouts.build_row_layout_plan(spacing=font_plan.get('tatechuyoko_row_spacing', 6))
+        )
+        tatechuyoko_row.addWidget(self._dim_label('縦中横'))
+        self.tatechuyoko_digit_mode_combo.setMaximumWidth(self._plan_int_value(font_plan, 'tatechuyoko_digit_mode_combo_width', 92))
+        tatechuyoko_row.addWidget(self.tatechuyoko_digit_mode_combo)
+        tatechuyoko_row.addWidget(self._help_icon_button('半角数字を1文字分に横組みする上限です。\n4文字: 4桁までを縦中横にします。\n3文字: 3桁までを縦中横にします。\n2文字: 2桁までを縦中横にします。\n無し: 半角数字を縦中横にしません。'))
+        tatechuyoko_row.addStretch(1)
+        lay.addLayout(tatechuyoko_row)
 
         self.profile_hint = QLabel(DEVICE_PROFILES['x4'].tagline)
         self.profile_hint.setObjectName('hintLabel')
@@ -1868,26 +1903,22 @@ class MainWindow(QMainWindow):
         row_plan = gui_layouts.build_row_layout_plan(
             contents_margins=margin_rows_plan.get('row_contents_margins', (0, 0, 0, 0))
         )
-        row1 = self._make_hbox_layout_from_plan(row_plan)
-        row1.addWidget(self._dim_label(str(margin_rows_plan.get('top_labels', ('上余白', '下余白'))[0])))
-        row1.addWidget(self.margin_t_spin)
-        row1.addSpacing(self._plan_int_value(margin_rows_plan, 'pair_spacing', 16))
-        row1.addWidget(self._dim_label(str(margin_rows_plan.get('top_labels', ('上余白', '下余白'))[1])))
-        row1.addWidget(self.margin_b_spin)
+        row = self._make_hbox_layout_from_plan(row_plan)
+        row.addWidget(self._dim_label(str(margin_rows_plan.get('labels', ('上余白', '下余白', '左余白', '右余白'))[0])))
+        row.addWidget(self.margin_t_spin)
+        row.addSpacing(self._plan_int_value(margin_rows_plan, 'pair_spacing', 16))
+        row.addWidget(self._dim_label(str(margin_rows_plan.get('labels', ('上余白', '下余白', '左余白', '右余白'))[1])))
+        row.addWidget(self.margin_b_spin)
+        row.addSpacing(self._plan_int_value(margin_rows_plan, 'pair_spacing', 16))
+        row.addWidget(self._dim_label(str(margin_rows_plan.get('labels', ('上余白', '下余白', '左余白', '右余白'))[2])))
+        row.addWidget(self.margin_l_spin)
+        row.addSpacing(self._plan_int_value(margin_rows_plan, 'pair_spacing', 16))
+        row.addWidget(self._dim_label(str(margin_rows_plan.get('labels', ('上余白', '下余白', '左余白', '右余白'))[3])))
+        row.addWidget(self.margin_r_spin)
         if self._plan_bool_value(margin_rows_plan, 'trailing_stretch', True):
-            row1.addStretch(1)
+            row.addStretch(1)
 
-        row2 = self._make_hbox_layout_from_plan(row_plan)
-        row2.addWidget(self._dim_label(str(margin_rows_plan.get('side_labels', ('右余白', '左余白'))[0])))
-        row2.addWidget(self.margin_r_spin)
-        row2.addSpacing(self._plan_int_value(margin_rows_plan, 'pair_spacing', 16))
-        row2.addWidget(self._dim_label(str(margin_rows_plan.get('side_labels', ('右余白', '左余白'))[1])))
-        row2.addWidget(self.margin_l_spin)
-        if self._plan_bool_value(margin_rows_plan, 'trailing_stretch', True):
-            row2.addStretch(1)
-
-        lay.addLayout(row1)
-        lay.addLayout(row2)
+        lay.addLayout(row)
         return w
 
     # ── 設定セクション：プレビュー ────────────────────────
@@ -2006,10 +2037,12 @@ class MainWindow(QMainWindow):
         self.preview_refresh_btn = self.preview_update_btn
         self.preview_status_label = QLabel(str(display_plan.get('preview_status_text', '')))
         self.preview_status_label.setObjectName(str(display_plan.get('preview_status_object_name', 'hintLabel')))
-        self.preview_status_label.setMinimumWidth(self._plan_int_value(display_plan, 'preview_status_min_width', 260))
-        row4.addWidget(self.preview_status_label, 1)
+        self.preview_status_label.setMinimumWidth(self._plan_int_value(display_plan, 'preview_status_min_width', 220))
+        self.preview_status_label.setMaximumWidth(self._plan_int_value(display_plan, 'preview_status_max_width', 260))
+        row4.addWidget(self.preview_status_label)
         row4.addSpacing(self._plan_int_value(display_plan, 'preview_status_help_spacing', 4))
-        row4.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時にプレビューを自動生成します。文字サイズ・余白・禁則処理・保存形式などの見た目に関わる設定は、操作が止まったタイミングで自動的にプレビューへ反映します。手動で確実に再生成したい場合は［プレビュー更新］を押してください。プレビュー上限を増やすほど確認範囲は広がりますが、読込と再描画は重くなります。'))))
+        row4.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時: プレビューを自動生成します。\n設定変更後: 自動再生成せず、［プレビュー更新］を押した時点で再生成します。\n更新対象: プレビュー上限を増やすほど確認範囲は広がりますが、読込と再描画は重くなります。'))))
+        row4.addStretch(1)
         lay.addLayout(row4)
 
         self.guides_check.toggled.connect(self.on_guides_toggled)
@@ -2031,7 +2064,12 @@ class MainWindow(QMainWindow):
         )
 
         row = self._make_hbox_layout_from_plan()
-        self.night_check = QCheckBox(str(image_plan.get('night_mode_text', '白黒反転（出力）')))
+        self.ruby_hide_check = QCheckBox(str(image_plan.get('ruby_hide_label', 'ルビ消し')))
+        self.ruby_hide_check.setChecked(self._plan_bool_value(image_plan, 'ruby_hide_checked_default', False))
+        self.ruby_hide_check.toggled.connect(self.on_ruby_hide_toggled)
+        row.addWidget(self.ruby_hide_check)
+        row.addSpacing(self._plan_int_value(image_plan, 'night_mode_spacing', 16))
+        self.night_check = QCheckBox(str(image_plan.get('night_mode_text', '白黒反転')))
         self.night_check.toggled.connect(self.on_night_toggled)
         row.addWidget(self.night_check)
         row.addSpacing(self._plan_int_value(image_plan, 'night_mode_spacing', 16))
@@ -2046,7 +2084,7 @@ class MainWindow(QMainWindow):
         self.threshold_spin.valueChanged.connect(self.on_threshold_changed)
         row.addWidget(self.threshold_spin)
         row.addSpacing(self._plan_int_value(image_plan, 'threshold_help_spacing', 6))
-        row.addWidget(self._help_icon_button(str(image_plan.get('help_text', '白黒反転（出力）: 白と黒を入れ替えて出力します。プレビューにも反映されます。しきい値: 白と黒の分かれ目を調整します。ディザリング: 粒状感と引き換えに濃淡感を残します。'))))
+        row.addWidget(self._help_icon_button(str(image_plan.get('help_text', 'ルビ消し: チェックした場合だけ、親文字は残したままルビを表示しない変換モードにします。\n白黒反転: 白と黒を入れ替えて出力します。プレビューにも反映されます。\nディザリング: 粒状感と引き換えに濃淡感を残します。\nしきい値: 白と黒の分かれ目を調整します。'))))
         if self._plan_bool_value(image_plan, 'trailing_stretch', True):
             row.addStretch(1)
         lay.addLayout(row)
@@ -2058,20 +2096,20 @@ class MainWindow(QMainWindow):
         glyph_combo_width = self._plan_int_value(image_plan, 'glyph_position_combo_width', 92)
         closing_bracket_combo_width = self._plan_int_value(image_plan, 'closing_bracket_position_combo_width', glyph_combo_width)
         glyph_group_spacing = self._plan_int_value(image_plan, 'glyph_position_group_spacing', 8)
-        for combo in (self.punctuation_position_combo, self.ichi_position_combo):
+        for combo in (self.punctuation_position_combo, self.ichi_position_combo, self.halfwidth_digit_position_combo):
             combo.setMaximumWidth(glyph_combo_width)
         self.lower_closing_bracket_position_combo.setMaximumWidth(closing_bracket_combo_width)
         image_glyph_position_row.addWidget(self._dim_label('句読点'))
         image_glyph_position_row.addWidget(self.punctuation_position_combo)
-        image_glyph_position_row.addWidget(self._help_icon_button('ぶら下がり句読点のみ対象です。下補正 強/弱: 標準より下へ寄せます。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
+        image_glyph_position_row.addWidget(self._help_icon_button('対象: ぶら下がり句読点のみです。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
         image_glyph_position_row.addSpacing(glyph_group_spacing)
         image_glyph_position_row.addWidget(self._dim_label('漢数字 一'))
         image_glyph_position_row.addWidget(self.ichi_position_combo)
-        image_glyph_position_row.addWidget(self._help_icon_button('文中すべての漢数字「一」が対象です。下補正 強/弱: 標準より下へ寄せます。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
+        image_glyph_position_row.addWidget(self._help_icon_button('対象: 文中すべての漢数字「一」です。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
         image_glyph_position_row.addSpacing(glyph_group_spacing)
-        image_glyph_position_row.addWidget(self._dim_label('下鍵括弧'))
-        image_glyph_position_row.addWidget(self.lower_closing_bracket_position_combo)
-        image_glyph_position_row.addWidget(self._help_icon_button('閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみ対象です。下補正 強/弱: 標準より下へ寄せます。標準: これまでと同じ位置で描画します。上補正 弱/強: 標準より上へ寄せます。'))
+        image_glyph_position_row.addWidget(self._dim_label('半角数字'))
+        image_glyph_position_row.addWidget(self.halfwidth_digit_position_combo)
+        image_glyph_position_row.addWidget(self._help_icon_button('対象: 文中の半角数字と縦中横の半角数字のみです。\n全角数字とルビ内数字は対象外です。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
         image_glyph_position_row.addStretch(1)
         lay.addLayout(image_glyph_position_row)
 
@@ -2081,13 +2119,17 @@ class MainWindow(QMainWindow):
         self.wave_dash_drawing_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_drawing_combo_width', 108))
         self.wave_dash_position_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_position_combo_width', 92))
         wave_dash_group_spacing = self._plan_int_value(image_plan, 'wave_dash_group_spacing', 8)
+        image_wave_dash_row.addWidget(self._dim_label('下鍵括弧'))
+        image_wave_dash_row.addWidget(self.lower_closing_bracket_position_combo)
+        image_wave_dash_row.addWidget(self._help_icon_button('対象: 閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみです。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
+        image_wave_dash_row.addSpacing(wave_dash_group_spacing)
         image_wave_dash_row.addWidget(self._dim_label('波線描画'))
         image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)
-        image_wave_dash_row.addWidget(self._help_icon_button('波線系記号（～/〜/〰/~ など）の描画方式です。回転グリフ: フォントの質感を保って90度回転します。別描画: アプリ側で縦波線を描きます。回転グリフに失敗した場合は別描画へ自動フォールバックします。'))
+        image_wave_dash_row.addWidget(self._help_icon_button('対象: 波線系記号（～/〜/〰/~ など）の描画方式です。\n回転グリフ: フォントの質感を保って90度回転します。\n別描画: アプリ側で縦波線を描きます。\n自動フォールバック: 回転グリフに失敗した場合は別描画へ切り替えます。'))
         image_wave_dash_row.addSpacing(wave_dash_group_spacing)
         image_wave_dash_row.addWidget(self._dim_label('波線位置'))
         image_wave_dash_row.addWidget(self.wave_dash_position_combo)
-        image_wave_dash_row.addWidget(self._help_icon_button('波線系記号の縦位置だけを下方向へ補正します。標準: これまでの位置、下補正弱/強: 標準より下へ寄せます。'))
+        image_wave_dash_row.addWidget(self._help_icon_button('対象: 波線系記号の縦位置だけを補正します。\n標準: これまでの位置です。\n下補正弱/強: 標準より下へ寄せます。'))
         image_wave_dash_row.addStretch(1)
         lay.addLayout(image_wave_dash_row)
         return box
@@ -2120,18 +2162,18 @@ class MainWindow(QMainWindow):
 
         self.preset_apply_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                preset_plan.get('apply_button_text', 'プリセット適用'),
+                preset_plan.get('apply_button_text', 'プリセット読込'),
                 object_name=preset_plan.get('button_object_name', 'smallBtn'),
-                tooltip=preset_plan.get('apply_tooltip', '選択中のプリセットを現在の組版へ反映'),
+                tooltip=preset_plan.get('apply_tooltip', '選択中のプリセットを現在の組版へ読み込みます'),
             ),
             self.apply_selected_preset,
         )
 
         self.preset_save_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                preset_plan.get('save_button_text', '組版保存'),
+                preset_plan.get('save_button_text', 'プリセット保存'),
                 object_name=preset_plan.get('button_object_name', 'smallBtn'),
-                tooltip=preset_plan.get('save_tooltip', '現在の組版設定をこのプリセットへ上書き保存'),
+                tooltip=preset_plan.get('save_tooltip', '現在の組版設定をこのプリセットへ保存します'),
             ),
             self.save_selected_preset,
         )
@@ -2174,13 +2216,19 @@ class MainWindow(QMainWindow):
             return
         behavior_plan = gui_layouts.build_behavior_section_plan()
         self.open_folder_check = QCheckBox(str(behavior_plan.get('open_folder_text', '完了後フォルダを開く')))
-        self.open_folder_check.setChecked(self._plan_bool_value(behavior_plan, 'open_folder_checked_default', True))
+        self.open_folder_check.setChecked(self._plan_bool_value(behavior_plan, 'open_folder_checked_default', False))
         self.open_folder_check.toggled.connect(self.save_ui_state)
 
         self.kinsoku_mode_combo = QComboBox()
         for key, label in KINSOKU_MODE_OPTIONS:
             self.kinsoku_mode_combo.addItem(label, key)
         self.kinsoku_mode_combo.currentIndexChanged.connect(self._on_kinsoku_mode_changed)
+
+        self.tatechuyoko_digit_mode_combo = QComboBox()
+        for key, label in TATECHUYOKO_DIGIT_MODE_OPTIONS:
+            self.tatechuyoko_digit_mode_combo.addItem(label, key)
+        self._set_combo_to_data(self.tatechuyoko_digit_mode_combo, '2')
+        self.tatechuyoko_digit_mode_combo.currentIndexChanged.connect(self._on_tatechuyoko_digit_mode_changed)
 
         self.punctuation_position_combo = QComboBox()
         for key, label in GLYPH_POSITION_MODE_OPTIONS:
@@ -2191,6 +2239,11 @@ class MainWindow(QMainWindow):
         for key, label in GLYPH_POSITION_MODE_OPTIONS:
             self.ichi_position_combo.addItem(label, key)
         self.ichi_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
+
+        self.halfwidth_digit_position_combo = QComboBox()
+        for key, label in GLYPH_POSITION_MODE_OPTIONS:
+            self.halfwidth_digit_position_combo.addItem(label, key)
+        self.halfwidth_digit_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
 
         self.lower_closing_bracket_position_combo = QComboBox()
         for key, label in CLOSING_BRACKET_POSITION_MODE_OPTIONS:
@@ -2225,16 +2278,18 @@ class MainWindow(QMainWindow):
 
         self._ensure_behavior_controls()
 
-        row1 = self._make_hbox_layout_from_plan()
-        row1.addWidget(self.open_folder_check)
-        if self._plan_bool_value(behavior_plan, 'open_folder_row_stretch', True):
-            row1.addStretch(1)
-        lay.addLayout(row1)
+        # v1.3.3.48: 変換完了後のフォルダ自動オープンは廃止し、
+        # 右ペイン完了カードの［保存先を開く］ボタンから手動で開く導線に一本化する。
+        try:
+            self.open_folder_check.setChecked(False)
+            self.open_folder_check.setVisible(False)
+        except Exception:
+            pass
 
         row2 = self._make_hbox_layout_from_plan()
         row2.addWidget(self._dim_label(str(behavior_plan.get('output_conflict_label', '同名出力'))))
         row2.addWidget(self.output_conflict_combo, 1)
-        row2.addWidget(self._help_icon_button(str(behavior_plan.get('output_conflict_help_text', '保存先に同名の .xtc / .xtch があるときの動作を選びます。自動連番: foo(1).xtc 形式で保存 / 上書き: 既存ファイルを置き換え / エラー: そのファイルを保存せずエラーとして記録します。'))))
+        row2.addWidget(self._help_icon_button(str(behavior_plan.get('output_conflict_help_text', '保存先に同名の .xtc / .xtch があるときの動作を選びます。\n自動連番: foo(1).xtc 形式で保存します。\n上書き: 既存ファイルを置き換えます。\nエラー: そのファイルを保存せずエラーとして記録します。'))))
         lay.addLayout(row2)
         return box
 
@@ -2256,14 +2311,15 @@ class MainWindow(QMainWindow):
             self.open_xtc_file,
         )
         row.addWidget(self.open_xtc_btn)
-        if self._plan_bool_value(file_viewer_plan, 'open_xtc_trailing_stretch', True):
-            row.addStretch(1)
+        row.addSpacing(self._plan_int_value(file_viewer_plan, 'open_xtc_help_leading_spacing', 8))
         row.addWidget(self._help_icon_button(
             file_viewer_plan.get(
                 'open_xtc_help_text',
                 '既存の .xtc / .xtch ファイルを右ペインの実機ビューへ読み込んで確認します。',
             )
         ))
+        if self._plan_bool_value(file_viewer_plan, 'open_xtc_help_trailing_stretch', True):
+            row.addStretch(1)
         lay.addLayout(row)
         return box
 
@@ -2277,6 +2333,7 @@ class MainWindow(QMainWindow):
         lay.setSpacing(self._plan_int_value(preview_panel_plan, 'panel_spacing', 0))
 
         lay.addWidget(self._build_view_toggle_bar())
+        lay.addWidget(self._build_conversion_completion_card())
 
         self.preview_stack = QStackedWidget()
 
@@ -2293,12 +2350,34 @@ class MainWindow(QMainWindow):
         self.preview_scroll.setFrameShape(
             self._plan_frame_shape_value(preview_panel_plan, 'font_scroll_frame_shape', 'no_frame')
         )
+        self.preview_scroll.setHorizontalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(
+                preview_panel_plan,
+                'font_scroll_horizontal_scroll_bar_policy',
+                'as_needed',
+            )
+        )
+        self.preview_scroll.setVerticalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(
+                preview_panel_plan,
+                'font_scroll_vertical_scroll_bar_policy',
+                'as_needed',
+            )
+        )
+        try:
+            self.preview_scroll.setLayoutDirection(Qt.LeftToRight)
+        except Exception:
+            pass
         self.preview_label = QLabel()
         self.preview_label.setAlignment(
             self._plan_alignment_value(preview_panel_plan, 'font_preview_alignment', 'center')
         )
         self.preview_label.setMinimumSize(*self._plan_int_tuple_value(preview_panel_plan, 'font_preview_min_size', (360, 600), expected_length=2))
         self.preview_label.setWordWrap(self._plan_bool_value(preview_panel_plan, 'font_preview_word_wrap', True))
+        try:
+            self.preview_label.setLayoutDirection(Qt.LeftToRight)
+        except Exception:
+            pass
         self.preview_scroll.setWidget(self.preview_label)
         fl.addWidget(self.preview_scroll)
         self.preview_stack.addWidget(font_page)
@@ -2316,6 +2395,24 @@ class MainWindow(QMainWindow):
         self.viewer_scroll.setFrameShape(
             self._plan_frame_shape_value(preview_panel_plan, 'device_scroll_frame_shape', 'no_frame')
         )
+        self.viewer_scroll.setHorizontalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(
+                preview_panel_plan,
+                'device_scroll_horizontal_scroll_bar_policy',
+                'as_needed',
+            )
+        )
+        self.viewer_scroll.setVerticalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(
+                preview_panel_plan,
+                'device_scroll_vertical_scroll_bar_policy',
+                'as_needed',
+            )
+        )
+        try:
+            self.viewer_scroll.setLayoutDirection(Qt.LeftToRight)
+        except Exception:
+            pass
         self.viewer_scroll.setFocusPolicy(
             self._plan_focus_policy_value(preview_panel_plan, 'device_scroll_focus_policy', 'strong_focus')
         )
@@ -2399,6 +2496,261 @@ class MainWindow(QMainWindow):
         self._add_optional_widget_to_layout(lay, 'guides_check')
         self._add_optional_widget_to_layout(lay, 'guides_help_btn')
 
+    def _build_conversion_completion_card(self):
+        """右ペイン上部へ表示する変換完了カードを構築する。"""
+        card = QFrame()
+        card.setObjectName('conversionCompletionCard')
+        card.setVisible(False)
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(6)
+
+        top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
+        top.setSpacing(8)
+        self.conversion_completion_title_label = QLabel('変換完了')
+        self.conversion_completion_title_label.setObjectName('conversionCompletionTitle')
+        top.addWidget(self.conversion_completion_title_label, 0)
+        top.addStretch(1)
+        self.close_conversion_completion_card_btn = QPushButton('閉じる')
+        self.close_conversion_completion_card_btn.setObjectName('conversionCompletionCloseButton')
+        self.close_conversion_completion_card_btn.setToolTip('変換完了カードを閉じます。')
+        self.close_conversion_completion_card_btn.clicked.connect(self._hide_conversion_completion_card)
+        top.addWidget(self.close_conversion_completion_card_btn, 0)
+        lay.addLayout(top)
+
+        self.conversion_completion_message_label = QLabel('')
+        self.conversion_completion_message_label.setObjectName('conversionCompletionMessage')
+        self.conversion_completion_message_label.setWordWrap(True)
+        self.conversion_completion_message_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        lay.addWidget(self.conversion_completion_message_label, 0)
+
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(8)
+        self.card_open_results_folder_btn = QPushButton('保存先を開く')
+        self.card_open_results_folder_btn.setObjectName('conversionCompletionActionButton')
+        self.card_open_results_folder_btn.setToolTip('変換結果が保存されたフォルダを開きます。')
+        self.card_open_results_folder_btn.clicked.connect(self.open_results_folder_from_results)
+        actions.addWidget(self.card_open_results_folder_btn, 0)
+        actions.addStretch(1)
+        lay.addLayout(actions)
+        self.conversion_completion_card = card
+        return card
+
+    def _hide_conversion_completion_card(self: MainWindow) -> None:
+        card = getattr(self, 'conversion_completion_card', None)
+        if card is not None and hasattr(card, 'setVisible'):
+            try:
+                card.setVisible(False)
+            except Exception:
+                pass
+
+    def _show_results_tab_from_completion_card(self: MainWindow) -> None:
+        if hasattr(self, 'bottom_tabs'):
+            try:
+                self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX)
+            except Exception:
+                pass
+
+    def _completion_card_parent_texts(self: MainWindow, paths: object) -> list[str]:
+        parents: list[str] = []
+        seen: set[str] = set()
+        for value in results_controller.coerce_result_path_list(paths):
+            path_text = worker_logic._normalized_path_text(value).strip()
+            if not path_text:
+                continue
+            try:
+                if worker_logic._is_windows_like_path(path_text):
+                    parent = ntpath.dirname(ntpath.normpath(path_text))
+                else:
+                    parent = str(Path(path_text).parent)
+            except Exception:
+                parent = ''
+            parent = worker_logic._normalized_path_text(parent).strip()
+            if not parent:
+                continue
+            key = parent.replace('\\', '/').casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            parents.append(parent)
+        return parents
+
+    def _completion_card_result_item_texts(
+        self: MainWindow,
+        paths: object,
+        *,
+        base_path: object = '',
+        max_items: int = 5,
+    ) -> list[str]:
+        """変換完了カードへ表示する出力ファイルの短い一覧を返す。"""
+        normalized_paths = results_controller.coerce_result_path_list(paths)
+        base_text = worker_logic._normalized_path_text(base_path).strip()
+        items: list[str] = []
+        for value in normalized_paths[:max(0, int(max_items))]:
+            path_text = worker_logic._normalized_path_text(value).strip()
+            if not path_text:
+                continue
+            display_text = ''
+            try:
+                if base_text and worker_logic._is_windows_like_path(path_text):
+                    path_norm = ntpath.normpath(path_text)
+                    base_norm = ntpath.normpath(base_text)
+                    rel = ntpath.relpath(path_norm, base_norm)
+                    if rel and rel != '.' and not rel.startswith('..'):
+                        display_text = rel
+                elif base_text:
+                    path_obj = Path(path_text)
+                    base_obj = Path(base_text)
+                    try:
+                        display_text = str(path_obj.relative_to(base_obj))
+                    except Exception:
+                        display_text = ''
+            except Exception:
+                display_text = ''
+            if not display_text:
+                display_text = studio_logic.build_result_display_name(path_text) or path_text
+            items.append(display_text)
+        return items
+
+    def _build_conversion_completion_card_message(
+        self: MainWindow,
+        converted_files: object,
+        result: Mapping[str, object] | None = None,
+    ) -> str:
+        paths = results_controller.coerce_result_path_list(converted_files)
+        count = len(paths)
+        result_payload = result or {}
+        is_folder_batch = bool(result_payload.get('folder_batch'))
+        folder_batch_stopped = bool(result_payload.get('folder_batch_stopped'))
+        target_text = worker_logic._normalized_path_text(result_payload.get('open_folder_target')).strip()
+        if count <= 0:
+            if is_folder_batch and folder_batch_stopped:
+                lines = ['フォルダ一括変換を中止しました。', '保存済みファイルはありません。']
+                processed = int(result_payload.get('folder_batch_processed_count') or 0)
+                total = int(result_payload.get('folder_batch_total_count') or 0)
+                pending = int(result_payload.get('folder_batch_pending_count') or 0)
+                if total > 0:
+                    lines.append(f'処理済み: {processed} / {total} 件')
+                if pending > 0:
+                    lines.append(f'未処理: {pending} 件')
+                if target_text:
+                    lines.append(f'出力先: {target_text}')
+                lines.append('停止要求により、以降の未処理ファイルは変換していません。')
+                lines.append('詳細は左下の「変換結果」タブにも記録しています。')
+                return '\n'.join(lines)
+            if bool(result_payload.get('stopped')):
+                lines = ['変換を中止しました。', '保存済みファイルはありません。']
+                if target_text:
+                    lines.append(f'出力先: {target_text}')
+                lines.append('停止要求により、変換結果は保存されませんでした。')
+                lines.append('詳細は左下の「ログ」タブにも記録しています。')
+                return '\n'.join(lines)
+            return ''
+        parents = self._completion_card_parent_texts(paths)
+        destination = ''
+        if len(parents) <= 1:
+            destination = parents[0] if parents else target_text
+        elif target_text:
+            destination = target_text
+
+        if count == 1:
+            filename = studio_logic.build_result_display_name(paths[0]) or '1件'
+            if is_folder_batch and folder_batch_stopped:
+                lines = ['フォルダ一括変換を中止しました。', f'保存済み: {filename}']
+            else:
+                lines = [f'保存しました: {filename}']
+            if destination:
+                lines.append(f'保存先: {destination}')
+            lines.append('保存先を開く場合は、下の［保存先を開く］を押してください。')
+            lines.append('詳細は左下の「変換結果」タブにも記録しています。')
+            return '\n'.join(lines)
+
+        if is_folder_batch and folder_batch_stopped:
+            lines = ['フォルダ一括変換を中止しました。', f'保存済み: {count}件']
+            processed = int(result_payload.get('folder_batch_processed_count') or 0)
+            total = int(result_payload.get('folder_batch_total_count') or 0)
+            pending = int(result_payload.get('folder_batch_pending_count') or 0)
+            if total > 0:
+                lines.append(f'処理済み: {processed} / {total} 件')
+            if pending > 0:
+                lines.append(f'未処理: {pending} 件')
+        else:
+            lines = [f'保存しました: {count}件']
+        if len(parents) <= 1:
+            if destination:
+                lines.append(f'保存先: {destination}')
+        else:
+            lines.append(f'保存先: 複数フォルダ（{len(parents)}か所）')
+            if target_text:
+                lines.append(f'基準フォルダ: {target_text}')
+            lines.append('サブフォルダ構造を保持して保存しました。')
+
+        lines.append('出力ファイル:')
+        item_base = target_text if len(parents) > 1 else destination
+        item_texts = self._completion_card_result_item_texts(paths, base_path=item_base, max_items=5)
+        for index, item_text in enumerate(item_texts, start=1):
+            lines.append(f'{index}. {item_text}')
+        remaining = count - len(item_texts)
+        if remaining > 0:
+            lines.append(f'…ほか{remaining}件')
+        lines.append('保存先を開く場合は、下の［保存先を開く］を押してください。')
+        lines.append('詳細は左下の「変換結果」タブにも記録しています。')
+        return '\n'.join(lines)
+
+    def _show_conversion_completion_card(
+        self: MainWindow,
+        converted_files: object,
+        result: Mapping[str, object] | None = None,
+    ) -> bool:
+        card = getattr(self, 'conversion_completion_card', None)
+        if card is None:
+            return False
+        paths = results_controller.coerce_result_path_list(converted_files)
+        result_payload = result or {}
+        if not paths and not bool(result_payload.get('show_without_paths')):
+            self._hide_conversion_completion_card()
+            return False
+        message = self._build_conversion_completion_card_message(paths, result_payload)
+        if not message:
+            self._hide_conversion_completion_card()
+            return False
+        title_label = getattr(self, 'conversion_completion_title_label', None)
+        if title_label is not None and hasattr(title_label, 'setText'):
+            try:
+                title_label.setText(str(result_payload.get('completion_title') or '変換完了'))
+            except Exception:
+                pass
+        message_label = getattr(self, 'conversion_completion_message_label', None)
+        if message_label is not None and hasattr(message_label, 'setText'):
+            try:
+                message_label.setText(message)
+            except Exception:
+                pass
+        try:
+            self._completion_card_open_folder_target = worker_logic._normalized_path_text(
+                result_payload.get('open_folder_target')
+            ).strip()
+        except Exception:
+            self._completion_card_open_folder_target = ''
+        open_target_available = bool(self._completion_card_open_folder_target)
+        for attr_name in (
+            'card_open_results_folder_btn',
+        ):
+            button = getattr(self, attr_name, None)
+            if button is None or not hasattr(button, 'setEnabled'):
+                continue
+            try:
+                button.setEnabled(open_target_available)
+            except Exception:
+                pass
+        try:
+            card.setVisible(True)
+        except Exception:
+            return False
+        return True
+
     def _build_nav_bar(self):
         nav_bar_plan = gui_layouts.build_nav_bar_plan()
         bar = QFrame()
@@ -2410,6 +2762,24 @@ class MainWindow(QMainWindow):
         self._add_nav_controls_to_layout(lay, nav_bar_plan=nav_bar_plan, current_label_stretch=1)
         return bar
 
+    def _ensure_nav_reverse_control(self: MainWindow, nav_bar_plan: dict | None = None):
+        nav_bar_plan = nav_bar_plan or gui_layouts.build_nav_bar_plan()
+        existing = getattr(self, 'nav_reverse_check', None)
+        if existing is not None:
+            return existing
+        text = str(nav_bar_plan.get('nav_reverse_text', 'ページ送りキー反転'))
+        try:
+            self.nav_reverse_check = QCheckBox(text, self)
+        except TypeError:
+            self.nav_reverse_check = QCheckBox(text)
+        self.nav_reverse_check.setObjectName(str(nav_bar_plan.get('nav_reverse_object_name', 'navToggle')))
+        self.nav_reverse_check.setFocusPolicy(
+            self._plan_focus_policy_value(nav_bar_plan, 'nav_reverse_focus_policy', 'no_focus')
+        )
+        self.nav_reverse_check.setVisible(False)
+        self.nav_reverse_check.toggled.connect(self.on_nav_reverse_toggled)
+        return self.nav_reverse_check
+
     def _add_nav_controls_to_layout(self, lay: QHBoxLayout, *, nav_bar_plan: dict | None = None, current_label_stretch: int = 0) -> None:
         nav_bar_plan = nav_bar_plan or gui_layouts.build_nav_bar_plan()
 
@@ -2419,13 +2789,7 @@ class MainWindow(QMainWindow):
         self.current_xtc_label.setMaximumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_max_width', 220))
         lay.addWidget(self.current_xtc_label, current_label_stretch)
 
-        self.nav_reverse_check = QCheckBox(str(nav_bar_plan.get('nav_reverse_text', 'ボタン反転')))
-        self.nav_reverse_check.setObjectName(str(nav_bar_plan.get('nav_reverse_object_name', 'navToggle')))
-        self.nav_reverse_check.setFocusPolicy(
-            self._plan_focus_policy_value(nav_bar_plan, 'nav_reverse_focus_policy', 'no_focus')
-        )
-        self.nav_reverse_check.toggled.connect(self.on_nav_reverse_toggled)
-        lay.addWidget(self.nav_reverse_check)
+        self._ensure_nav_reverse_control(nav_bar_plan)
         lay.addWidget(self._nav_section_separator(nav_bar_plan))
         lay.addSpacing(self._plan_int_value(nav_bar_plan, 'nav_button_side_spacing', 10))
 
@@ -2563,7 +2927,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setMaximumWidth(self._plan_int_value(status_strip_plan, 'progress_max_width', 200))
         sl.addWidget(self.progress_bar)
 
-        self.progress_label = QLabel(str(status_strip_plan.get('progress_text', '待機中です。')))
+        self.progress_label = QLabel(str(status_strip_plan.get('progress_text', '')))
         self.progress_label.setObjectName(str(status_strip_plan.get('progress_label_object_name', 'hintLabel')))
         sl.addWidget(self.progress_label, 1)
 
@@ -2600,9 +2964,31 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(*self._plan_int_tuple_value(results_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4))
         lay.setSpacing(self._plan_int_value(results_tab_plan, 'spacing', 4))
         self.results_summary_label = QLabel(str(results_tab_plan.get('summary_text', '変換結果の概要をここに表示します。')))
-        self.results_summary_label.setObjectName(str(results_tab_plan.get('summary_label_object_name', 'hintLabel')))
+        self.results_summary_label.setObjectName(str(results_tab_plan.get('summary_label_object_name', 'resultsPlaceholderLabel')))
         self.results_summary_label.setWordWrap(self._plan_bool_value(results_tab_plan, 'summary_label_word_wrap', True))
+        self.results_summary_label.setAlignment(
+            self._plan_alignment_value(results_tab_plan, 'summary_label_alignment', 'center')
+        )
+        self._set_results_summary_placeholder_state(True)
         lay.addWidget(self.results_summary_label, 0)
+
+        self.results_action_row = QFrame()
+        self.results_action_row.setObjectName('resultsActionRow')
+        results_action_lay = QHBoxLayout(self.results_action_row)
+        results_action_lay.setContentsMargins(8, 5, 8, 5)
+        results_action_lay.setSpacing(8)
+        self.open_results_folder_btn = QPushButton('保存先を開く')
+        self.open_results_folder_btn.setObjectName('resultsActionButton')
+        self.open_results_folder_btn.setToolTip('選択中、または先頭の変換結果が保存されたフォルダを開きます。')
+        self.open_results_folder_btn.clicked.connect(self.open_results_folder_from_results)
+        results_action_lay.addWidget(self.open_results_folder_btn, 0)
+        self.open_selected_result_btn = QPushButton('実機ビューで確認')
+        self.open_selected_result_btn.setObjectName('resultsActionButton')
+        self.open_selected_result_btn.setToolTip('選択中、または先頭の変換結果を右側の実機ビューへ読み込みます。')
+        self.open_selected_result_btn.clicked.connect(self.open_selected_result_from_results)
+        results_action_lay.addWidget(self.open_selected_result_btn, 0)
+        results_action_lay.addStretch(1)
+        lay.addWidget(self.results_action_row, 0)
 
         self.results_list = QListWidget()
         self.results_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -2613,6 +2999,7 @@ class MainWindow(QMainWindow):
         self.results_list.itemClicked.connect(self.on_result_item_clicked)
         self.results_list.itemActivated.connect(self.on_result_item_clicked)
         lay.addWidget(self.results_list, 1)
+        self._sync_results_action_buttons_state()
         return w
 
     def _build_log_tab(self):
@@ -2836,6 +3223,7 @@ class MainWindow(QMainWindow):
             msg = QMessageBox(self)
             msg.setWindowTitle(title)
             msg.setIcon(QMessageBox.Information)
+            msg.setTextFormat(Qt.PlainText)
             msg.setText(text)
             msg.setStandardButtons(QMessageBox.Ok)
             msg.setDefaultButton(QMessageBox.Ok)
@@ -2861,7 +3249,7 @@ class MainWindow(QMainWindow):
         title = QLabel('使い方')
         title.setObjectName('flowGuideTitle')
         title_row.addWidget(title)
-        title_row.addWidget(self._help_icon_button('1. ファイルを開く → 2. プリセットを選ぶ → 3. 必要なら微調整 → 4. 変換実行 → 5. 実機ビューで確認'))
+        title_row.addWidget(self._help_icon_button('1. ファイルを開く\n2. プリセットを選ぶ\n3. 必要なら微調整\n4. 変換実行\n5. 実機ビューで確認'))
         title_row.addStretch(1)
         lay.addLayout(title_row)
         return box
@@ -2939,11 +3327,14 @@ class MainWindow(QMainWindow):
         QFrame#leftSettingsBottomSep { background: #DDE6EF; border: none; max-height: 1px; }
         QFrame#bottomPanelSep { background: #DDE6EF; border: none; max-height: 1px; }
 
-        QLabel#appTitle {
-            font-size: 17px;
-            font-weight: 700;
-            color: #1F3A56;
-            letter-spacing: 0.5px;
+        QLabel#appVersionSubtle {
+            background: transparent;
+            border: none;
+            padding: 0px 2px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #5A7794;
+            letter-spacing: 0px;
         }
 
         QLineEdit#targetEdit {
@@ -3039,6 +3430,19 @@ class MainWindow(QMainWindow):
 
         QLabel#dimLabel { color: #5E7893; font-size: 14px; }
         QLabel#hintLabel { color: #788FA4; font-size: 13px; }
+        QLabel#resultsPlaceholderLabel { color: #9BAABB; font-size: 13px; }
+        QLabel#resultsPlaceholderLabel[placeholderState="empty"] { color: #AAB7C4; }
+        QLabel#resultsPlaceholderLabel[placeholderState="content"] { color: #24577E; font-size: 13px; font-weight: 600; }
+        QFrame#resultsActionRow { background: #EEF6FC; border: 1px solid #C9DDED; border-radius: 8px; }
+        QPushButton#resultsActionButton { background: #FFFFFF; border: 1px solid #9CBAD4; border-radius: 8px; padding: 4px 10px; color: #234D70; font-weight: 700; }
+        QPushButton#resultsActionButton:hover { background: #F6FBFF; border-color: #6F9FC8; }
+        QPushButton#resultsActionButton:disabled { color: #A5B4C1; border-color: #D5E0E8; background: #F6F8FA; }
+        QFrame#conversionCompletionCard { background: #FFF9E8; border: 1px solid #F0CF76; border-radius: 10px; margin: 6px 8px 0 8px; }
+        QLabel#conversionCompletionTitle { color: #6F4B00; font-size: 15px; font-weight: 800; background: transparent; }
+        QLabel#conversionCompletionMessage { color: #4A3A12; font-size: 13px; background: transparent; }
+        QPushButton#conversionCompletionActionButton, QPushButton#conversionCompletionCloseButton { background: #FFFFFF; border: 1px solid #D8B95D; border-radius: 8px; padding: 4px 10px; color: #6F4B00; font-weight: 700; }
+        QPushButton#conversionCompletionActionButton:hover, QPushButton#conversionCompletionCloseButton:hover { background: #FFF3CC; border-color: #C99D2E; }
+        QPushButton#conversionCompletionActionButton:disabled { color: #B6A77E; border-color: #E8DBB1; background: #F8F4E8; }
         QLabel#presetSummaryLabel { color: #275C9A; font-size: 15px; font-weight: 400; }
         QLabel#subNoteLabel { color: #4F6982; font-size: 12px; line-height: 1.35em; }
         QLabel#flowGuideTitle { color: #1F3D5A; font-size: 13px; font-weight: 700; }
@@ -3179,6 +3583,7 @@ class MainWindow(QMainWindow):
         }
 
         QCheckBox { color: #35506A; spacing: 6px; }
+        QLabel#checkboxTextLabel { color: #35506A; }
         QCheckBox::indicator {
             width: 16px; height: 16px;
             border: 1px solid #AFC1D2;
@@ -3415,11 +3820,14 @@ class MainWindow(QMainWindow):
         QFrame#leftSettingsBottomSep { background: #1A2D3F; border: none; max-height: 1px; }
         QFrame#bottomPanelSep { background: #1A2D3F; border: none; max-height: 1px; }
 
-        QLabel#appTitle {
-            font-size: 17px;
-            font-weight: 700;
-            color: #E8F6FF;
-            letter-spacing: 0.5px;
+        QLabel#appVersionSubtle {
+            background: transparent;
+            border: none;
+            padding: 0px 2px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #7FA4C2;
+            letter-spacing: 0px;
         }
 
         QLineEdit#targetEdit {
@@ -3515,6 +3923,12 @@ class MainWindow(QMainWindow):
 
         QLabel#dimLabel { color: #7A9BB2; font-size: 14px; }
         QLabel#hintLabel { color: #6485A0; font-size: 13px; }
+        QFrame#conversionCompletionCard { background: #2A2414; border: 1px solid #8B6C21; border-radius: 10px; margin: 6px 8px 0 8px; }
+        QLabel#conversionCompletionTitle { color: #FFD97A; font-size: 15px; font-weight: 800; background: transparent; }
+        QLabel#conversionCompletionMessage { color: #F0E2BB; font-size: 13px; background: transparent; }
+        QPushButton#conversionCompletionActionButton, QPushButton#conversionCompletionCloseButton { background: #172434; border: 1px solid #8B6C21; border-radius: 8px; padding: 4px 10px; color: #FFD97A; font-weight: 700; }
+        QPushButton#conversionCompletionActionButton:hover, QPushButton#conversionCompletionCloseButton:hover { background: #24364A; border-color: #B98A28; }
+        QPushButton#conversionCompletionActionButton:disabled { color: #827657; border-color: #4A3D1F; background: #1A1D20; }
         QLabel#presetSummaryLabel { color: #8BB6E8; font-size: 15px; font-weight: 400; }
         QLabel#subNoteLabel { color: #83A0BD; font-size: 12px; line-height: 1.35em; }
         QLabel#flowGuideTitle { color: #D6E6F6; font-size: 13px; font-weight: 700; }
@@ -3655,6 +4069,7 @@ class MainWindow(QMainWindow):
         }
 
         QCheckBox { color: #A8C8E0; spacing: 6px; }
+        QLabel#checkboxTextLabel { color: #A8C8E0; }
         QCheckBox::indicator {
             width: 16px; height: 16px;
             border: 1px solid #2A4A60;
@@ -3949,6 +4364,35 @@ class MainWindow(QMainWindow):
             return
         QTimer.singleShot(0, lambda: self.viewer_widget.setFocus(Qt.OtherFocusReason))
 
+    def _resync_device_preview_layout_now_and_later(self: MainWindow) -> None:
+        """Synchronize device-view geometry after the scroll viewport settles.
+
+        v1.3.3.23: when switching from font view to device view immediately
+        after startup, Qt can report the device scroll viewport before the
+        stacked page has its final width.  That made preview_leading_gap look
+        like zero and caused the device mockup to jump to the splitter side.
+        Run the same sync immediately and again on the next event-loop turns so
+        device view / actual-size approximation get the same settled placement
+        that font view already receives after pixmap refresh.
+        """
+        if not hasattr(self, 'viewer_widget'):
+            return
+
+        def _sync() -> None:
+            try:
+                self._sync_viewer_size()
+            except Exception:
+                APP_LOGGER.exception('実機ビューの遅延レイアウト同期に失敗しました')
+
+        _sync()
+        single_shot = getattr(QTimer, 'singleShot', None)
+        if callable(single_shot):
+            for delay_ms in (0, 50):
+                try:
+                    single_shot(delay_ms, _sync)
+                except Exception:
+                    pass
+
     def _refresh_active_view_after_mode_change(self: MainWindow, mode: object) -> None:
         normalized = self._normalized_main_view_mode(mode)
         try:
@@ -4053,15 +4497,19 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addSection('その他オプション')
 
-        open_folder_action = menu.addAction('完了後フォルダを開く')
-        open_folder_action.setCheckable(True)
-        open_folder_action.setChecked(self.open_folder_check.isChecked())
-        open_folder_action.toggled.connect(lambda checked: self.open_folder_check.setChecked(bool(checked)))
+        # フォルダ自動オープンは v1.3.3.48 で廃止。
+        # 保存先を開きたい場合は、変換完了カードまたは変換結果タブのボタンを使う。
 
         panel_button_action = menu.addAction('三本線ボタンを表示')
         panel_button_action.setCheckable(True)
         panel_button_action.setChecked(bool(getattr(self, 'panel_button_visible', True)))
         panel_button_action.toggled.connect(lambda checked: self.set_panel_button_visible(bool(checked)))
+
+        nav_reverse_control = self._ensure_nav_reverse_control()
+        nav_reverse_action = menu.addAction('ページ送りキー反転')
+        nav_reverse_action.setCheckable(True)
+        nav_reverse_action.setChecked(bool(nav_reverse_control.isChecked()))
+        nav_reverse_action.toggled.connect(lambda checked: nav_reverse_control.setChecked(bool(checked)))
 
         conflict_menu = menu.addMenu('同名出力')
         conflict_group = QActionGroup(conflict_menu)
@@ -4111,6 +4559,15 @@ class MainWindow(QMainWindow):
     def _clear_preview_label_pixmap(self: MainWindow) -> None:
         if not hasattr(self, 'preview_label'):
             return
+        self._last_font_preview_scaled_size = None
+        try:
+            self.preview_label.setContentsMargins(0, 0, 0, 0)
+        except Exception:
+            pass
+        try:
+            self.preview_label.setMaximumSize(16777215, 16777215)
+        except Exception:
+            pass
         clear = getattr(self.preview_label, 'clear', None)
         if callable(clear):
             try:
@@ -4146,6 +4603,11 @@ class MainWindow(QMainWindow):
     def _show_preview_message(self: MainWindow, message: str) -> None:
         self._clear_preview_label_pixmap()
         preview_label = getattr(self, 'preview_label', None)
+        try:
+            if preview_label is not None:
+                preview_label.setAlignment(Qt.AlignCenter)
+        except Exception:
+            pass
         setter = getattr(preview_label, 'setText', None)
         if callable(setter):
             setter(message)
@@ -4262,7 +4724,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            button.setText('更新待ち…')
+            button.setText('● プレビュー更新')
         except Exception:
             pass
         self._set_preview_update_button_visual_state('pending')
@@ -4366,15 +4828,12 @@ class MainWindow(QMainWindow):
             if not bool(getattr(self, '_settings_preview_refresh_pending', False)):
                 return
             if bool(getattr(self, '_preview_running', False)):
-                rerun_generation = int(getattr(self, '_settings_preview_refresh_generation', 0) or 0) + 1
-                self._settings_preview_refresh_generation = rerun_generation
-                self._settings_preview_refresh_scheduled = True
-                if self._queue_live_preview_refresh_timer(
-                    lambda: _run_live_preview_refresh(rerun_generation),
-                    50,
-                ):
-                    return
+                # v1.3.3.45: プレビュー生成中に設定変更が入った場合、50ms 間隔で
+                # 完了待ちポーリングを積み続けない。ディザリング ON のように重い
+                # プレビューでは、このポーリングが「更新状態で暴走」に見えるため、
+                # 現在の生成完了後に 1 回だけ後続更新を予約する。
                 self._settings_preview_refresh_scheduled = False
+                self._settings_preview_refresh_deferred_until_preview_finished = True
                 return
             reset_page_for_run = bool(
                 getattr(self, '_settings_preview_refresh_pending_reset_page', reset_page)
@@ -4483,6 +4942,7 @@ class MainWindow(QMainWindow):
                         pass
             self._update_preview_status_label(placeholder)
             return
+        self._mark_preview_update_button_pending()
         self._update_preview_status_label(studio_logic.build_preview_status_message('dirty'))
 
     def _update_preview_status_label(self: MainWindow, text: object) -> None:
@@ -4497,6 +4957,32 @@ class MainWindow(QMainWindow):
                     self.preview_status_label.setToolTip(label_text)
             except Exception:
                 pass
+
+    def _set_results_summary_placeholder_state(self: MainWindow, is_placeholder: object) -> None:
+        label = getattr(self, 'results_summary_label', None)
+        if label is None:
+            return
+        placeholder = bool(is_placeholder)
+        try:
+            label.setProperty('placeholderState', 'empty' if placeholder else 'content')
+        except Exception:
+            pass
+        try:
+            label.setAlignment(self._plan_alignment_value(None, None, 'center' if placeholder else 'left_top'))
+        except Exception:
+            pass
+        try:
+            style = label.style()
+            if hasattr(style, 'unpolish'):
+                style.unpolish(label)
+            if hasattr(style, 'polish'):
+                style.polish(label)
+        except Exception:
+            pass
+        try:
+            label.update()
+        except Exception:
+            pass
 
     def _current_guide_margins(self: MainWindow) -> tuple[int, int, int, int]:
         values: list[int] = []
@@ -4610,13 +5096,17 @@ class MainWindow(QMainWindow):
             target = QSize(480, 720)
         scaled = pix.scaled(target, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         scaled = self._decorate_font_view_pixmap(scaled, page_width=orig_w, page_height=orig_h)
-        self.preview_label.resize(scaled.size())
+        scaled_size = scaled.size()
+        self._last_font_preview_scaled_size = (int(scaled_size.width()), int(scaled_size.height()))
         try:
-            self.preview_label.setMinimumSize(0, 0)
+            self.preview_label.setMinimumSize(scaled_size)
+            self.preview_label.setMaximumSize(scaled_size)
         except Exception:
             pass
+        self.preview_label.resize(scaled_size)
         self.preview_label.setPixmap(scaled)
         self.preview_label.setText('')
+        self._sync_font_preview_scroll_placement(reset_horizontal=True)
 
     def _apply_preview_png_bytes(self: MainWindow, raw: bytes) -> None:
         self._apply_preview_pixmap(self._preview_pixmap_from_png_bytes(raw))
@@ -5428,6 +5918,26 @@ class MainWindow(QMainWindow):
         finally:
             self._preview_running = False
             self._pending_preview_refresh_request = None
+            try:
+                deferred_live_refresh = bool(
+                    getattr(self, '_settings_preview_refresh_deferred_until_preview_finished', False)
+                )
+                self._settings_preview_refresh_deferred_until_preview_finished = False
+                if deferred_live_refresh and bool(getattr(self, '_settings_preview_refresh_pending', False)):
+                    reset_page_for_followup = bool(
+                        getattr(self, '_settings_preview_refresh_pending_reset_page', False)
+                    )
+
+                    def _run_deferred_live_refresh() -> None:
+                        self._schedule_live_preview_refresh(
+                            reset_page=reset_page_for_followup,
+                            delay_ms=0,
+                        )
+
+                    if not self._queue_live_preview_refresh_timer(_run_deferred_live_refresh, 0):
+                        _run_deferred_live_refresh()
+            except Exception:
+                pass
 
     def refresh_preview(self: MainWindow) -> None:
         self.request_preview_refresh(reset_page=False)
@@ -5694,20 +6204,202 @@ class MainWindow(QMainWindow):
         width, height = studio_logic.build_safe_preview_layout_size(size, fallback=fallback)
         return QSize(width, height)
 
+    def _preview_zoom_left_bias(self: MainWindow) -> float:
+        """Return a gentle 0.0..1.0 left-shift bias for preview zoom.
+
+        v1.3.3.22: the previous 100%->200% smoothstep made the preview feel
+        over-eager while repeatedly increasing the zoom.  Keep 100% centered,
+        preserve most of the centered feeling through the mid zoom range, and
+        finish the left shift only near the maximum 300% setting.  All three
+        right-pane modes use this same curve.
+        """
+        try:
+            zoom = float(self._preview_zoom_factor())
+        except Exception:
+            zoom = 1.0
+        if not math.isfinite(zoom):
+            zoom = 1.0
+        start = 1.0
+        end = 3.0
+        if zoom <= start:
+            return 0.0
+        if zoom >= end:
+            return 1.0
+        t = (zoom - start) / (end - start)
+        # smootherstep keeps the 100%-150% range calm, while still reaching
+        # the left-biased high-zoom view at the 300% upper limit.
+        eased = t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+        return max(0.0, min(1.0, eased))
+
+    def _viewport_width_for_scroll_area(self: MainWindow, scroll_area: object) -> int:
+        try:
+            viewport_getter = getattr(scroll_area, 'viewport', None)
+            viewport = viewport_getter() if callable(viewport_getter) else None
+            size_getter = getattr(viewport, 'size', None)
+            size = size_getter() if callable(size_getter) else None
+            width_getter = getattr(size, 'width', None)
+            width = width_getter() if callable(width_getter) else 0
+            return max(0, int(width))
+        except Exception:
+            return 0
+
+    def _font_preview_leading_gap(self: MainWindow, content_width: int) -> int:
+        preview_scroll = getattr(self, 'preview_scroll', None)
+        viewport_width = self._viewport_width_for_scroll_area(preview_scroll)
+        content_width = max(0, int(content_width))
+        if viewport_width <= 0 or content_width <= 0 or content_width >= viewport_width:
+            return 0
+        centered_gap = max(0, int(round((viewport_width - content_width) / 2.0)))
+        bias = self._preview_zoom_left_bias()
+        return max(0, int(round(centered_gap * (1.0 - bias))))
+
+    def _viewer_preview_leading_gap(self: MainWindow, content_width: int) -> int:
+        viewer_scroll = getattr(self, 'viewer_scroll', None)
+        viewport_width = self._viewport_width_for_scroll_area(viewer_scroll)
+        content_width = max(0, int(content_width))
+        if viewport_width <= 0 or content_width <= 0 or content_width >= viewport_width:
+            return 0
+        centered_gap = max(0, int(round((viewport_width - content_width) / 2.0)))
+        bias = self._preview_zoom_left_bias()
+        return max(0, int(round(centered_gap * (1.0 - bias))))
+
+    def _set_horizontal_scrollbar_to_zoom_bias_later(
+        self: MainWindow,
+        scroll_area: object,
+    ) -> None:
+        def _position() -> None:
+            try:
+                hbar_getter = getattr(scroll_area, 'horizontalScrollBar', None)
+                hbar = hbar_getter() if callable(hbar_getter) else None
+                if hbar is None:
+                    return
+                minimum_getter = getattr(hbar, 'minimum', None)
+                maximum_getter = getattr(hbar, 'maximum', None)
+                minimum_value = int(minimum_getter() if callable(minimum_getter) else 0)
+                maximum_value = int(maximum_getter() if callable(maximum_getter) else minimum_value)
+                span = max(0, maximum_value - minimum_value)
+                bias = self._preview_zoom_left_bias()
+                target = minimum_value + int(round(span * 0.5 * (1.0 - bias)))
+                set_value = getattr(hbar, 'setValue', None)
+                if callable(set_value):
+                    set_value(max(minimum_value, min(maximum_value, target)))
+            except Exception:
+                pass
+
+        _position()
+        try:
+            QTimer.singleShot(0, _position)
+        except Exception:
+            pass
+
+    def _set_horizontal_scrollbar_to_minimum_later(
+        self: MainWindow,
+        scroll_area: object,
+    ) -> None:
+        def _reset() -> None:
+            try:
+                hbar_getter = getattr(scroll_area, 'horizontalScrollBar', None)
+                hbar = hbar_getter() if callable(hbar_getter) else None
+                if hbar is None:
+                    return
+                minimum_getter = getattr(hbar, 'minimum', None)
+                minimum_value = minimum_getter() if callable(minimum_getter) else 0
+                set_value = getattr(hbar, 'setValue', None)
+                if callable(set_value):
+                    set_value(minimum_value)
+            except Exception:
+                pass
+
+        _reset()
+        try:
+            QTimer.singleShot(0, _reset)
+        except Exception:
+            pass
+
+    def _sync_font_preview_scroll_placement(
+        self: MainWindow,
+        *,
+        reset_horizontal: bool = False,
+    ) -> None:
+        try:
+            preview_scroll = getattr(self, 'preview_scroll', None)
+            if preview_scroll is None:
+                return
+            preview_label = getattr(self, 'preview_label', None)
+            scaled_size = getattr(self, '_last_font_preview_scaled_size', None)
+            scaled_width = 0
+            scaled_height = 0
+            if scaled_size:
+                try:
+                    scaled_width, scaled_height = int(scaled_size[0]), int(scaled_size[1])
+                except Exception:
+                    scaled_width = scaled_height = 0
+            leading_gap = self._font_preview_leading_gap(scaled_width) if scaled_width > 0 else 0
+            # v1.3.3.19: keep the fixed-blank-rail fix from v1.3.3.18, but
+            # replace the abrupt 100% -> 110% left snap with a viewport-aware
+            # leading gap and a scrollbar position eased by the zoom percentage.
+            preview_scroll.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+            if preview_label is not None:
+                try:
+                    preview_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+                except Exception:
+                    pass
+                try:
+                    preview_label.setContentsMargins(leading_gap, 0, 0, 0)
+                except Exception:
+                    pass
+                if scaled_width > 0 and scaled_height > 0:
+                    layout_width = max(1, scaled_width + leading_gap)
+                    layout_height = max(1, scaled_height)
+                    layout_size = QSize(layout_width, layout_height)
+                    try:
+                        preview_label.setMinimumSize(layout_size)
+                        preview_label.setMaximumSize(layout_size)
+                        preview_label.resize(layout_size)
+                    except Exception:
+                        pass
+            if reset_horizontal:
+                self._set_horizontal_scrollbar_to_zoom_bias_later(preview_scroll)
+        except Exception:
+            APP_LOGGER.exception('フォントビューのスクロール配置更新に失敗しました')
+
     def _sync_preview_size(self: MainWindow) -> None:
         self._sync_viewer_size()
+        self._sync_font_preview_scroll_placement(reset_horizontal=False)
         preview_label = getattr(self, 'preview_label', None)
         if preview_label is None:
             return
         target = self._safe_preview_layout_size(self._font_preview_target_size())
+        last_scaled = getattr(self, '_last_font_preview_scaled_size', None)
+        try:
+            current_pixmap = preview_label.pixmap() if hasattr(preview_label, 'pixmap') else None
+        except Exception:
+            current_pixmap = None
+        if current_pixmap is not None and last_scaled:
+            try:
+                width, height = last_scaled
+                target = QSize(max(1, int(width)), max(1, int(height)))
+                preview_label.setMaximumSize(target)
+            except Exception:
+                pass
+        else:
+            try:
+                preview_label.setMaximumSize(16777215, 16777215)
+            except Exception:
+                pass
         try:
             preview_label.setMinimumSize(target)
         except Exception:
             APP_LOGGER.exception('フォントプレビューの最小サイズ更新に失敗しました')
         try:
+            preview_label.resize(target)
+        except Exception:
+            pass
+        try:
             preview_label.updateGeometry()
         except Exception:
             APP_LOGGER.exception('フォントプレビューのレイアウト更新に失敗しました')
+        self._sync_font_preview_scroll_placement(reset_horizontal=False)
 
     def _sync_viewer_size(self: MainWindow) -> None:
         try:
@@ -5715,6 +6407,16 @@ class MainWindow(QMainWindow):
                 self.viewer_widget.set_preview_zoom_factor(self._preview_zoom_factor())
         except Exception:
             APP_LOGGER.exception('実機ビューの表示倍率更新に失敗しました')
+        try:
+            base_hint_getter = getattr(self.viewer_widget, 'baseSizeHint', None)
+            base_hint = base_hint_getter() if callable(base_hint_getter) else self.viewer_widget.sizeHint()
+            base_width = int(base_hint.width()) if hasattr(base_hint, 'width') else 0
+            leading_gap = self._viewer_preview_leading_gap(base_width)
+            set_gap = getattr(self.viewer_widget, 'set_preview_leading_gap', None)
+            if callable(set_gap):
+                set_gap(leading_gap)
+        except Exception:
+            APP_LOGGER.exception('実機ビューの左寄せ補間余白更新に失敗しました')
         hint = self.viewer_widget.sizeHint()
         w, h = studio_logic.build_viewer_minimum_size(hint)
         try:
@@ -5727,6 +6429,24 @@ class MainWindow(QMainWindow):
                 resize(w, h)
         except Exception:
             APP_LOGGER.exception('実機ビューの表示サイズ更新に失敗しました')
+        try:
+            viewer_scroll = getattr(self, 'viewer_scroll', None)
+            if viewer_scroll is not None:
+                # v1.3.3.21: use the same placement model as the font view for
+                # device view and actual-size approximation: keep the scroll area
+                # left/top aligned at every zoom level, create the 100%-style
+                # centered look with preview_leading_gap, and ease the horizontal
+                # scrollbar toward the left as zoom increases.  Avoid switching
+                # QScrollArea alignment at 100% -> 110%, which caused a visible
+                # jump in the device/actual-size modes.
+                set_alignment = getattr(viewer_scroll, 'setAlignment', None)
+                align_left = getattr(Qt, 'AlignLeft', None)
+                align_top = getattr(Qt, 'AlignTop', None)
+                if callable(set_alignment) and align_left is not None and align_top is not None:
+                    set_alignment(align_left | align_top)
+                self._set_horizontal_scrollbar_to_zoom_bias_later(viewer_scroll)
+        except Exception:
+            APP_LOGGER.exception('実機ビューのスクロール配置更新に失敗しました')
         try:
             self.viewer_widget.updateGeometry()
         except Exception:
@@ -6063,6 +6783,11 @@ class MainWindow(QMainWindow):
         self._schedule_live_preview_refresh(reset_page=False)
         self._finalize_setting_change(refresh_preview=False)
 
+    def on_ruby_hide_toggled(self: MainWindow, checked: bool) -> None:
+        # ルビ消しは組版内容を再生成するが、閲覧中ページは維持する。
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
+
     def on_guides_toggled(self: MainWindow, checked: bool) -> None:
         self._apply_viewer_display_runtime_state()
         # フォントビュー側もガイド表示に追従（見た目を実機ビューへ寄せる）
@@ -6090,7 +6815,11 @@ class MainWindow(QMainWindow):
 
     def on_dither_toggled(self: MainWindow, checked: bool) -> None:
         self._apply_render_option_ui_state(checked)
-        self._finalize_setting_change()
+        # ディザリングはプレビュー画像に影響するため、他の表示系設定と同じ
+        # debounced live refresh 経路に寄せる。プレビュー生成中なら 50ms
+        # ポーリングせず、完了後に 1 回だけ再更新する。
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
 
     def _on_kinsoku_mode_changed(self: MainWindow) -> None:
         self._schedule_live_preview_refresh(reset_page=False)
@@ -6101,6 +6830,18 @@ class MainWindow(QMainWindow):
             return 'standard'
         value = str(self.kinsoku_mode_combo.currentData() or 'standard').strip().lower()
         return value if value in KINSOKU_MODE_LABELS else 'standard'
+
+    def _on_tatechuyoko_digit_mode_changed(self: MainWindow) -> None:
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
+
+    def current_tatechuyoko_digit_mode(self: MainWindow) -> str:
+        combo = self.__dict__.get('tatechuyoko_digit_mode_combo')
+        if combo is None:
+            return '2'
+        current_data = getattr(combo, 'currentData', None)
+        raw_value = current_data() if callable(current_data) else None
+        return studio_logic.normalize_tatechuyoko_digit_mode(raw_value, '2')
 
     def _on_glyph_position_mode_changed(self: MainWindow) -> None:
         self._schedule_live_preview_refresh(reset_page=False)
@@ -6121,6 +6862,9 @@ class MainWindow(QMainWindow):
 
     def current_ichi_position_mode(self: MainWindow) -> str:
         return self._current_glyph_position_mode('ichi_position_combo')
+
+    def current_halfwidth_digit_position_mode(self: MainWindow) -> str:
+        return self._current_glyph_position_mode('halfwidth_digit_position_combo')
 
     def current_lower_closing_bracket_position_mode(self: MainWindow) -> str:
         return self._current_glyph_position_mode(
@@ -6304,6 +7048,13 @@ class MainWindow(QMainWindow):
             except Exception:
                 dither = None
 
+        ruby_hide = None
+        if self.__dict__.get('ruby_hide_check') is not None:
+            try:
+                ruby_hide = bool(self.ruby_hide_check.isChecked())
+            except Exception:
+                ruby_hide = None
+
         font_value = self.current_font_value() if self.__dict__.get('font_combo') is not None else None
         return settings_controller.build_live_preset_widget_payload(
             profile=selected_profile,
@@ -6311,6 +7062,7 @@ class MainWindow(QMainWindow):
             height=resolved_height,
             font_size=_widget_value('font_size_spin'),
             ruby_size=_widget_value('ruby_size_spin'),
+            ruby_hide=ruby_hide,
             line_spacing=_widget_value('line_spacing_spin'),
             margin_t=_widget_value('margin_t_spin'),
             margin_b=_widget_value('margin_b_spin'),
@@ -6320,9 +7072,11 @@ class MainWindow(QMainWindow):
             night_mode=night_mode,
             dither=dither,
             kinsoku_mode=self.current_kinsoku_mode() if self.__dict__.get('kinsoku_mode_combo') is not None else None,
+            tatechuyoko_digit_mode=self.current_tatechuyoko_digit_mode() if self.__dict__.get('tatechuyoko_digit_mode_combo') is not None else None,
             output_format=self.current_output_format() if self.__dict__.get('output_format_combo') is not None else None,
             punctuation_position_mode=self.current_punctuation_position_mode() if self.__dict__.get('punctuation_position_combo') is not None else None,
             ichi_position_mode=self.current_ichi_position_mode() if self.__dict__.get('ichi_position_combo') is not None else None,
+            halfwidth_digit_position_mode=self.current_halfwidth_digit_position_mode() if self.__dict__.get('halfwidth_digit_position_combo') is not None else None,
             lower_closing_bracket_position_mode=self.current_lower_closing_bracket_position_mode() if self.__dict__.get('lower_closing_bracket_position_combo') is not None else None,
             wave_dash_drawing_mode=self.current_wave_dash_drawing_mode() if self.__dict__.get('wave_dash_drawing_combo') is not None else None,
             wave_dash_position_mode=self.current_wave_dash_position_mode() if self.__dict__.get('wave_dash_position_combo') is not None else None,
@@ -6347,9 +7101,12 @@ class MainWindow(QMainWindow):
         fallback_font: str = '',
         fallback_night_mode: bool = False,
         fallback_dither: bool = False,
+        fallback_ruby_hide: bool = False,
         fallback_kinsoku_mode: str = 'standard',
+        fallback_tatechuyoko_digit_mode: str = '2',
         fallback_punctuation_position_mode: str = 'standard',
         fallback_ichi_position_mode: str = 'standard',
+        fallback_halfwidth_digit_position_mode: str = 'standard',
         fallback_lower_closing_bracket_position_mode: str = 'standard',
         fallback_wave_dash_drawing_mode: str = 'rotate',
         fallback_wave_dash_position_mode: str = 'standard',
@@ -6401,10 +7158,19 @@ class MainWindow(QMainWindow):
             'dither',
             worker_logic._bool_config_value(fallback_payload, 'dither', bool(fallback_dither)),
         )
+        normalized['ruby_hide'] = worker_logic._bool_config_value(
+            source,
+            'ruby_hide',
+            worker_logic._bool_config_value(fallback_payload, 'ruby_hide', bool(fallback_ruby_hide)),
+        )
         normalized['kinsoku_mode'] = self._normalize_choice_value(
             source.get('kinsoku_mode', fallback_payload.get('kinsoku_mode', fallback_kinsoku_mode)),
             'standard',
             KINSOKU_MODE_LABELS,
+        )
+        normalized['tatechuyoko_digit_mode'] = studio_logic.normalize_tatechuyoko_digit_mode(
+            source.get('tatechuyoko_digit_mode', fallback_payload.get('tatechuyoko_digit_mode', fallback_tatechuyoko_digit_mode)),
+            '2',
         )
         normalized['output_format'] = self._normalize_choice_value(
             source.get('output_format', fallback_payload.get('output_format', fallback_output_format)),
@@ -6418,6 +7184,11 @@ class MainWindow(QMainWindow):
         )
         normalized['ichi_position_mode'] = self._normalize_choice_value(
             source.get('ichi_position_mode', fallback_payload.get('ichi_position_mode', fallback_ichi_position_mode)),
+            'standard',
+            GLYPH_POSITION_MODE_LABELS,
+        )
+        normalized['halfwidth_digit_position_mode'] = self._normalize_choice_value(
+            source.get('halfwidth_digit_position_mode', fallback_payload.get('halfwidth_digit_position_mode', fallback_halfwidth_digit_position_mode)),
             'standard',
             GLYPH_POSITION_MODE_LABELS,
         )
@@ -6456,6 +7227,7 @@ class MainWindow(QMainWindow):
         ) or self._default_font_name()
         stored_night = worker_logic._bool_config_value({'night_mode': self._settings_default_value('night_mode', False)}, 'night_mode', False)
         stored_dither = worker_logic._bool_config_value({'dither': self._settings_default_value('dither', False)}, 'dither', False)
+        stored_ruby_hide = worker_logic._bool_config_value({'ruby_hide': self._settings_default_value('ruby_hide', False)}, 'ruby_hide', False)
         stored_kinsoku_mode = self._normalize_choice_value(
             worker_logic._str_config_value({'kinsoku_mode': self._settings_default_value('kinsoku_mode', 'standard')}, 'kinsoku_mode', 'standard'),
             'standard',
@@ -6480,6 +7252,7 @@ class MainWindow(QMainWindow):
                 fallback_font=stored_font,
                 fallback_night_mode=bool(stored_night),
                 fallback_dither=bool(stored_dither),
+                fallback_ruby_hide=bool(stored_ruby_hide),
                 fallback_kinsoku_mode=stored_kinsoku_mode,
                 fallback_wave_dash_drawing_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_drawing_mode', 'rotate')),
                 fallback_wave_dash_position_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_position_mode', 'standard')),
@@ -6811,6 +7584,156 @@ class MainWindow(QMainWindow):
             fallback_wave_dash_position_mode=self.current_wave_dash_position_mode(),
         )
 
+    def _settings_no_error_value(self: MainWindow) -> object | None:
+        status_enum = getattr(QSettings, 'Status', None)
+        if status_enum is not None:
+            no_error = getattr(status_enum, 'NoError', None)
+            if no_error is not None:
+                return no_error
+        return getattr(QSettings, 'NoError', None)
+
+    def _settings_status_text(self: MainWindow, settings_store: object | None = None) -> str:
+        store = settings_store if settings_store is not None else self.settings_store
+        status_getter = getattr(store, 'status', None)
+        if not callable(status_getter):
+            return 'NoError'
+        try:
+            status = status_getter()
+        except Exception:
+            return 'NoError'
+        name = getattr(status, 'name', None)
+        if name:
+            return str(name)
+        return str(status)
+
+    def _settings_status_is_ok(self: MainWindow, settings_store: object | None = None) -> bool:
+        store = settings_store if settings_store is not None else self.settings_store
+        status_getter = getattr(store, 'status', None)
+        if not callable(status_getter):
+            return True
+        try:
+            status = status_getter()
+        except Exception:
+            return True
+        no_error = self._settings_no_error_value()
+        if no_error is not None:
+            try:
+                return status == no_error
+            except Exception:
+                pass
+        try:
+            return int(status) == 0
+        except Exception:
+            pass
+        text = self._settings_status_text(store)
+        if 'NoError' in text:
+            return True
+        if 'AccessError' in text or 'FormatError' in text or text.endswith('Error'):
+            return False
+        return True
+
+    def _settings_store_for_disk_readback(self: MainWindow) -> object:
+        file_name_getter = getattr(self.settings_store, 'fileName', None)
+        if callable(file_name_getter):
+            try:
+                file_name = str(file_name_getter() or '').strip()
+            except Exception:
+                file_name = ''
+            if file_name:
+                try:
+                    readback_store = QSettings(file_name, QSettings.IniFormat)
+                    readback_sync = getattr(readback_store, 'sync', None)
+                    if callable(readback_sync):
+                        readback_sync()
+                    # Unit-test stubs may not implement QSettings.contains().
+                    # Real Qt QSettings does, so only use a fresh disk readback
+                    # store when it supports the same key-existence check.
+                    if callable(getattr(readback_store, 'contains', None)):
+                        return readback_store
+                except Exception:
+                    APP_LOGGER.exception('プリセット保存確認用の設定ファイル再読込に失敗しました')
+        return self.settings_store
+
+    def _settings_store_contains_key(self: MainWindow, settings_store: object, key: str) -> bool:
+        return _settings_contains_key_in_store(settings_store, key)
+
+    def _settings_store_raw_value(self: MainWindow, settings_store: object, key: str, default: object = None) -> object:
+        return _settings_raw_value_from_store(settings_store, key, default)
+
+    def _verify_preset_save_readback(
+        self: MainWindow,
+        key: str,
+        payload: Mapping[str, object],
+    ) -> tuple[bool, str]:
+        if not self._settings_status_is_ok(self.settings_store):
+            return False, f'設定ファイルへの書き込みに失敗しました。状態: {self._settings_status_text(self.settings_store)}'
+
+        readback_store = self._settings_store_for_disk_readback()
+        if not self._settings_status_is_ok(readback_store):
+            return False, f'設定ファイルの再読込に失敗しました。状態: {self._settings_status_text(readback_store)}'
+
+        prefix = self._preset_settings_prefix(key)
+        expected_fields = tuple(str(field) for field in payload.keys())
+        missing_fields: list[str] = []
+        readback_payload: dict[str, object] = {}
+        sentinel = object()
+        for field in expected_fields:
+            settings_key = f'{prefix}/{field}'
+            if not self._settings_store_contains_key(readback_store, settings_key):
+                missing_fields.append(field)
+                continue
+            value = self._settings_store_raw_value(readback_store, settings_key, sentinel)
+            if value is sentinel:
+                missing_fields.append(field)
+                continue
+            readback_payload[field] = value
+        if missing_fields:
+            sample = ', '.join(missing_fields[:4])
+            if len(missing_fields) > 4:
+                sample += f' ほか {len(missing_fields) - 4} 件'
+            return False, f'保存後に設定値を再読込できませんでした: {sample}'
+
+        fallback = DEFAULT_PRESET_DEFINITIONS.get(key)
+        fallback_font = self._default_font_name()
+        expected_norm = self._normalize_preset_payload(
+            payload,
+            fallback=fallback,
+            fallback_font=fallback_font,
+            fallback_wave_dash_drawing_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_drawing_mode', 'rotate')),
+            fallback_wave_dash_position_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_position_mode', 'standard')),
+        )
+        actual_norm = self._normalize_preset_payload(
+            readback_payload,
+            fallback=fallback,
+            fallback_font=fallback_font,
+            fallback_wave_dash_drawing_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_drawing_mode', 'rotate')),
+            fallback_wave_dash_position_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_position_mode', 'standard')),
+        )
+        mismatched: list[str] = []
+        for field in expected_fields:
+            if field in PRESET_FIELDS and expected_norm.get(field) != actual_norm.get(field):
+                mismatched.append(field)
+        if mismatched:
+            sample = ', '.join(mismatched[:4])
+            if len(mismatched) > 4:
+                sample += f' ほか {len(mismatched) - 4} 件'
+            return False, f'保存後に再読込した設定値が一致しません: {sample}'
+        return True, ''
+
+    def _show_preset_save_failed(self: MainWindow, reason: str) -> None:
+        message = 'プリセットを保存できませんでした。\n\n'
+        message += str(reason or '設定ファイルへの書き込みを確認できませんでした。')
+        message += '\n\nアプリをzip内や書き込み不可フォルダから起動していないか確認してください。'
+        try:
+            APP_LOGGER.error('プリセット保存失敗: %s', reason)
+        except Exception:
+            pass
+        self._show_warning_dialog_with_status_fallback(
+            'プリセット保存',
+            message,
+            duration_ms=7000,
+        )
+
     def _request_preview_refresh_after_preset_apply(self: MainWindow) -> bool:
         """Run the same lightweight preview refresh as the Preview Update button once.
 
@@ -6838,7 +7761,7 @@ class MainWindow(QMainWindow):
             return True
         except Exception:
             try:
-                APP_LOGGER.exception('プリセット適用後のプレビュー自動更新に失敗しました')
+                APP_LOGGER.exception('プリセット読込後のプレビュー自動更新に失敗しました')
             except Exception:
                 pass
             try:
@@ -6875,11 +7798,21 @@ class MainWindow(QMainWindow):
             return
         updated = deepcopy(p)
         updated.update(payload)
-        self.preset_definitions[key] = updated
         prefix = self._preset_settings_prefix(key)
-        for field, value in payload.items():
-            self.settings_store.setValue(f'{prefix}/{field}', value)
-        self.settings_store.sync()
+        try:
+            for field, value in payload.items():
+                self.settings_store.setValue(f'{prefix}/{field}', value)
+            self.settings_store.sync()
+            verified, reason = self._verify_preset_save_readback(key, payload)
+        except Exception as exc:
+            APP_LOGGER.exception('プリセット保存中に例外が発生しました')
+            self._show_preset_save_failed(str(exc))
+            return
+        if not verified:
+            self._show_preset_save_failed(reason)
+            return
+
+        self.preset_definitions[key] = updated
         self._refresh_preset_ui()
         self._sync_selected_preset_summary(key)
         self._show_ui_status_message_unless_render_failure_visible(
@@ -6928,7 +7861,7 @@ class MainWindow(QMainWindow):
         self._finalize_setting_change(update_status=True)
         self._sync_selected_preset_summary(key)
 
-        # sweep350: プリセット適用後の自動プレビュー更新は、手動の
+        # sweep350: プリセット読込後の自動プレビュー更新は、手動の
         # 「プレビュー更新」と同じ経路を優先し、1回だけ走らせる。
         # これが使える実GUIでは、ここで古い runtime preview を先に再描画
         # しない。ヘッドレス/旧スタブで手動更新経路が無い場合だけ、従来の
@@ -6950,6 +7883,17 @@ class MainWindow(QMainWindow):
         self._show_ui_status_message_unless_render_failure_visible(status_message, 3000)
 
     # ── ファイル選択 ───────────────────────────────────────
+
+    def _apply_dropped_target_path(self: MainWindow, path: object) -> None:
+        normalized_path = worker_logic.normalize_target_path_text(path)
+        if not normalized_path:
+            return
+        with _bulk_block_signals(getattr(self, 'target_edit', None)):
+            self.target_edit.setText(normalized_path)
+        self._update_top_status()
+        self.save_ui_state()
+        self._show_ui_status_message_unless_render_failure_visible('ドロップしたファイルを変換対象に設定しました。', 3000)
+        self._schedule_target_preview_refresh(reset_page=True)
 
     def select_target_path(self: MainWindow, as_file: bool) -> None:
         current = worker_logic.normalize_target_path_text(self.target_edit.text()) or str(Path.home())
@@ -7201,6 +8145,7 @@ class MainWindow(QMainWindow):
             'font_file': self.current_font_value() if hasattr(self, 'current_font_value') else str(defaults['font_file']),
             'font_size': self._safe_widget_value('font_size_spin', defaults['font_size']),
             'ruby_size': self._safe_widget_value('ruby_size_spin', defaults['ruby_size']),
+            'ruby_hide': self._safe_widget_checked('ruby_hide_check', bool(defaults['ruby_hide'])),
             'line_spacing': self._safe_widget_value('line_spacing_spin', defaults['line_spacing']),
             'margin_t': self._safe_widget_value('margin_t_spin', defaults['margin_t']),
             'margin_b': self._safe_widget_value('margin_b_spin', defaults['margin_b']),
@@ -7210,8 +8155,10 @@ class MainWindow(QMainWindow):
             'threshold': self._safe_widget_value('threshold_spin', defaults['threshold']),
             'night_mode': self._safe_widget_checked('night_check', bool(defaults['night_mode'])),
             'kinsoku_mode': self.current_kinsoku_mode() if hasattr(self, 'current_kinsoku_mode') else str(defaults['kinsoku_mode']),
+            'tatechuyoko_digit_mode': self.current_tatechuyoko_digit_mode() if hasattr(self, 'current_tatechuyoko_digit_mode') else str(defaults['tatechuyoko_digit_mode']),
             'punctuation_position_mode': self.current_punctuation_position_mode() if hasattr(self, 'current_punctuation_position_mode') else str(defaults['punctuation_position_mode']),
             'ichi_position_mode': self.current_ichi_position_mode() if hasattr(self, 'current_ichi_position_mode') else str(defaults['ichi_position_mode']),
+            'halfwidth_digit_position_mode': self.current_halfwidth_digit_position_mode() if hasattr(self, 'current_halfwidth_digit_position_mode') else str(defaults['halfwidth_digit_position_mode']),
             'lower_closing_bracket_position_mode': self.current_lower_closing_bracket_position_mode() if hasattr(self, 'current_lower_closing_bracket_position_mode') else str(defaults['lower_closing_bracket_position_mode']),
             'wave_dash_drawing_mode': self.current_wave_dash_drawing_mode() if hasattr(self, 'current_wave_dash_drawing_mode') else str(defaults['wave_dash_drawing_mode']),
             'wave_dash_position_mode': self.current_wave_dash_position_mode() if hasattr(self, 'current_wave_dash_position_mode') else str(defaults['wave_dash_position_mode']),
@@ -7226,7 +8173,9 @@ class MainWindow(QMainWindow):
         return settings_controller.build_current_settings_payload(
             render_settings_base=self._current_render_settings_base(),
             output_conflict=self.current_output_conflict_mode(),
-            open_folder=self.open_folder_check.isChecked(),
+            # v1.3.3.48: 変換完了後に Windows エクスプローラーを自動起動しない。
+            # 保存先を開く操作は完了カード / 変換結果タブの手動ボタンに限定する。
+            open_folder=False,
         )
 
     def _folder_batch_worker_settings(
@@ -7814,6 +8763,14 @@ class MainWindow(QMainWindow):
 
     def _prepare_conversion_ui_for_run(self: MainWindow, settings: WorkerConversionSettings) -> None:
         try:
+            self.__dict__['_conversion_stop_requested'] = False
+        except Exception:
+            pass
+        try:
+            self._hide_conversion_completion_card()
+        except Exception:
+            pass
+        try:
             self._clear_results_view(studio_logic.build_running_results_summary())
         except Exception:
             pass
@@ -8266,6 +9223,10 @@ class MainWindow(QMainWindow):
         if not self.worker:
             return
         try:
+            self.__dict__['_conversion_stop_requested'] = True
+        except Exception:
+            pass
+        try:
             self.worker.stop()
         except Exception as exc:
             message_text = _coerce_ui_message_text(exc, str(exc)).strip() or '不明なエラー'
@@ -8289,6 +9250,17 @@ class MainWindow(QMainWindow):
         except Exception:
             APP_LOGGER.exception('停止ボタンの更新に失敗しました')
         log_message = '停止要求を送りました。現在の変換単位が終わりしだい停止します。'
+        try:
+            if hasattr(self, 'progress_bar'):
+                self.progress_bar.setRange(0, 1)
+                self.progress_bar.setValue(0)
+            if hasattr(self, 'progress_label'):
+                self.progress_label.setText(log_message)
+            if hasattr(self, 'busy_badge'):
+                self.busy_badge.setText('停止中')
+            self._show_ui_status_message_with_reflection_or_direct_fallback(log_message, 5000)
+        except Exception:
+            APP_LOGGER.exception('停止要求後の進捗表示停止に失敗しました')
         helper_succeeded = False
         try:
             helper_succeeded = bool(self._append_log_without_status_best_effort(log_message))
@@ -8886,25 +9858,49 @@ class MainWindow(QMainWindow):
             combined_messages.append(warning_message)
         return combined_messages
 
-    def _open_finished_conversion_folder(self: MainWindow, result: ConversionResult) -> list[str]:
-        if not worker_logic._bool_config_value(result, 'open_folder_requested', False):
-            return []
-        target = _coerce_ui_message_text(result.get('open_folder_target'), '').strip()
-        if not target:
-            return []
+    def _build_conversion_completion_summary_lines(
+        self: MainWindow,
+        converted_files: object,
+        summary_lines: object,
+        result: Mapping[str, object] | None = None,
+    ) -> list[str]:
+        base_lines = results_controller.coerce_summary_line_list(summary_lines)
+        payload = result or {}
+        guidance_lines = results_controller.build_conversion_completion_guidance_lines(
+            converted_files,
+            open_folder_target=payload.get('open_folder_target', ''),
+            stopped=payload.get('stopped', False),
+        )
+        return studio_logic.merge_unique_message_values(base_lines, guidance_lines)
+
+    def _apply_conversion_completion_guidance_to_results_view(
+        self: MainWindow,
+        converted_files: object,
+        summary_lines: object,
+        result: Mapping[str, object] | None = None,
+    ) -> bool:
+        if not hasattr(self, 'results_summary_label'):
+            return False
+        enriched_lines = self._build_conversion_completion_summary_lines(
+            converted_files,
+            summary_lines,
+            result,
+        )
+        base_lines = results_controller.coerce_summary_line_list(summary_lines)
+        if enriched_lines == base_lines:
+            return False
+        entry_count = len(results_controller.coerce_result_path_list(converted_files))
+        summary_text = results_controller.build_completion_summary_text(enriched_lines, entry_count)
+        updated = bool(self._set_results_summary_text_with_fallback(summary_text))
         try:
-            if _open_path_in_file_manager(target):
-                return []
-            warning = f'完了後フォルダを開けませんでした: {target}'
-            APP_LOGGER.warning(warning)
-            return [warning]
-        except Exception as exc:
-            APP_LOGGER.exception('完了後フォルダを開けませんでした (target=%s): %s', target, exc)
-            detail = _coerce_ui_message_text(exc).strip()
-            message = f'完了後フォルダを開けませんでした。 / 対象: {target}'
-            if detail:
-                message = f'{message} / {detail}'
-            return [message]
+            self._sync_results_action_buttons_state()
+        except Exception:
+            pass
+        return updated
+
+    def _open_finished_conversion_folder(self: MainWindow, result: ConversionResult) -> list[str]:
+        """変換完了後のフォルダ自動オープンは行わない。"""
+        return []
 
     def on_conversion_finished(self: MainWindow, result: ConversionResult) -> None:
         self._clear_active_conversion_run_token()
@@ -8922,6 +9918,8 @@ class MainWindow(QMainWindow):
             '_append_unique_postprocess_warnings_to_log_with_fallback',
             '_emit_unique_postprocess_warnings_or_append_to_log',
             '_build_results_summary_text',
+            '_build_conversion_completion_summary_lines',
+            '_apply_conversion_completion_guidance_to_results_view',
             '_coerce_mapping_payload',
             '_clear_results_selection_with_fallback',
             '_ui_widget_index',
@@ -8966,6 +9964,12 @@ class MainWindow(QMainWindow):
                 terminal_state_fallback_warnings = worker_logic.coerce_postprocess_warning_messages(
                     f'完了表示エラー: {finish_error_text}'
                 )
+        if stopped and not converted_files:
+            try:
+                result.setdefault('show_without_paths', True)
+                result.setdefault('completion_title', '変換を中止しました')
+            except Exception:
+                pass
         summary_lines = result.get('summary_lines')
         show_postprocess_warning_status = not stopped
         summary_lines, final_postprocess_warnings = self._merge_results_summary_lines_and_collect_warnings(
@@ -8975,10 +9979,24 @@ class MainWindow(QMainWindow):
         )
         try:
             self._show_conversion_results(converted_files, summary_lines)
+            try:
+                self._apply_conversion_completion_guidance_to_results_view(
+                    converted_files,
+                    summary_lines,
+                    result,
+                )
+            except Exception:
+                APP_LOGGER.exception('変換完了後の確認導線表示に失敗しました')
+            try:
+                self._show_conversion_completion_card(converted_files, result)
+            except Exception:
+                APP_LOGGER.exception('変換完了カード表示に失敗しました')
             if hasattr(self, 'bottom_tabs'):
                 try:
                     if stopped and not converted_files:
                         self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)
+                    elif converted_files:
+                        self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX)
                     elif self._ui_widget_index(self.bottom_tabs) is None:
                         self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX)
                 except Exception:
@@ -9053,9 +10071,17 @@ class MainWindow(QMainWindow):
             duration_ms=5000,
             show_status=show_postprocess_warning_status,
         )
+        try:
+            self.__dict__['_conversion_stop_requested'] = False
+        except Exception:
+            pass
 
     def on_conversion_error(self: MainWindow, message: str) -> None:
         self._clear_active_conversion_run_token()
+        try:
+            self._hide_conversion_completion_card()
+        except Exception:
+            pass
         message_text = _coerce_ui_message_text(message, '不明なエラー')
         APP_LOGGER.error('変換エラー: %s', message_text)
         try:
@@ -9077,6 +10103,10 @@ class MainWindow(QMainWindow):
             progress_error_context='変換エラー時の進捗バー更新に失敗しました',
             tab_error_context='変換エラー時のタブ切替に失敗しました',
         )
+        try:
+            self.__dict__['_conversion_stop_requested'] = False
+        except Exception:
+            pass
 
     def append_log(
         self: MainWindow,
@@ -9124,6 +10154,38 @@ class MainWindow(QMainWindow):
         return studio_logic.build_progress_status_text(current, total, message)
 
     def update_conversion_progress(self: MainWindow, current: int, total: int, message: str) -> None:
+        stop_requested = False
+        try:
+            stop_requested = bool(self.__dict__.get('_conversion_stop_requested', False))
+            worker_obj = getattr(self, 'worker', None)
+            is_stop_requested = getattr(worker_obj, '_is_stop_requested', None)
+            if callable(is_stop_requested):
+                stop_requested = stop_requested or bool(is_stop_requested())
+        except Exception:
+            stop_requested = bool(self.__dict__.get('_conversion_stop_requested', False))
+        if stop_requested:
+            text = '停止要求を受け付けました。現在の変換単位が終わりしだい停止します。'
+            if hasattr(self, 'progress_bar'):
+                try:
+                    self.progress_bar.setRange(0, 1)
+                    self.progress_bar.setValue(0)
+                except Exception:
+                    pass
+            if hasattr(self, 'progress_label'):
+                try:
+                    self.progress_label.setText(text)
+                except Exception:
+                    pass
+            if hasattr(self, 'busy_badge'):
+                try:
+                    self.busy_badge.setText('停止中')
+                except Exception:
+                    pass
+            try:
+                self._show_ui_status_message_with_reflection_or_direct_fallback(text, 5000)
+            except Exception:
+                pass
+            return
         total_value = max(1, _coerce_progress_number(total, 1))
         current_value = max(0, min(_coerce_progress_number(current, 0), total_value))
         text = self._progress_status_text(current_value, total_value, message)
@@ -9176,8 +10238,10 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'results_summary_label'):
             return False
         text = _coerce_ui_message_text(summary_text)
+        visible_text = text or default_text
         try:
-            self.results_summary_label.setText(text or default_text)
+            self.results_summary_label.setText(visible_text)
+            self._set_results_summary_placeholder_state(False)
             return True
         except Exception:
             return False
@@ -9205,6 +10269,7 @@ class MainWindow(QMainWindow):
             return True
         try:
             self.results_summary_label.setText(expected_text)
+            self._set_results_summary_placeholder_state(False)
         except Exception:
             return False
         return self._ui_widget_text(getattr(self, 'results_summary_label', None)) == expected_text
@@ -9283,9 +10348,69 @@ class MainWindow(QMainWindow):
             summary_updated = bool(self._set_results_summary_text_with_fallback(summary_text))
         except Exception:
             APP_LOGGER.exception('結果一覧サマリ更新に失敗しました')
+        try:
+            self._sync_results_action_buttons_state()
+        except Exception:
+            pass
         if summary_requested and not summary_updated:
             return False
         return bool(list_cleared or selection_cleared or summary_updated)
+
+    def _sync_results_action_buttons_state(self: MainWindow) -> bool:
+        has_results = False
+        try:
+            has_results = self._result_item_count() > 0
+        except Exception:
+            has_results = False
+        for attr_name in ('open_results_folder_btn', 'open_selected_result_btn'):
+            button = getattr(self, attr_name, None)
+            if button is None or not hasattr(button, 'setEnabled'):
+                continue
+            try:
+                button.setEnabled(has_results)
+            except Exception:
+                pass
+        return has_results
+
+    def _preferred_result_path_for_action(self: MainWindow) -> str:
+        context = self._resolved_result_load_context()
+        path = worker_logic._normalized_path_text(context.get('resolved_path')).strip()
+        if path:
+            return path
+        item = self._result_item_at(0)
+        return worker_logic._normalized_path_text(self._results_item_path(item)).strip() if item is not None else ''
+
+    def open_results_folder_from_results(self: MainWindow) -> None:
+        path = self._preferred_result_path_for_action()
+        if not path:
+            folder_override = worker_logic._normalized_path_text(
+                getattr(self, '_completion_card_open_folder_target', '')
+            ).strip()
+            if folder_override:
+                if _open_path_in_file_manager(folder_override):
+                    return
+                self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先を開けませんでした。\n{folder_override}')
+                return
+            self._show_result_load_dialog_with_status_fallback('information', '保存先', '開ける変換結果がありません。')
+            return
+        try:
+            if worker_logic._is_windows_like_path(path):
+                folder = ntpath.dirname(ntpath.normpath(path))
+            else:
+                folder = str(Path(path).parent)
+        except Exception:
+            folder = ''
+        target = folder or path
+        if _open_path_in_file_manager(target):
+            return
+        self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先を開けませんでした。\n{target}')
+
+    def open_selected_result_from_results(self: MainWindow) -> None:
+        item = self._resolved_results_item_for_loading() or self._result_item_at(0)
+        if item is None:
+            self._show_result_load_dialog_with_status_fallback('information', '実機ビュー', '確認できる変換結果がありません。')
+            return
+        self.on_result_item_clicked(item)
 
     def _result_display_name(self: MainWindow, path_text: str) -> str:
         return studio_logic.build_result_display_name(path_text)
@@ -9310,6 +10435,10 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(display_name)
             item.setData(Qt.UserRole, raw)
             self.results_list.addItem(item)
+        try:
+            self._sync_results_action_buttons_state()
+        except Exception:
+            pass
         try:
             normalized_index = int(initial_index)
         except Exception:
@@ -9825,6 +10954,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             self.viewer_widget.clear_page()
+            self._resync_device_preview_layout_now_and_later()
         if refresh_navigation:
             self.update_navigation_ui()
 
@@ -9968,6 +11098,7 @@ class MainWindow(QMainWindow):
             resolved_profile = profile or self._viewer_profile_for_page_image(image)
             self.viewer_widget.set_profile(resolved_profile)
             self.viewer_widget.set_page_image(image)
+            self._resync_device_preview_layout_now_and_later()
         try:
             self._refresh_successful_device_render_status()
         except Exception:
@@ -10327,6 +11458,12 @@ class MainWindow(QMainWindow):
         window_height = max(760, self._payload_int_value(window_payload, 'window_height', int(default_size.height())))
         is_maximized = self._payload_bool_value(window_payload, 'is_maximized', False)
         left_w = max(0, self._payload_int_value(window_payload, 'left_panel_width', DEFAULT_LEFT_PANEL_WIDTH))
+        # v1.3.3.46: 中央セパレーターの既定位置を 600px に固定する。
+        # 旧既定値 760px / 800px / 820px のまま保存されている環境では、新既定値 600px へ穏やかに寄せる。
+        if left_w in (760, 800, 820):
+            left_w = DEFAULT_LEFT_PANEL_WIDTH
+            window_payload = dict(window_payload)
+            window_payload['left_panel_width'] = left_w
         left_splitter_sizes = self._payload_splitter_sizes_value(
             window_payload,
             'left_splitter_sizes',
@@ -10428,7 +11565,7 @@ class MainWindow(QMainWindow):
 ・フォントビュー: 設定中の文字の見え方を確認します。
 ・実機ビュー: 変換後の XTC を X3/X4 の外形で確認します。
 ・ページ送りは右ペインの「前/次」ボタン、またはページ番号入力で行います。
-・「ボタン反転」を ON にすると、前/次 ボタンの左右配置と動作感を入れ替えられます。
+・歯車メニューの「ページ送りキー反転」を ON にすると、前/次 ボタンの左右配置と動作感を入れ替えられます。
 
 【右ペイン表示ツールバー】
 ・「実寸近似」は PC 画面上の実機サイズに近い表示へ切り替えます。
@@ -10444,8 +11581,8 @@ class MainWindow(QMainWindow):
 ・「XTC/XTCHを開く」から既存の .xtc / .xtch ファイルを右ペインの実機ビューへ読み込めます。
 
 【プリセット】
-・コンボボックスで選択し「プリセット適用」で呼び出します。
-・「組版保存」で現在の設定を上書きします。
+・コンボボックスで選択し「プリセット読込」で呼び出します。
+・「プリセット保存」で現在の設定を上書きします。
 ・プリセットには禁則処理モードも保存されます。
 
 【下部パネル】
