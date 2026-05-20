@@ -906,22 +906,39 @@ def natural_sort_key(value: str) -> list[object]:
 
 
 
+def _absolute_tree_root(root: Path) -> Path:
+    """Return an absolute tree root without resolving Windows short names.
+
+    ``Path.resolve()`` can expose GitHub Actions Windows temporary paths as
+    ``RUNNER~1`` while directory traversal and unittest mocks still use
+    ``runneradmin``.  Keep the caller spelling for tree traversal and only make
+    relative roots absolute.
+    """
+    root = Path(root)
+    return root if root.is_absolute() else root.absolute()
+
+
 def _normalized_relative_path(path: Path, root: Path) -> Path:
     """Return a stable relative path even on Windows CI short-name paths.
 
-    GitHub Actions Windows runners can expose the same temporary directory as
-    both ``C:/Users/runneradmin`` and ``C:/Users/RUNNER~1``.  In that
-    situation ``Path.relative_to()`` may raise ``ValueError`` even though the
-    paths point to the same tree.  Use ``os.path.realpath``/``relpath`` as a
-    fallback so release hygiene checks stay deterministic across local Windows
-    and CI runners.
+    Prefer caller-spelled absolute paths so tests that monkeypatch ``Path``
+    methods keep seeing the same path objects.  Fall back through ``relpath``
+    and then ``realpath`` to survive Windows CI short-name path mismatches.
     """
-    path_real = Path(os.path.realpath(path))
-    root_real = Path(os.path.realpath(root))
+    path_abs = _absolute_tree_root(path)
+    root_abs = _absolute_tree_root(root)
     try:
-        return path_real.relative_to(root_real)
+        return path_abs.relative_to(root_abs)
     except ValueError:
-        return Path(os.path.relpath(str(path_real), str(root_real)))
+        try:
+            return Path(os.path.relpath(str(path_abs), str(root_abs)))
+        except ValueError:
+            path_real = Path(os.path.realpath(path))
+            root_real = Path(os.path.realpath(root))
+            try:
+                return path_real.relative_to(root_real)
+            except ValueError:
+                return Path(os.path.relpath(str(path_real), str(root_real)))
 
 
 
@@ -1046,7 +1063,7 @@ def should_include_path(path: Path, root: Path, *,
 
 def iter_release_files(root: Path, *, excluded_paths: Iterable[Path] | None = None) -> Iterator[Path]:
     """release zip に含めるファイル一覧を自然順で返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     excluded_resolved = {path.resolve() for path in (excluded_paths or ())}
     files: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -1298,7 +1315,7 @@ def _is_release_directory(path: Path) -> bool:
 
 def iter_bundled_font_files(root: Path) -> Iterator[Path]:
     """release に同梱予定のローカルフォント一覧を返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     font_dirs = [
         path for path in root.iterdir()
         if _is_release_directory(path) and _is_bundled_font_dir_name(path.name)
@@ -1311,7 +1328,7 @@ def iter_bundled_font_files(root: Path) -> Iterator[Path]:
 
 def _tree_required_bundled_font_license_issue(root: Path) -> str:
     """同梱フォント用ライセンスが許容位置にあり、空でないかを返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     candidates: list[Path] = []
     candidates.extend(path for path in root.iterdir() if _is_release_regular_file(path))
     candidates.extend(
@@ -1359,13 +1376,13 @@ def _tree_has_required_bundled_font_license(root: Path) -> bool:
 
 def _tree_has_project_app_markers(root: Path) -> bool:
     """公開配布対象のアプリ本体を含むツリーかを返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     return any(_is_release_regular_file(root / name) for name in PROJECT_APP_MARKER_FILES)
 
 
 def _tree_missing_required_public_docs(root: Path) -> list[str]:
     """公開配布対象ツリーで不足している必須公開文書を返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     if not _tree_has_project_app_markers(root):
         return []
     return [name for name in REQUIRED_PUBLIC_DOC_FILES if not _is_release_regular_file(root / name)]
@@ -1575,7 +1592,7 @@ def _required_release_file_list_issues() -> list[str]:
 
 def _tree_missing_required_project_support_files(root: Path) -> list[str]:
     """公開配布対象ツリーで不足している起動・依存関係ファイルや分割モジュール・GUI資産を返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     if not _tree_has_project_app_markers(root):
         return []
     return [name for name in _required_project_support_member_names() if not _is_release_regular_file(root / name)]
@@ -1601,7 +1618,7 @@ def _required_regression_test_list_untracked_reason(name: str) -> str:
 
 def _tree_untracked_regression_test_files(root: Path) -> list[str]:
     """実ツリーにある tests/test_*.py のうち、必須リストから漏れているものを返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     if not _tree_has_project_app_markers(root):
         return []
     required = _required_release_member_keys(REQUIRED_PROJECT_REGRESSION_TEST_FILES)
@@ -1669,7 +1686,7 @@ def _untracked_golden_case_files_from_source(source: str) -> list[str]:
 
 def _tree_untracked_golden_case_files(root: Path) -> list[str]:
     """CASE_SPECS 由来の golden PNG が必須リストから漏れていないか返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     if not _tree_has_project_app_markers(root):
         return []
     sources: list[str] = []
@@ -2013,7 +2030,7 @@ def _required_file_content_issues_from_bytes(name: str, data: bytes) -> list[str
 
 def _tree_required_file_content_issues(root: Path) -> list[str]:
     """公開配布対象ツリーで、必須ファイルの空内容や .bat / requirements 内容問題を返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     if not _tree_has_project_app_markers(root):
         return []
 
@@ -2033,7 +2050,7 @@ def _tree_required_file_content_issues(root: Path) -> list[str]:
 
 def validate_release_tree(root: Path) -> list[str]:
     """release 作成前に、公開配布に必要な資産不足を返す。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     missing_assets: list[str] = []
     missing_assets.extend(
         f'{name} (required for project release archives)'
@@ -2581,7 +2598,7 @@ def _first_release_zip_build_error_message(
 
 def build_release_zip(root: Path, output_path: Path) -> Path:
     """開発用生成物を除外した release zip を作成する。"""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -2639,7 +2656,7 @@ def source_archive_member_should_be_included(member_name: str, *, is_dir: bool =
 
 def iter_source_only_files(root: Path, *, excluded_paths: Iterable[Path] | None = None) -> Iterator[Path]:
     """Return files for a GitHub/source-only archive in stable order."""
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     excluded_resolved = {path.resolve() for path in (excluded_paths or ())}
 
     for current_root, dirs, files in os.walk(root):
@@ -2682,7 +2699,7 @@ def build_source_only_zip(root: Path, output_path: Path) -> Path:
     the same local/generated artifacts that .gitignore excludes, notably logs/
     and internal *handoff*.md files.
     """
-    root = root.resolve()
+    root = _absolute_tree_root(root)
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
