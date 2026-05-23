@@ -16,11 +16,11 @@ from typing import Any
 
 
 LOWER_CLOSING_BRACKET_POSITION_MODES: dict[str, str] = {
-    'down_strong': '下補正 強',
-    'down_weak': '下補正 弱',
+    'down_strong': '下補正強',
+    'down_weak': '下補正弱',
     'standard': '標準',
-    'up_weak': '上補正 弱',
-    'up_strong': '上補正 強',
+    'up_weak': '上補正弱',
+    'up_strong': '上補正強',
 }
 WAVE_DASH_DRAWING_MODES: dict[str, str] = {
     'rotate': '回転グリフ',
@@ -343,7 +343,7 @@ def build_settings_restore_payload(
 ) -> dict[str, Any]:
     raw_payload = _coerce_mapping_payload(raw_payload)
     if allowed_glyph_position_modes is None:
-        allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
+        allowed_glyph_position_modes = {'down_strong': '下補正強', 'down_weak': '下補正弱', 'standard': '標準', 'up_weak': '上補正弱', 'up_strong': '上補正強'}
     allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
     allowed_wave_dash_drawing_modes = WAVE_DASH_DRAWING_MODES
     allowed_wave_dash_position_modes = WAVE_DASH_POSITION_MODES
@@ -357,6 +357,8 @@ def build_settings_restore_payload(
         ('dither', False),
         ('night_mode', False),
         ('ruby_hide', False),
+        ('page_number_enabled', False),
+        ('page_number_margin_auto_active', False),
         ('open_folder', True),
     ):
         payload[key] = _config_bool_value(raw_payload.get(key), default)
@@ -364,6 +366,9 @@ def build_settings_restore_payload(
         ('calibration_pct', 100),
         ('font_size', 26),
         ('ruby_size', 12),
+        ('page_number_font_size', 12),
+        ('page_number_margin_auto_base_value', 14),
+        ('page_number_margin_auto_value', 14),
         ('line_spacing', 44),
         ('margin_t', 12),
         ('margin_b', 14),
@@ -410,6 +415,11 @@ def build_settings_restore_payload(
         'standard',
         allowed_glyph_position_modes,
     )
+    payload['halfwidth_alpha_position_mode'] = normalize_choice_value(
+        raw_payload.get('halfwidth_alpha_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
     payload['tatechuyoko_symbol_position_mode'] = normalize_choice_value(
         raw_payload.get('tatechuyoko_symbol_position_mode'),
         'standard',
@@ -427,6 +437,7 @@ def build_settings_restore_payload(
         raw_payload.get('wave_dash_position_mode'),
     )
     payload['target'] = str(raw_payload.get('target') or '').strip()
+    payload['output_dir'] = str(raw_payload.get('output_dir') or '').strip()
     payload['font_file'] = str(raw_payload.get('font_file') or '').strip()
     payload['main_view_mode'] = normalize_choice_value(
         raw_payload.get('main_view_mode'),
@@ -463,7 +474,7 @@ def build_settings_ui_apply_payload(
 ) -> dict[str, Any]:
     raw_payload = _coerce_mapping_payload(raw_payload)
     if allowed_glyph_position_modes is None:
-        allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
+        allowed_glyph_position_modes = {'down_strong': '下補正強', 'down_weak': '下補正弱', 'standard': '標準', 'up_weak': '上補正弱', 'up_strong': '上補正強'}
     allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
     allowed_wave_dash_drawing_modes = WAVE_DASH_DRAWING_MODES
     allowed_wave_dash_position_modes = WAVE_DASH_POSITION_MODES
@@ -474,7 +485,7 @@ def build_settings_ui_apply_payload(
         if key in raw_payload:
             plan[key] = raw_payload.get(key)
 
-    for key in ('target', 'font_file'):
+    for key in ('target', 'output_dir', 'font_file'):
         if key in raw_payload:
             plan[key] = str(raw_payload.get(key) or '').strip()
 
@@ -485,6 +496,7 @@ def build_settings_ui_apply_payload(
         ('dither', 'dither'),
         ('night_mode', 'night_mode'),
         ('ruby_hide', 'ruby_hide'),
+        ('page_number_enabled', 'page_number_enabled'),
         ('open_folder', 'open_folder'),
     ):
         if key in raw_payload:
@@ -494,6 +506,7 @@ def build_settings_ui_apply_payload(
         ('calibration_pct', 'calibration_pct'),
         ('font_size', 'font_size'),
         ('ruby_size', 'ruby_size'),
+        ('page_number_font_size', 'page_number_font_size'),
         ('line_spacing', 'line_spacing'),
         ('margin_t', 'margin_t'),
         ('margin_b', 'margin_b'),
@@ -532,7 +545,7 @@ def build_settings_ui_apply_payload(
             raw_payload.get('tatechuyoko_digit_mode'),
             str(defaults.get('tatechuyoko_digit_mode') or '2'),
         )
-    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'tatechuyoko_symbol_position_mode'):
+    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'halfwidth_alpha_position_mode', 'tatechuyoko_symbol_position_mode'):
         if glyph_key in raw_payload:
             plan[glyph_key] = normalize_choice_value(
                 raw_payload.get(glyph_key),
@@ -583,7 +596,7 @@ def build_settings_save_payload(
 ) -> dict[str, Any]:
     raw_payload = _coerce_mapping_payload(raw_payload)
     if allowed_glyph_position_modes is None:
-        allowed_glyph_position_modes = {'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'}
+        allowed_glyph_position_modes = {'down_strong': '下補正強', 'down_weak': '下補正弱', 'standard': '標準', 'up_weak': '上補正弱', 'up_strong': '上補正強'}
     allowed_lower_closing_bracket_position_modes = LOWER_CLOSING_BRACKET_POSITION_MODES
     allowed_wave_dash_drawing_modes = WAVE_DASH_DRAWING_MODES
     allowed_wave_dash_position_modes = WAVE_DASH_POSITION_MODES
@@ -606,10 +619,14 @@ def build_settings_save_payload(
     payload['nav_buttons_reversed'] = _config_bool_value(raw_payload.get('nav_buttons_reversed'), False)
     payload['preview_page_limit'] = max(1, _config_int_value(raw_payload.get('preview_page_limit'), default_preview_page_limit))
     payload['target'] = str(raw_payload.get('target') or '').strip()
+    payload['output_dir'] = str(raw_payload.get('output_dir') or '').strip()
     payload['font_file'] = str(raw_payload.get('font_file') or '').strip()
     for key, default in (
         ('font_size', 26),
         ('ruby_size', 12),
+        ('page_number_font_size', 12),
+        ('page_number_margin_auto_base_value', 14),
+        ('page_number_margin_auto_value', 14),
         ('line_spacing', 44),
         ('margin_t', 12),
         ('margin_b', 14),
@@ -624,6 +641,8 @@ def build_settings_save_payload(
         ('dither', False),
         ('night_mode', False),
         ('ruby_hide', False),
+        ('page_number_enabled', False),
+        ('page_number_margin_auto_active', False),
         ('open_folder', False),
     ):
         payload[key] = _config_bool_value(raw_payload.get(key), default)
@@ -653,6 +672,11 @@ def build_settings_save_payload(
     )
     payload['halfwidth_digit_position_mode'] = normalize_choice_value(
         raw_payload.get('halfwidth_digit_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['halfwidth_alpha_position_mode'] = normalize_choice_value(
+        raw_payload.get('halfwidth_alpha_position_mode'),
         'standard',
         allowed_glyph_position_modes,
     )
@@ -947,11 +971,19 @@ def build_preview_button_state(
 
 def build_preview_progress_context_state(
     context: Mapping[str, object] | None,
-) -> dict[str, str]:
-    """Return normalized preview-progress status text from a worker context."""
+) -> dict[str, Any]:
+    """Return normalized preview-progress status/progress-bar state."""
     payload = _coerce_mapping_payload(context)
+    total = max(0, _config_int_value(payload.get('progress_total'), 0))
+    current = max(0, _config_int_value(payload.get('progress_current'), 0))
+    if total > 0:
+        current = min(current, total)
     return {
         'status_message': str(payload.get('status_message', '')),
+        'progress_visible': _config_bool_value(payload.get('progress_visible'), False),
+        'progress_busy': _config_bool_value(payload.get('progress_busy'), total <= 0),
+        'progress_current': current,
+        'progress_total': total,
     }
 
 
@@ -1402,6 +1434,7 @@ def build_navigation_input_state(
         'changed': target != current,
         'is_valid': True,
     }
+
 
 
 def build_navigation_display_state(
@@ -1947,8 +1980,10 @@ def _build_preset_summary_lines(
     tatechuyoko_mode = normalize_tatechuyoko_digit_mode(preset.get('tatechuyoko_digit_mode', '2'), '2')
     tatechuyoko_text = TATECHUYOKO_DIGIT_MODES.get(tatechuyoko_mode, '2文字')
     name_line = preset_name
+    page_number_text = 'あり' if _config_bool_value(preset.get('page_number_enabled'), False) else 'なし'
+    page_number_size = _config_int_value(preset.get('page_number_font_size'), 12)
     line1 = f'機種: {profile_text} / 出力形式: {out_fmt_text} / 本文: {font_size} / ルビ: {ruby_size} / 行間: {line_spacing} / 縦中横: {tatechuyoko_text}'
-    line2 = f'余白: 上 {margin_t} 下 {margin_b} 左 {margin_l} 右 {margin_r} / 白黒反転: {night_text} / ディザ: {dither_text} / しきい値: {threshold} / 禁則: {kinsoku_text}'
+    line2 = f'余白: 上 {margin_t} 下 {margin_b} 左 {margin_l} 右 {margin_r} / 白黒反転: {night_text} / ディザ: {dither_text} / しきい値: {threshold} / 禁則: {kinsoku_text} / ページ番号: {page_number_text}({page_number_size})'
     line3 = f'フォント: {font_text}'
     return name_line, line1, line2, line3
 

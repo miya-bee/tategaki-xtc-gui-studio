@@ -45,6 +45,102 @@ _refresh_core_globals()
 # --- 画像フィルタ & XTG/XTC 変換 ---
 # ==========================================
 
+
+
+# ==========================================
+# --- Page number overlay helper ---
+# ==========================================
+
+def _page_number_overlay_enabled(args: ConversionArgs | None) -> bool:
+    return bool(args is not None and getattr(args, 'page_number_enabled', False))
+
+
+def _page_number_overlay_font_size(args: ConversionArgs | None) -> int:
+    try:
+        value = int(getattr(args, 'page_number_font_size', 12) if args is not None else 12)
+    except Exception:
+        value = 12
+    if value < 1:
+        raise ValueError('ページ番号フォントサイズは 1 以上である必要があります。')
+    if value >= 30:
+        raise ValueError('ページ番号フォントサイズは 30 未満である必要があります。')
+    return value
+
+
+def _load_page_number_overlay_font(args: ConversionArgs | None) -> Any:
+    size = _page_number_overlay_font_size(args)
+    font_value = ''
+    if args is not None:
+        font_value = str(getattr(args, 'page_number_font_file', '') or getattr(args, 'font_file', '') or '').strip()
+    if font_value:
+        loader = globals().get('load_truetype_font')
+        if callable(loader):
+            try:
+                return loader(font_value, size)
+            except Exception:
+                pass
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _measure_page_number_text(draw: Any, text: str, font: Any) -> tuple[int, int, int, int]:
+    try:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+    except Exception:
+        try:
+            width, height = draw.textsize(text, font=font)
+            return 0, 0, int(width), int(height)
+        except Exception:
+            size = max(1, len(text)) * 8
+            return 0, 0, size, 10
+
+
+def apply_page_number_overlay_to_canvas(canvas: Image.Image, args: ConversionArgs | None, page_index: int, total_pages: int) -> Image.Image:
+    """Draw ``current/total`` at the bottom-right of a prepared page canvas.
+
+    The overlay is intentionally applied after text-page margin clipping and before
+    XTC/XTCH thresholding, so it survives the existing output pipeline.  The
+    ConversionArgs validator already reserves at least ``font_size + 1`` pixels of
+    bottom margin when page numbering is enabled.
+    """
+    if not _page_number_overlay_enabled(args):
+        return canvas
+    try:
+        current = int(page_index)
+        total = int(total_pages)
+    except Exception:
+        return canvas
+    if current <= 0 or total <= 0:
+        return canvas
+    text = f'{current}/{total}'
+    work = canvas if canvas.mode == 'L' else canvas.convert('L')
+    if work is canvas:
+        work = canvas.copy()
+    width, height = work.size
+    draw = ImageDraw.Draw(work)
+    font = _load_page_number_overlay_font(args)
+    left, top, right, bottom = _measure_page_number_text(draw, text, font)
+    text_w = max(1, right - left)
+    text_h = max(1, bottom - top)
+    font_size = _page_number_overlay_font_size(args)
+    try:
+        margin_b = max(0, int(getattr(args, 'margin_b', font_size + 1) if args is not None else font_size + 1))
+    except Exception:
+        margin_b = font_size + 1
+    try:
+        margin_r = max(0, int(getattr(args, 'margin_r', 0) if args is not None else 0))
+    except Exception:
+        margin_r = 0
+    bottom_band_top = max(0, height - max(margin_b, font_size + 1))
+    x = max(0, width - margin_r - text_w - max(1, font_size // 6))
+    y = bottom_band_top + max(0, (height - bottom_band_top - text_h) // 2) - top
+    y = max(0, min(height - text_h, y))
+    draw.text((x, y), text, fill=0, font=font)
+    return work
+
 def _prepare_canvas_image(img: Image.Image, w: int, h: int) -> Image.Image:
     if img.mode == 'L' and img.size == (w, h):
         return img
@@ -217,6 +313,10 @@ def _prepared_canvas_to_xth_bytes(background: Image.Image, w: int, h: int, args:
 def canvas_image_to_xt_bytes(background: Image.Image, w: int, h: int, args: ConversionArgs, *, prepared: bool = False) -> bytes:
     _refresh_core_globals()
     canvas = background if prepared else _prepare_canvas_image(background, w, h)
+    page_current = getattr(args, '_page_number_current', None)
+    page_total = getattr(args, '_page_number_total', None)
+    if page_current is not None and page_total is not None:
+        canvas = apply_page_number_overlay_to_canvas(canvas, args, page_current, page_total)
     return _prepared_canvas_to_xth_bytes(canvas, w, h, args) if _normalize_output_format(getattr(args, 'output_format', 'xtc')) == 'xtch' else _prepared_canvas_to_xtg_bytes(canvas, w, h, args)
 
 
@@ -276,9 +376,18 @@ def _verify_xt_page_blob_header(blob_header: bytes, page_length: int, expected_w
 
 
 
-def _verify_xt_container_file(path: Path, expected_w: int, expected_h: int, output_format: str, expected_count: int | None = None) -> int:
+def _verify_xt_container_file(
+    path: Path,
+    expected_w: int,
+    expected_h: int,
+    output_format: str,
+    expected_count: int | None = None,
+    expected_page_specs: Sequence[tuple[int, int, int]] | None = None,
+) -> int:
     normalized_format = _normalize_output_format(output_format)
     expected_mark = b'XTCH' if normalized_format == 'xtch' else b'XTC\x00'
+    if expected_page_specs is not None:
+        expected_count = len(expected_page_specs)
     with open(path, 'rb') as fh:
         fh.seek(0, os.SEEK_END)
         file_size = fh.tell()
@@ -298,6 +407,10 @@ def _verify_xt_container_file(path: Path, expected_w: int, expected_h: int, outp
             raise RuntimeError(
                 f'自己検証に失敗しました: ページ数が一致しません。 expected={expected_count} actual={count}'
             )
+        if expected_page_specs is not None and len(expected_page_specs) != count:
+            raise RuntimeError(
+                f'自己検証に失敗しました: ページ仕様数が一致しません。 expected={len(expected_page_specs)} actual={count}'
+            )
         if count <= 0:
             raise RuntimeError('自己検証に失敗しました: ページ数が 0 です。')
         if idx_off < 48 or idx_off > file_size:
@@ -311,11 +424,16 @@ def _verify_xt_container_file(path: Path, expected_w: int, expected_h: int, outp
             if len(entry) != 16:
                 raise RuntimeError(f'自己検証に失敗しました: ページ {page_index} の索引が途中で切れています。')
             offset, length, width, height = struct.unpack('<Q I H H', entry)
+            if expected_page_specs is not None:
+                expected_length, expected_page_w, expected_page_h = expected_page_specs[page_index - 1]
+            else:
+                expected_length, expected_page_w, expected_page_h = length, expected_w, expected_h
             end = offset + length
             if (
                 length <= 0
-                or width != expected_w
-                or height != expected_h
+                or length != expected_length
+                or width != expected_page_w
+                or height != expected_page_h
                 or offset < data_off
                 or offset < prev_end
                 or end > file_size
@@ -326,7 +444,7 @@ def _verify_xt_container_file(path: Path, expected_w: int, expected_h: int, outp
                 )
             fh.seek(offset)
             blob_header = fh.read(22)
-            _verify_xt_page_blob_header(blob_header, length, expected_w, expected_h, normalized_format, page_index)
+            _verify_xt_page_blob_header(blob_header, length, expected_page_w, expected_page_h, normalized_format, page_index)
             prev_end = end
         if prev_end != file_size:
             raise RuntimeError(
@@ -351,9 +469,8 @@ def _atomic_replace_xt_container(out_path: Path, writer: Callable[[BinaryIO], No
         os.replace(tmp_path, out_path)
     except Exception:
         try:
-            if tmp_path.exists():
-                tmp_path.unlink()
-        except OSError:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
             pass
         raise
 

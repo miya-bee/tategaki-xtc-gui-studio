@@ -261,6 +261,29 @@ def load_archive_input_document(archive_path: PathLike, tmpdir_path: PathLike, *
     )
 
 
+
+
+def _set_archive_page_number_runtime(args: ConversionArgs, current: int, total: int) -> tuple[object, object, bool, bool]:
+    had_current = hasattr(args, '_page_number_current')
+    had_total = hasattr(args, '_page_number_total')
+    old_current = getattr(args, '_page_number_current', None)
+    old_total = getattr(args, '_page_number_total', None)
+    setattr(args, '_page_number_current', int(current))
+    setattr(args, '_page_number_total', int(total))
+    return old_current, old_total, had_current, had_total
+
+
+def _restore_archive_page_number_runtime(args: ConversionArgs, state: tuple[object, object, bool, bool]) -> None:
+    old_current, old_total, had_current, had_total = state
+    if had_current:
+        setattr(args, '_page_number_current', old_current)
+    elif hasattr(args, '_page_number_current'):
+        delattr(args, '_page_number_current')
+    if had_total:
+        setattr(args, '_page_number_total', old_total)
+    elif hasattr(args, '_page_number_total'):
+        delattr(args, '_page_number_total')
+
 # ==========================================
 # --- アーカイブ変換入口 ---
 # ==========================================
@@ -323,7 +346,12 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
                         _raise_if_cancelled(should_cancel)
                         try:
                             with zf.open(info) as member_fp:
-                                blob = process_image_data(member_fp, args, should_cancel=should_cancel)
+                                runtime_state = _set_archive_page_number_runtime(args, img_index, max(1, total_images)) if bool(getattr(args, 'page_number_enabled', False)) else None
+                                try:
+                                    blob = process_image_data(member_fp, args, should_cancel=should_cancel)
+                                finally:
+                                    if runtime_state is not None:
+                                        _restore_archive_page_number_runtime(args, runtime_state)
                             if blob:
                                 spooled_pages.add_blob(blob)
                                 _emit_progress(progress_cb, img_index, max(1, total_images), f'画像を変換中… ({img_index}/{total_images} 枚) {display_name}')
@@ -379,7 +407,12 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
                                 LOGGER.warning('パス・トラバーサル検出のためスキップ: %s', img_p)
                                 traversal_skipped += 1
                                 continue
-                        blob = process_image_data(resolved_img, args, should_cancel=should_cancel)
+                        runtime_state = _set_archive_page_number_runtime(args, img_index, max(1, total_images)) if bool(getattr(args, 'page_number_enabled', False)) else None
+                        try:
+                            blob = process_image_data(resolved_img, args, should_cancel=should_cancel)
+                        finally:
+                            if runtime_state is not None:
+                                _restore_archive_page_number_runtime(args, runtime_state)
                         if blob:
                             spooled_pages.add_blob(blob)
                             _emit_progress(progress_cb, img_index, max(1, total_images), f'画像を変換中… ({img_index}/{total_images} 枚) {img_p.name}')

@@ -280,6 +280,14 @@ REQUIRED_PROJECT_TEST_DATA_FILES = (
     *REQUIRED_PROJECT_TEST_FIXTURE_IMAGE_FILES,
     *REQUIRED_PROJECT_GOLDEN_IMAGE_FILES,
 )
+REQUIRED_PROJECT_SAMPLE_TEXT_FILES = (
+    'sample_texts/README_sample_texts.md',
+    'sample_texts/tategaki_position_kinsoku_test_text_v3.txt',
+    'sample_texts/tategaki_position_kinsoku_bold_markdown_v1.md',
+    'sample_texts/tategaki_tatechuyoko_punctuation_test_text_v1.txt',
+    'sample_texts/tategaki_halfwidth_alpha_position_test_text_v1.txt',
+    'sample_texts/tategaki_halfwidth_fullwidth_alpha_compare_test_text_v1.txt',
+)
 REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_aozora_archive_edge_regression.py',
     'tests/test_aozora_note_parser_regression.py',
@@ -298,6 +306,9 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_epub_code_font_preresolved.py',
     'tests/test_epub_css_pagebreak_skip_regression.py',
     'tests/test_epub_css_regression.py',
+    'tests/test_epub_diagnostics_regression_v13610.py',
+    'tests/test_epub_generated_fixture_set_v13611.py',
+    'tests/test_epub_auxiliary_hardening_v13612.py',
     'tests/test_epub_preview_helper_regression.py',
     'tests/test_epub_regression.py',
     'tests/test_epub_structure_progress_regression.py',
@@ -342,6 +353,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_markdown_table_footnote_regression.py',
     'tests/test_misc_conversion_helper_regression.py',
     'tests/test_output_conflict_regression.py',
+    'tests/test_page_number_regression.py',
     'tests/test_pending_indent_regression.py',
     'tests/test_preview_shared_renderer.py',
     'tests/test_real_file_preview.py',
@@ -376,6 +388,7 @@ REQUIRED_PROJECT_RELEASE_FILES = (
     *REQUIRED_PROJECT_GUI_ASSET_FILES,
     *REQUIRED_PROJECT_TEST_SUPPORT_FILES,
     *REQUIRED_PROJECT_TEST_DATA_FILES,
+    *REQUIRED_PROJECT_SAMPLE_TEXT_FILES,
     *REQUIRED_PROJECT_REGRESSION_TEST_FILES,
 )
 REQUIRED_ASCII_BATCH_FILES = tuple(

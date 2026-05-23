@@ -63,6 +63,7 @@ _XTC_PAGE_QIMAGE_CACHE_LIMIT = 8
 _DEVICE_PREVIEW_PAGE_QIMAGE_CACHE_LIMIT = 8
 _FONT_PREVIEW_PAGE_PIXMAP_CACHE_LIMIT = 8
 _SETTINGS_PREVIEW_REFRESH_DELAY_MS = 350
+_AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX = 20
 def _resolve_log_dir() -> Path:
     global ACTIVE_LOG_DIR
     if isinstance(ACTIVE_LOG_DIR, Path):
@@ -365,6 +366,7 @@ class MainWindow(QMainWindow):
         self._device_preview_page_cache_tokens: list[int] = []
         self.current_page_index = 0
         self.nav_buttons_reversed = False
+        self.selected_output_dir = ''
         self.current_ui_theme = 'light'
         self.panel_button_visible = True
         self.worker_thread: QThread | None = None
@@ -916,9 +918,9 @@ class MainWindow(QMainWindow):
             'profile_combo', 'actual_size_check', 'guides_check', 'calib_spin', 'preview_zoom_spin', 'nav_reverse_check',
             'font_combo', 'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'ruby_hide_check', 'dither_check', 'night_check',
+            'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'dither_check', 'night_check',
             'open_folder_check', 'output_conflict_combo', 'output_format_combo',
-            'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
+            'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
         )
 
     def _preset_apply_widgets(self: MainWindow) -> tuple[object, ...]:
@@ -926,7 +928,7 @@ class MainWindow(QMainWindow):
             'profile_combo', 'width_spin', 'height_spin', 'font_combo',
             'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'ruby_hide_check', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
+            'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
         )
 
     def _apply_profile_dimensions_to_ui(
@@ -962,6 +964,8 @@ class MainWindow(QMainWindow):
             font_size=self._safe_widget_value('font_size_spin', 26),
             ruby_size=self._safe_widget_value('ruby_size_spin', 12),
             ruby_hide=self._safe_widget_checked('ruby_hide_check'),
+            page_number_enabled=self._safe_widget_checked('page_number_check'),
+            page_number_font_size=self._safe_widget_value('page_number_font_size_spin', 12),
             line_spacing=self._safe_widget_value('line_spacing_spin', 44),
             margin_t=self._safe_widget_value('margin_t_spin', 12),
             margin_b=self._safe_widget_value('margin_b_spin', 14),
@@ -979,6 +983,7 @@ class MainWindow(QMainWindow):
             punctuation_position_mode=self._safe_combo_data('punctuation_position_combo', 'standard'),
             ichi_position_mode=self._safe_combo_data('ichi_position_combo', 'standard'),
             halfwidth_digit_position_mode=self._safe_combo_data('halfwidth_digit_position_combo', 'standard'),
+            halfwidth_alpha_position_mode=self._safe_combo_data('halfwidth_alpha_position_combo', 'standard'),
             tatechuyoko_symbol_position_mode=self._safe_combo_data('tatechuyoko_symbol_position_combo', 'standard'),
             lower_closing_bracket_position_mode=self._safe_combo_data('lower_closing_bracket_position_combo', 'standard'),
             wave_dash_drawing_mode=self._safe_combo_data('wave_dash_drawing_combo', 'rotate'),
@@ -1050,6 +1055,7 @@ class MainWindow(QMainWindow):
         for key, widget in [
             ('font_size', getattr(self, 'font_size_spin', None)),
             ('ruby_size', getattr(self, 'ruby_size_spin', None)),
+            ('page_number_font_size', getattr(self, 'page_number_font_size_spin', None)),
             ('line_spacing', getattr(self, 'line_spacing_spin', None)),
             ('margin_t', getattr(self, 'margin_t_spin', None)),
             ('margin_b', getattr(self, 'margin_b_spin', None)),
@@ -1063,6 +1069,11 @@ class MainWindow(QMainWindow):
 
         if 'ruby_hide' in apply_plan:
             getattr(self, 'ruby_hide_check', None) is not None and self.ruby_hide_check.setChecked(bool(apply_plan['ruby_hide']))
+        if 'page_number_enabled' in apply_plan:
+            getattr(self, 'page_number_check', None) is not None and self.page_number_check.setChecked(bool(apply_plan['page_number_enabled']))
+        if getattr(self, 'page_number_font_size_spin', None) is not None and getattr(self, 'page_number_check', None) is not None:
+            self.page_number_font_size_spin.setEnabled(bool(self.page_number_check.isChecked()))
+        self._restore_page_number_bottom_margin_auto_state_from_payload(payload)
         if 'dither' in apply_plan:
             getattr(self, 'dither_check', None) is not None and self.dither_check.setChecked(bool(apply_plan['dither']))
         self._apply_render_option_ui_state()
@@ -1084,6 +1095,8 @@ class MainWindow(QMainWindow):
             getattr(self, 'ichi_position_combo', None) is not None and self._set_combo_to_data(self.ichi_position_combo, str(apply_plan['ichi_position_mode']))
         if 'halfwidth_digit_position_mode' in apply_plan:
             getattr(self, 'halfwidth_digit_position_combo', None) is not None and self._set_combo_to_data(self.halfwidth_digit_position_combo, str(apply_plan['halfwidth_digit_position_mode']))
+        if 'halfwidth_alpha_position_mode' in apply_plan:
+            getattr(self, 'halfwidth_alpha_position_combo', None) is not None and self._set_combo_to_data(self.halfwidth_alpha_position_combo, str(apply_plan['halfwidth_alpha_position_mode']))
         if 'tatechuyoko_symbol_position_mode' in apply_plan:
             getattr(self, 'tatechuyoko_symbol_position_combo', None) is not None and self._set_combo_to_data(self.tatechuyoko_symbol_position_combo, str(apply_plan['tatechuyoko_symbol_position_mode']))
         if 'lower_closing_bracket_position_mode' in apply_plan:
@@ -1094,7 +1107,15 @@ class MainWindow(QMainWindow):
             getattr(self, 'wave_dash_position_combo', None) is not None and self._set_combo_to_data(self.wave_dash_position_combo, str(apply_plan['wave_dash_position_mode']))
 
         if 'target' in apply_plan:
-            getattr(self, 'target_edit', None) is not None and self.target_edit.setText(str(apply_plan.get('target') or '').strip())
+            # プリセット/設定復元で変換対象が変わる場合も、ファイル選択・
+            # ドロップ・手入力と同じ target 変更 helper を通して通常
+            # プレビューへ戻す。
+            self._set_target_path_for_normal_preview(
+                str(apply_plan.get('target') or '').strip(),
+                block_signals=False,
+            )
+        if 'output_dir' in apply_plan:
+            self.selected_output_dir = worker_logic.normalize_target_path_text(str(apply_plan.get('output_dir') or ''))
 
         if 'main_view_mode' in apply_plan:
             hasattr(self, 'set_main_view_mode') and self.set_main_view_mode(str(apply_plan['main_view_mode']), initial=True)
@@ -1172,6 +1193,16 @@ class MainWindow(QMainWindow):
         if persist:
             self.save_ui_state()
         if refresh_preview:
+            try:
+                if self._is_file_viewer_mode_active():
+                    # File-viewer mode shows already-rendered XTC/XTCH pages.
+                    # Display-only controls such as the device approximation
+                    # button must not mark the conversion preview stale or turn
+                    # the Preview Update button into the pending beige state.
+                    self._apply_file_viewer_mode_preview_button_state()
+                    return
+            except Exception:
+                pass
             self.mark_preview_dirty()
 
     def _normalize_font_setting_value(self: MainWindow, value: object, fallback: str = '') -> str:
@@ -1265,19 +1296,59 @@ class MainWindow(QMainWindow):
             return False
         return response == yes_button
 
-    def _clear_startup_target_for_sample_preview(self: MainWindow) -> None:
+    def _set_target_path_for_normal_preview(
+        self: MainWindow,
+        path: object,
+        *,
+        block_signals: bool = True,
+        exit_file_viewer: bool = True,
+    ) -> str:
+        """Set the normal conversion target through one guarded path.
+
+        Target changes are initiated by several UI routes: file dialog, drag
+        and drop, manual entry, preset restore, and startup helpers.  The
+        XTC/XTCH file viewer owns the right-pane page source while it is
+        active, so every normal target change must first leave viewer mode.
+        Keeping the setText + viewer-exit sequence here prevents the same
+        cleanup from being forgotten by a future target-change route.
+        """
+        normalized_path = worker_logic.normalize_target_path_text(path)
+        if exit_file_viewer:
+            self._leave_file_viewer_mode_for_target_change()
         target_edit = getattr(self, 'target_edit', None)
         setter = getattr(target_edit, 'setText', None)
         if not callable(setter):
-            return
-        try:
-            with _bulk_block_signals(target_edit):
-                setter('')
-        except Exception:
+            return normalized_path
+        if block_signals:
             try:
-                setter('')
+                with _bulk_block_signals(target_edit):
+                    setter(normalized_path)
+                return normalized_path
             except Exception:
                 pass
+        try:
+            setter(normalized_path)
+        except Exception:
+            pass
+        return normalized_path
+
+    def on_target_text_changed(self: MainWindow, text: object = '') -> None:
+        """Leave XTC/XTCH viewer mode as soon as the target field changes.
+
+        Programmatic target updates should normally use
+        _set_target_path_for_normal_preview(), but this signal-level guard is
+        a low-cost safety net for manual edits or future UI paths that touch
+        target_edit directly.
+        """
+        del text
+        try:
+            if self._is_file_viewer_mode_active():
+                self._leave_file_viewer_mode_for_target_change()
+        except Exception:
+            APP_LOGGER.exception('変換対象テキスト変更時のファイルビューワー状態解除に失敗しました')
+
+    def _clear_startup_target_for_sample_preview(self: MainWindow) -> None:
+        self._set_target_path_for_normal_preview('', exit_file_viewer=False)
 
     def _show_startup_sample_preview_status(self: MainWindow, message: str) -> None:
         try:
@@ -1287,10 +1358,91 @@ class MainWindow(QMainWindow):
 
     def _request_startup_sample_preview(self: MainWindow) -> bool:
         try:
-            return bool(self.request_preview_refresh(reset_page=True))
+            refreshed = bool(self.request_preview_refresh(reset_page=True))
         except Exception:
             APP_LOGGER.exception('起動時サンプルプレビューの生成に失敗しました')
-            return False
+            refreshed = False
+        try:
+            self._schedule_startup_preview_idle_reconcile()
+        except Exception:
+            pass
+        return refreshed
+
+    def _schedule_startup_preview_idle_reconcile(self: MainWindow) -> None:
+        """Finalize startup preview UI after delayed showEvent work has settled.
+
+        The startup sample/restore preview runs from ``showEvent`` through a
+        deferred ``QTimer.singleShot(0, ...)`` path.  On Windows/PySide6, early
+        repaint/resize events can leave the preview progress controls showing
+        the start-context text even after the synchronous preview bundle was
+        applied.  Keep this guard scoped to startup preview: it only runs after
+        the initial sample/restore request and reconciles the controls once all
+        running flags are down.
+        """
+
+        def _run() -> None:
+            self._reconcile_startup_preview_idle_state(remaining_retries=3)
+
+        single_shot = getattr(QTimer, 'singleShot', None)
+        if callable(single_shot):
+            try:
+                single_shot(0, _run)
+                return
+            except Exception:
+                pass
+        _run()
+
+    def _reconcile_startup_preview_idle_state(
+        self: MainWindow, *, remaining_retries: int = 0
+    ) -> None:
+        """Force startup preview controls out of stale generating state safely."""
+        running = bool(
+            getattr(self, '_preview_running', False)
+            or getattr(self, '_target_preview_refresh_running', False)
+        )
+        if running and remaining_retries > 0:
+            single_shot = getattr(QTimer, 'singleShot', None)
+            if callable(single_shot):
+                try:
+                    single_shot(80, lambda: self._reconcile_startup_preview_idle_state(remaining_retries=remaining_retries - 1))
+                    return
+                except Exception:
+                    pass
+        if running:
+            return
+
+        finish_context = preview_controller.build_preview_finish_context()
+        try:
+            self._apply_preview_progress_bar_context(finish_context)
+        except Exception:
+            pass
+        try:
+            self._refresh_preview_update_button_for_current_state(finish_context)
+        except Exception:
+            pass
+
+        try:
+            preview_pages = self._runtime_preview_pages()
+        except Exception:
+            preview_pages = []
+        if preview_pages:
+            try:
+                requested_limit = max(
+                    len(preview_pages),
+                    int(getattr(self, 'last_preview_requested_limit', 0) or 0),
+                )
+            except Exception:
+                requested_limit = len(preview_pages)
+            status_state = studio_logic.build_preview_success_status_state(
+                page_count=len(preview_pages),
+                requested_limit=requested_limit,
+                truncated=getattr(self, 'preview_pages_truncated', False),
+            )
+            try:
+                self._update_preview_status_label(str(status_state.get('status_message', '')))
+            except Exception:
+                pass
+            self.preview_dirty = False
 
     def _request_startup_preview_after_restore(self: MainWindow) -> None:
         target_text = self._startup_target_text()
@@ -1320,6 +1472,10 @@ class MainWindow(QMainWindow):
 
         try:
             if self.request_preview_refresh(reset_page=True):
+                try:
+                    self._schedule_startup_preview_idle_reconcile()
+                except Exception:
+                    pass
                 return
         except Exception:
             APP_LOGGER.exception('前回作業ファイルの起動時プレビュー生成に失敗しました')
@@ -1449,7 +1605,10 @@ class MainWindow(QMainWindow):
     def _can_handle_device_view_arrow_key(self: MainWindow) -> bool:
         view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
         if view_mode == 'font':
-            if not self._runtime_preview_pages():
+            if self._is_file_viewer_mode_active():
+                if not self._runtime_xtc_pages():
+                    return False
+            elif not self._runtime_preview_pages():
                 return False
         elif view_mode == 'device':
             if self._effective_device_view_source() == 'preview':
@@ -1571,7 +1730,17 @@ class MainWindow(QMainWindow):
                 tooltip=top_bar_plan.get('folder_button_tooltip', '変換後のXTC保存先を選びます'),
                 fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
             ),
-            lambda: self.select_target_path(False),
+            self.select_output_folder,
+        )
+
+        btn_output_reset = self._make_button_from_plan(
+            gui_layouts.build_button_widget_plan(
+                top_bar_plan.get('output_reset_button_text', '保存先リセット'),
+                object_name='topBtn',
+                tooltip=top_bar_plan.get('output_reset_button_tooltip', '保存先指定を解除し、ソースファイルと同じフォルダへ戻します'),
+                fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
+            ),
+            self.reset_output_folder,
         )
 
         self.folder_batch_btn = self._make_button_from_plan(
@@ -1586,6 +1755,7 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(btn_file)
         lay.addWidget(btn_folder)
+        lay.addWidget(btn_output_reset)
         lay.addWidget(self.folder_batch_btn)
         lay.addWidget(self._help_icon_button(
             str(top_bar_plan.get('top_buttons_help_text', '上部3ボタンの違いを説明します。')),
@@ -1597,6 +1767,7 @@ class MainWindow(QMainWindow):
         self.target_edit.setObjectName('targetEdit')
         self.target_edit.setPlaceholderText(str(top_bar_plan.get('target_placeholder', 'EPUB / ZIP / CBZ / CBR / RAR / TXT / Markdown / 画像 / フォルダ')))
         self.target_edit.setToolTip(str(top_bar_plan.get('target_tooltip', '変換対象のファイルまたはフォルダを入力します。ソースファイルはここへドラッグ＆ドロップできます。')))
+        self.target_edit.textChanged.connect(self.on_target_text_changed)
         self.target_edit.editingFinished.connect(self._update_top_status)
         self.target_edit.editingFinished.connect(self.save_ui_state)
         self.target_edit.editingFinished.connect(self.on_target_editing_finished)
@@ -2020,7 +2191,7 @@ class MainWindow(QMainWindow):
 
         row4 = self._make_hbox_layout_from_plan()
         row4.addWidget(self._dim_label(str(display_plan.get('preview_page_limit_label', '更新対象'))))
-        self.preview_page_limit_spin = self._spin(1, 99, DEFAULT_PREVIEW_PAGE_LIMIT, compact=True, buttons=True)
+        self.preview_page_limit_spin = self._spin(1, 9999, DEFAULT_PREVIEW_PAGE_LIMIT, compact=True, buttons=True)
         self.preview_page_limit_spin.setProperty('miniSpinButtons', True)
         self.preview_page_limit_spin.setFixedWidth(self._plan_int_value(display_plan, 'preview_page_limit_width', 68))
         self.preview_page_limit_spin.valueChanged.connect(self._mark_preview_dirty_from_signal)
@@ -2038,13 +2209,22 @@ class MainWindow(QMainWindow):
         )
         row4.addWidget(self.preview_update_btn)
         self.preview_refresh_btn = self.preview_update_btn
+        self.preview_progress_bar = QProgressBar()
+        self.preview_progress_bar.setObjectName(str(display_plan.get('preview_progress_object_name', 'previewProgressBar')))
+        self.preview_progress_bar.setTextVisible(True)
+        self.preview_progress_bar.setFixedWidth(self._plan_int_value(display_plan, 'preview_progress_width', 118))
+        self.preview_progress_bar.setRange(0, 1)
+        self.preview_progress_bar.setValue(0)
+        self.preview_progress_bar.setFormat(str(display_plan.get('preview_progress_idle_format', '')))
+        self.preview_progress_bar.setVisible(False)
+        row4.addWidget(self.preview_progress_bar)
         self.preview_status_label = QLabel(str(display_plan.get('preview_status_text', '')))
         self.preview_status_label.setObjectName(str(display_plan.get('preview_status_object_name', 'hintLabel')))
         self.preview_status_label.setMinimumWidth(self._plan_int_value(display_plan, 'preview_status_min_width', 220))
         self.preview_status_label.setMaximumWidth(self._plan_int_value(display_plan, 'preview_status_max_width', 260))
         row4.addWidget(self.preview_status_label)
         row4.addSpacing(self._plan_int_value(display_plan, 'preview_status_help_spacing', 4))
-        row4.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時: プレビューを自動生成します。\n設定変更後: 自動再生成せず、［プレビュー更新］を押した時点で再生成します。\n更新対象: プレビュー上限を増やすほど確認範囲は広がりますが、読込と再描画は重くなります。'))))
+        row4.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時: プレビューを自動生成します。\n設定変更後: 更新対象が20ページ以下なら自動更新します。21ページ以上では自動更新せず、「プレビュー更新が必要です」と表示し、［プレビュー更新］を押した時点で再生成します。\n更新対象: プレビュー上限を増やすほど確認範囲は広がりますが、読込・再描画・メモリ使用量は重くなります。最大9999ページまで指定できます。'))))
         row4.addStretch(1)
         lay.addLayout(row4)
 
@@ -2092,6 +2272,22 @@ class MainWindow(QMainWindow):
             row.addStretch(1)
         lay.addLayout(row)
 
+        page_row = self._make_hbox_layout_from_plan()
+        self.page_number_check = QCheckBox('ページ番号')
+        self.page_number_check.setChecked(False)
+        page_row.addWidget(self.page_number_check)
+        page_row.addSpacing(8)
+        page_row.addWidget(self._dim_label('サイズ'))
+        self.page_number_font_size_spin = self._spin(1, 29, 12, compact=True, buttons=True)
+        self.page_number_font_size_spin.setEnabled(False)
+        page_row.addWidget(self.page_number_font_size_spin)
+        page_row.addWidget(self._help_icon_button('ページ番号: チェックすると各ページ右下に「現在ページ/総ページ」を表示します。\nサイズ: 1〜29 の数値を指定します。30以上はエラーです。\nページ番号ON時は、下余白を「サイズ+1」以上に自動確保します。'))
+        page_row.addStretch(1)
+        self.page_number_check.toggled.connect(self.page_number_font_size_spin.setEnabled)
+        self.page_number_check.toggled.connect(self.on_page_number_setting_changed)
+        self.page_number_font_size_spin.valueChanged.connect(self.on_page_number_setting_changed)
+        lay.addLayout(page_row)
+
         self._ensure_behavior_controls()
         image_glyph_position_row = self._make_hbox_layout_from_plan(
             gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))
@@ -2099,30 +2295,50 @@ class MainWindow(QMainWindow):
         glyph_combo_width = self._plan_int_value(image_plan, 'glyph_position_combo_width', 92)
         closing_bracket_combo_width = self._plan_int_value(image_plan, 'closing_bracket_position_combo_width', glyph_combo_width)
         glyph_group_spacing = self._plan_int_value(image_plan, 'glyph_position_group_spacing', 8)
-        for combo in (self.punctuation_position_combo, self.ichi_position_combo, self.halfwidth_digit_position_combo, self.tatechuyoko_symbol_position_combo):
+        for combo in (self.punctuation_position_combo, self.ichi_position_combo, self.halfwidth_digit_position_combo, self.halfwidth_alpha_position_combo, self.tatechuyoko_symbol_position_combo):
             combo.setMaximumWidth(glyph_combo_width)
         self.lower_closing_bracket_position_combo.setMaximumWidth(closing_bracket_combo_width)
-        image_glyph_position_row.addWidget(self._dim_label('句読点'))
-        image_glyph_position_row.addWidget(self.punctuation_position_combo)
-        image_glyph_position_row.addWidget(self._help_icon_button('対象: ぶら下がり句読点のみです。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
+        self._add_glyph_position_control(
+            image_glyph_position_row,
+            '句読点',
+            self.punctuation_position_combo,
+            '対象: ぶら下がり句読点のみです。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
+        )
         image_glyph_position_row.addSpacing(glyph_group_spacing)
-        image_glyph_position_row.addWidget(self._dim_label('漢数字 一'))
-        image_glyph_position_row.addWidget(self.ichi_position_combo)
-        image_glyph_position_row.addWidget(self._help_icon_button('対象: 文中すべての漢数字「一」です。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
+        self._add_glyph_position_control(
+            image_glyph_position_row,
+            '漢数字 一',
+            self.ichi_position_combo,
+            '対象: 文中すべての漢数字「一」です。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
+        )
         image_glyph_position_row.addSpacing(glyph_group_spacing)
-        image_glyph_position_row.addWidget(self._dim_label('半角数字'))
-        image_glyph_position_row.addWidget(self.halfwidth_digit_position_combo)
-        image_glyph_position_row.addWidget(self._help_icon_button('対象: 文中の半角数字と縦中横の半角数字のみです。\n全角数字とルビ内数字は対象外です。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
+        self._add_glyph_position_control(
+            image_glyph_position_row,
+            '半角数字/記号',
+            self.halfwidth_digit_position_combo,
+            '対象: 文中の半角数字、数値記号（/ . , : ; + - = % など）、縦中横の半角数字です。\n全角数字とルビ内数字は対象外です。\n!! / !? / ?? などの記号ペアは「縦中横記号」で補正します。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
+        )
         image_glyph_position_row.addStretch(1)
         lay.addLayout(image_glyph_position_row)
 
         image_tatechuyoko_symbol_row = self._make_hbox_layout_from_plan(
             gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))
         )
+        self.halfwidth_alpha_position_combo.setMaximumWidth(glyph_combo_width)
         self.tatechuyoko_symbol_position_combo.setMaximumWidth(glyph_combo_width)
-        image_tatechuyoko_symbol_row.addWidget(self._dim_label('縦中横記号'))
-        image_tatechuyoko_symbol_row.addWidget(self.tatechuyoko_symbol_position_combo)
-        image_tatechuyoko_symbol_row.addWidget(self._help_icon_button('対象: 縦中横で描画される記号ペア（！？/？？/！！/？！/!?/??/!!/?!）のみです。\n数字の縦中横には影響しません。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
+        self._add_glyph_position_control(
+            image_tatechuyoko_symbol_row,
+            '半角英字',
+            self.halfwidth_alpha_position_combo,
+            '対象: 文中の半角英字（A-Z / a-z）です。\n半角数字、数値記号、全角英字、ルビ内英字は対象外です。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
+        )
+        image_tatechuyoko_symbol_row.addSpacing(glyph_group_spacing)
+        self._add_glyph_position_control(
+            image_tatechuyoko_symbol_row,
+            '縦中横記号',
+            self.tatechuyoko_symbol_position_combo,
+            '対象: 縦中横で描画される記号ペア（！？/？？/！！/？！/!?/??/!!/?!）のみです。\n数字の縦中横には影響しません。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
+        )
         image_tatechuyoko_symbol_row.addStretch(1)
         lay.addLayout(image_tatechuyoko_symbol_row)
 
@@ -2132,9 +2348,12 @@ class MainWindow(QMainWindow):
         self.wave_dash_drawing_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_drawing_combo_width', 108))
         self.wave_dash_position_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_position_combo_width', 92))
         wave_dash_group_spacing = self._plan_int_value(image_plan, 'wave_dash_group_spacing', 8)
-        image_wave_dash_row.addWidget(self._dim_label('下鍵括弧'))
-        image_wave_dash_row.addWidget(self.lower_closing_bracket_position_combo)
-        image_wave_dash_row.addWidget(self._help_icon_button('対象: 閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみです。\n下補正 強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正 弱/強: 標準より上へ寄せます。'))
+        self._add_glyph_position_control(
+            image_wave_dash_row,
+            '下鍵括弧',
+            self.lower_closing_bracket_position_combo,
+            '対象: 閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみです。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
+        )
         image_wave_dash_row.addSpacing(wave_dash_group_spacing)
         image_wave_dash_row.addWidget(self._dim_label('波線描画'))
         image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)
@@ -2224,6 +2443,21 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.preset_summary_label)
         return box
 
+    def _make_position_mode_combo(self, options, changed_slot) -> QComboBox:
+        combo = QComboBox()
+        for key, label in options:
+            combo.addItem(label, key)
+        combo.currentIndexChanged.connect(changed_slot)
+        return combo
+
+    def _make_glyph_position_combo(self) -> QComboBox:
+        return self._make_position_mode_combo(GLYPH_POSITION_MODE_OPTIONS, self._on_glyph_position_mode_changed)
+
+    def _add_glyph_position_control(self, row, label: str, combo: QComboBox, help_text: str) -> None:
+        row.addWidget(self._dim_label(label))
+        row.addWidget(combo)
+        row.addWidget(self._help_icon_button(help_text))
+
     def _ensure_behavior_controls(self):
         if hasattr(self, 'open_folder_check'):
             return
@@ -2243,30 +2477,15 @@ class MainWindow(QMainWindow):
         self._set_combo_to_data(self.tatechuyoko_digit_mode_combo, '2')
         self.tatechuyoko_digit_mode_combo.currentIndexChanged.connect(self._on_tatechuyoko_digit_mode_changed)
 
-        self.punctuation_position_combo = QComboBox()
-        for key, label in GLYPH_POSITION_MODE_OPTIONS:
-            self.punctuation_position_combo.addItem(label, key)
-        self.punctuation_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
-
-        self.ichi_position_combo = QComboBox()
-        for key, label in GLYPH_POSITION_MODE_OPTIONS:
-            self.ichi_position_combo.addItem(label, key)
-        self.ichi_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
-
-        self.halfwidth_digit_position_combo = QComboBox()
-        for key, label in GLYPH_POSITION_MODE_OPTIONS:
-            self.halfwidth_digit_position_combo.addItem(label, key)
-        self.halfwidth_digit_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
-
-        self.tatechuyoko_symbol_position_combo = QComboBox()
-        for key, label in GLYPH_POSITION_MODE_OPTIONS:
-            self.tatechuyoko_symbol_position_combo.addItem(label, key)
-        self.tatechuyoko_symbol_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
-
-        self.lower_closing_bracket_position_combo = QComboBox()
-        for key, label in CLOSING_BRACKET_POSITION_MODE_OPTIONS:
-            self.lower_closing_bracket_position_combo.addItem(label, key)
-        self.lower_closing_bracket_position_combo.currentIndexChanged.connect(self._on_glyph_position_mode_changed)
+        self.punctuation_position_combo = self._make_glyph_position_combo()
+        self.ichi_position_combo = self._make_glyph_position_combo()
+        self.halfwidth_digit_position_combo = self._make_glyph_position_combo()
+        self.halfwidth_alpha_position_combo = self._make_glyph_position_combo()
+        self.tatechuyoko_symbol_position_combo = self._make_glyph_position_combo()
+        self.lower_closing_bracket_position_combo = self._make_position_mode_combo(
+            CLOSING_BRACKET_POSITION_MODE_OPTIONS,
+            self._on_glyph_position_mode_changed,
+        )
 
         self.wave_dash_drawing_combo = QComboBox()
         for key, label in WAVE_DASH_DRAWING_MODE_OPTIONS:
@@ -2397,7 +2616,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self.preview_scroll.setWidget(self.preview_label)
-        fl.addWidget(self.preview_scroll)
+        fl.addWidget(self.preview_scroll, 1)
         self.preview_stack.addWidget(font_page)
 
         device_page = QWidget()
@@ -2437,7 +2656,7 @@ class MainWindow(QMainWindow):
         self.viewer_widget = XtcViewerWidget()
         self.viewer_widget.setMinimumSize(*self._plan_int_tuple_value(preview_panel_plan, 'device_preview_min_size', (360, 600), expected_length=2))
         self.viewer_scroll.setWidget(self.viewer_widget)
-        dl.addWidget(self.viewer_scroll)
+        dl.addWidget(self.viewer_scroll, 1)
         self.preview_stack.addWidget(device_page)
 
         lay.addWidget(self.preview_stack, 1)
@@ -2752,7 +2971,7 @@ class MainWindow(QMainWindow):
             ).strip()
         except Exception:
             self._completion_card_open_folder_target = ''
-        open_target_available = bool(self._completion_card_open_folder_target)
+        open_target_available = bool(self._completion_card_open_folder_target or paths)
         for attr_name in (
             'card_open_results_folder_btn',
         ):
@@ -3009,8 +3228,9 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.results_action_row, 0)
 
         self.results_list = QListWidget()
-        self.results_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.results_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        results_scroll_policy = self._qt_constant('ScrollBarAsNeeded', self._qt_constant('ScrollBarAlwaysOff', 0))
+        self.results_list.setVerticalScrollBarPolicy(results_scroll_policy)
+        self.results_list.setHorizontalScrollBarPolicy(results_scroll_policy)
         self.results_list.setSelectionMode(
             self._plan_list_selection_mode_value(results_tab_plan, 'results_list_selection_mode', 'single_selection')
         )
@@ -3047,8 +3267,9 @@ class MainWindow(QMainWindow):
         lay.addLayout(top)
 
         self.log_edit = QTextEdit()
-        self.log_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.log_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        log_scroll_policy = self._qt_constant('ScrollBarAsNeeded', self._qt_constant('ScrollBarAlwaysOff', 0))
+        self.log_edit.setVerticalScrollBarPolicy(log_scroll_policy)
+        self.log_edit.setHorizontalScrollBarPolicy(log_scroll_policy)
         log_edit_read_only = self._plan_bool_value(log_tab_plan, 'log_edit_read_only', True)
         self.log_edit.setReadOnly(log_edit_read_only)
         lay.addWidget(self.log_edit, 1)
@@ -3638,6 +3859,13 @@ class MainWindow(QMainWindow):
             color: #FFFFFF;
             font-weight: 700;
         }
+        QPushButton#smallBtn[previewState="viewer"],
+        QPushButton#smallBtn[previewState="viewer"]:disabled {
+            background: #EEF2F6;
+            border: 1px solid #CAD6E2;
+            color: #6F8294;
+            font-weight: 700;
+        }
 
         QPushButton#stepBtn {
             background: #FFFFFF;
@@ -4122,6 +4350,13 @@ class MainWindow(QMainWindow):
             background: #A16207;
             border: 1px solid #D97706;
             color: #FFF7ED;
+            font-weight: 700;
+        }
+        QPushButton#smallBtn[previewState="viewer"],
+        QPushButton#smallBtn[previewState="viewer"]:disabled {
+            background: #223244;
+            border: 1px solid #3D5268;
+            color: #9DB4C9;
             font-weight: 700;
         }
 
@@ -4632,8 +4867,12 @@ class MainWindow(QMainWindow):
 
     def on_target_editing_finished(self: MainWindow) -> None:
         # 対象パスを手入力で確定した場合も、ファイル選択と同じくプレビューを更新する。
+        # ファイルビューワーで XTC/XTCH を直接表示した直後でも、手入力で通常
+        # ターゲットへ戻した場合は、ファイル選択・ドロップと同じくビューワー
+        # 状態を解除してから通常プレビューへ切り替える。
         # ただし重い生成処理は editingFinished / dialog handler の中で直接走らせず、
         # UI イベントループへ戻してから開始する。
+        self._leave_file_viewer_mode_for_target_change()
         self._schedule_target_preview_refresh(reset_page=True)
 
     def _schedule_target_preview_refresh(self: MainWindow, *, reset_page: bool = True) -> None:
@@ -4656,6 +4895,8 @@ class MainWindow(QMainWindow):
                 self.mark_preview_dirty()
             except Exception:
                 pass
+
+        self._apply_preview_pending_progress_context('プレビュー対象を読み込んでいます…')
 
         pending_reset_page = bool(reset_page) or bool(
             getattr(self, '_target_preview_refresh_pending_reset_page', False)
@@ -4700,11 +4941,81 @@ class MainWindow(QMainWindow):
                 if rerun_requested:
                     self._target_preview_refresh_scheduled = True
                     _queue_target_preview_refresh_run(_run_target_preview_refresh)
+                else:
+                    self._apply_preview_finish_context_after_running_flags_clear()
 
         _queue_target_preview_refresh_run(_run_target_preview_refresh)
 
     def _mark_preview_dirty_from_signal(self: MainWindow, *_args: object) -> None:
-        self.mark_preview_dirty()
+        self._mark_preview_dirty_without_auto_refresh()
+
+    def _current_preview_page_limit_value(self: MainWindow) -> int:
+        limit_widget = getattr(self, 'preview_page_limit_spin', None)
+        value_getter = getattr(limit_widget, 'value', None)
+        if callable(value_getter):
+            try:
+                return max(1, int(value_getter()))
+            except Exception:
+                pass
+        return max(1, int(DEFAULT_PREVIEW_PAGE_LIMIT))
+
+    def _should_auto_live_preview_refresh(self: MainWindow) -> bool:
+        return self._current_preview_page_limit_value() <= _AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX
+
+    def _manual_preview_required_status_message(self: MainWindow) -> str:
+        limit = self._current_preview_page_limit_value()
+        if limit > _AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX:
+            return (
+                f'プレビュー更新が必要です（更新対象 {limit} ページのため自動更新しません）'
+            )
+        return 'プレビュー更新が必要です'
+
+    def _mark_preview_dirty_without_auto_refresh(self: MainWindow) -> None:
+        try:
+            self.mark_preview_dirty()
+        except Exception:
+            pass
+        if self._current_preview_page_limit_value() > _AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX:
+            try:
+                self._cancel_auto_live_preview_due_to_large_limit()
+            except Exception:
+                pass
+            try:
+                self._apply_manual_preview_required_context()
+            except Exception:
+                pass
+
+    def _apply_manual_preview_required_context(self: MainWindow) -> None:
+        message = self._manual_preview_required_status_message()
+        try:
+            self._apply_preview_progress_bar_context(preview_controller.build_preview_finish_context())
+        except Exception:
+            pass
+        try:
+            self._mark_preview_update_button_pending()
+        except Exception:
+            pass
+        try:
+            self._update_preview_status_label(message)
+        except Exception:
+            pass
+        progress_label = getattr(self, 'progress_label', None)
+        setter = getattr(progress_label, 'setText', None)
+        if callable(setter):
+            try:
+                setter(message)
+            except Exception:
+                pass
+
+    def _cancel_auto_live_preview_due_to_large_limit(self: MainWindow) -> None:
+        try:
+            self._cancel_pending_settings_live_preview_refresh()
+        except Exception:
+            pass
+        self._settings_preview_refresh_pending = False
+        self._settings_preview_refresh_pending_reset_page = False
+        self._settings_preview_refresh_scheduled = False
+        self._settings_preview_refresh_deferred_until_preview_finished = False
 
     def _set_preview_update_button_visual_state(self: MainWindow, state: object) -> None:
         """Apply a lightweight visual state to the Preview Update button."""
@@ -4712,7 +5023,7 @@ class MainWindow(QMainWindow):
         if button is None:
             return
         normalized = str(state or 'idle').strip().lower()
-        if normalized not in {'idle', 'pending', 'refreshing'}:
+        if normalized not in {'idle', 'pending', 'refreshing', 'viewer'}:
             normalized = 'idle'
         self._preview_update_button_visual_state = normalized
         try:
@@ -4732,8 +5043,169 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _has_loaded_xtc_viewer_document(self: MainWindow) -> bool:
+        """Return True when a user-opened XTC/XTCH document is loaded.
+
+        Generated preview pages can remain cached, and some view/display-only
+        controls may temporarily leave ``device_view_source`` set to ``preview``.
+        A loaded file-viewer document must therefore be detected from the loaded
+        XTC/XTCH identity plus XTC pages, not from the current preview source.
+        """
+        try:
+            if not self._runtime_xtc_pages():
+                return False
+        except Exception:
+            return False
+        loaded_path = worker_logic._normalized_path_text(
+            self.__dict__.get('_loaded_xtc_path_text')
+        ).strip()
+        loaded_name = worker_logic._normalized_path_text(
+            self.__dict__.get('_loaded_xtc_display_name')
+        ).strip()
+        return bool(loaded_path or loaded_name)
+
+    def _is_file_viewer_mode_active(self: MainWindow) -> bool:
+        """Return True when a user-opened XTC/XTCH document is being shown.
+
+        Generated conversion results can also populate ``xtc_pages``.  Treating
+        bare XTC pages as file-viewer mode would incorrectly neutralize preview
+        refresh state.  Require the loaded-file identity that the XTC/XTCH
+        viewer path stores alongside the page data.
+        """
+        try:
+            return self._has_loaded_xtc_viewer_document()
+        except Exception:
+            return False
+
+    def _apply_file_viewer_mode_preview_button_state(self: MainWindow) -> bool:
+        """Neutralize the Preview Update button while loaded XTC/XTCH is shown.
+
+        Returning True means file-viewer mode handled the button state.
+        """
+        if not self._is_file_viewer_mode_active():
+            return False
+        button = getattr(self, 'preview_update_btn', None)
+        if button is not None:
+            try:
+                button.setEnabled(False)
+            except Exception:
+                pass
+            try:
+                button.setText('ファイル表示中')
+            except Exception:
+                pass
+            try:
+                button.setToolTip('ファイルビューワーモードではXTC/XTCHを直接表示しているため、プレビュー更新は不要です。')
+            except Exception:
+                pass
+            self._set_preview_update_button_visual_state('viewer')
+        try:
+            self._update_preview_status_label('ファイルビューワーモード: XTC/XTCHを直接表示中です')
+        except Exception:
+            pass
+        return True
+
+    def _restore_preview_update_button_from_file_viewer_state(self: MainWindow) -> None:
+        button = getattr(self, 'preview_update_btn', None)
+        if button is None:
+            return
+        current_visual = str(getattr(self, '_preview_update_button_visual_state', 'idle') or 'idle')
+        current_text = str(getattr(button, 'text_value', '') or '')
+        text_getter = getattr(button, 'text', None)
+        if callable(text_getter):
+            try:
+                current_text = str(text_getter() or '')
+            except Exception:
+                current_text = str(getattr(button, 'text_value', '') or '')
+        if current_visual != 'viewer' and current_text != 'ファイル表示中':
+            return
+        try:
+            button.setEnabled(True)
+        except Exception:
+            pass
+        try:
+            button.setText('プレビュー更新')
+        except Exception:
+            pass
+        try:
+            button.setToolTip('')
+        except Exception:
+            pass
+        self._set_preview_update_button_visual_state('idle')
+
+    def _refresh_preview_update_button_for_current_state(
+        self: MainWindow,
+        context: Mapping[str, object] | None = None,
+    ) -> None:
+        """Reconcile Preview Update button from current state in one place.
+
+        Older code paths pushed button text/state directly, which made stale
+        viewer labels such as 「ファイル表示中」 easy to leave behind when a
+        normal target change escaped one of the explicit cleanup calls.  This
+        helper keeps the operation pull-like: file-viewer state wins, then
+        running/pending flags, then the worker-provided idle context.
+        """
+        button = getattr(self, 'preview_update_btn', None)
+        if button is None:
+            return
+        if self._apply_file_viewer_mode_preview_button_state():
+            return
+
+        button_state = studio_logic.build_preview_button_state(context)
+        button_enabled = bool(button_state.get('button_enabled', True))
+        button_text = str(button_state.get('button_text', 'プレビュー更新'))
+
+        running = bool(
+            getattr(self, '_preview_running', False)
+            or getattr(self, '_target_preview_refresh_running', False)
+        )
+        if running or (not button_enabled) or button_text == '生成中…':
+            try:
+                button.setEnabled(False if running else button_enabled)
+            except Exception:
+                pass
+            try:
+                button.setText('生成中…' if running else button_text)
+            except Exception:
+                pass
+            self._set_preview_update_button_visual_state('refreshing')
+            return
+
+        pending = bool(getattr(self, '_settings_preview_refresh_pending', False))
+        if pending:
+            try:
+                button.setEnabled(True)
+            except Exception:
+                pass
+            try:
+                button.setText('● プレビュー更新')
+            except Exception:
+                pass
+            try:
+                button.setToolTip('')
+            except Exception:
+                pass
+            self._set_preview_update_button_visual_state('pending')
+            return
+
+        try:
+            button.setEnabled(button_enabled)
+        except Exception:
+            pass
+        try:
+            button.setText(button_text or 'プレビュー更新')
+        except Exception:
+            pass
+        try:
+            button.setToolTip('')
+        except Exception:
+            pass
+        self._set_preview_update_button_visual_state('idle')
+
     def _mark_preview_update_button_pending(self: MainWindow) -> None:
         """Show that a debounced live preview refresh has been queued."""
+        if self._apply_file_viewer_mode_preview_button_state():
+            return
         button = getattr(self, 'preview_update_btn', None)
         if button is None:
             return
@@ -4803,7 +5275,7 @@ class MainWindow(QMainWindow):
         return False
 
     def _cancel_pending_settings_live_preview_refresh(self: MainWindow) -> None:
-        # v1.3.5.1: 手動の「プレビュー更新」が開始された時点で、設定変更由来の
+        # v1.3.5: 手動の「プレビュー更新」が開始された時点で、設定変更由来の
         # live-preview timer を無効化する。未処理 timer が request_preview_refresh()
         # 冒頭の processEvents() 中に発火すると、生成完了後に後続 preview を予約し、
         # 「プレビュー更新で暴走」して見えるため。QTimer.singleShot 自体はキャンセル
@@ -4835,12 +5307,40 @@ class MainWindow(QMainWindow):
         has been generated yet, fall back to the existing dirty placeholder
         instead of starting an empty refresh.
         """
+        try:
+            if self._is_file_viewer_mode_active():
+                self._cancel_auto_live_preview_due_to_large_limit()
+                self._apply_file_viewer_mode_preview_button_state()
+                try:
+                    self._apply_preview_progress_bar_context(preview_controller.build_preview_finish_context())
+                except Exception:
+                    pass
+                return False
+        except Exception:
+            pass
+
         if not self._has_active_preview_for_live_refresh():
             try:
                 self.mark_preview_dirty()
             except Exception:
                 pass
+            try:
+                self._apply_preview_progress_bar_context(preview_controller.build_preview_finish_context())
+            except Exception:
+                pass
             return False
+
+        if not self._should_auto_live_preview_refresh():
+            try:
+                self.mark_preview_dirty()
+            except Exception:
+                pass
+            self._cancel_auto_live_preview_due_to_large_limit()
+            try:
+                self._apply_manual_preview_required_context()
+            except Exception:
+                pass
+            return True
 
         try:
             self.mark_preview_dirty()
@@ -4855,6 +5355,7 @@ class MainWindow(QMainWindow):
         )
         self._settings_preview_refresh_scheduled = True
         self._mark_preview_update_button_pending()
+        self._apply_preview_pending_progress_context('設定変更を反映するプレビュー更新を準備しています…')
 
         def _run_live_preview_refresh(expected_generation: int) -> None:
             if expected_generation != int(getattr(self, '_settings_preview_refresh_generation', 0) or 0):
@@ -4931,6 +5432,29 @@ class MainWindow(QMainWindow):
             pass
 
     def mark_preview_dirty(self: MainWindow) -> None:
+        try:
+            if self._is_file_viewer_mode_active():
+                self.preview_dirty = False
+                previous_device_source = getattr(self, 'device_view_source', 'xtc')
+                if previous_device_source == 'preview':
+                    self.device_view_source = 'xtc'
+                    self.current_device_preview_page_index = 0
+                try:
+                    self._sync_loaded_xtc_display_context_for_device_view()
+                except Exception:
+                    pass
+                try:
+                    if self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) == 'device' and previous_device_source == 'preview':
+                        self.render_current_page(refresh_navigation=True)
+                except Exception:
+                    try:
+                        self._clear_xtc_viewer_page(refresh_navigation=True)
+                    except Exception:
+                        pass
+                self._apply_file_viewer_mode_preview_button_state()
+                return
+        except Exception:
+            pass
         self.preview_dirty = True
         has_runtime_preview = False
         try:
@@ -5019,6 +5543,250 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _page_number_minimum_bottom_margin(
+        self: MainWindow,
+        enabled_override: bool | None = None,
+    ) -> int:
+        if enabled_override is None:
+            try:
+                enabled = bool(
+                    getattr(self, 'page_number_check', None) is not None
+                    and self.page_number_check.isChecked()
+                )
+            except Exception:
+                enabled = False
+        else:
+            enabled = bool(enabled_override)
+        if not enabled:
+            return 0
+        try:
+            size = int(self.page_number_font_size_spin.value())
+        except Exception:
+            size = 12
+        return max(0, size + 1)
+
+    def _effective_page_number_bottom_margin(
+        self: MainWindow,
+        margin_b: int | None = None,
+        *,
+        enabled_override: bool | None = None,
+    ) -> int:
+        if margin_b is None:
+            widget = getattr(self, 'margin_b_spin', None)
+            try:
+                margin_b = int(widget.value()) if widget is not None and hasattr(widget, 'value') else 0
+            except Exception:
+                margin_b = 0
+        return max(0, int(margin_b), self._page_number_minimum_bottom_margin(enabled_override))
+
+    def _current_page_number_bottom_margin_auto_state(self: MainWindow) -> dict[str, int | bool] | None:
+        state = getattr(self, '_page_number_bottom_margin_auto_state', None)
+        if not isinstance(state, dict) or not bool(state.get('active')):
+            return None
+        try:
+            base_value = max(0, int(state.get('base_value', 0)))
+            auto_value = max(0, int(state.get('auto_value', 0)))
+        except Exception:
+            return None
+        widget = getattr(self, 'margin_b_spin', None)
+        try:
+            current = max(0, int(widget.value())) if widget is not None and hasattr(widget, 'value') else auto_value
+        except Exception:
+            current = auto_value
+        if current != auto_value:
+            return None
+        return {'active': True, 'base_value': base_value, 'auto_value': auto_value}
+
+    def _restore_page_number_bottom_margin_auto_state_from_payload(self: MainWindow, payload: Mapping[str, object]) -> None:
+        if not isinstance(payload, Mapping):
+            return
+        try:
+            active = worker_logic._bool_config_value(payload, 'page_number_margin_auto_active', False)
+        except Exception:
+            active = False
+        if not active:
+            try:
+                delattr(self, '_page_number_bottom_margin_auto_state')
+            except Exception:
+                pass
+            return
+        widget = getattr(self, 'margin_b_spin', None)
+        try:
+            current = max(0, int(widget.value())) if widget is not None and hasattr(widget, 'value') else 0
+            base_value = max(0, worker_logic._int_config_value(payload, 'page_number_margin_auto_base_value', current))
+            auto_value = max(0, worker_logic._int_config_value(payload, 'page_number_margin_auto_value', current))
+        except Exception:
+            return
+        try:
+            enabled = bool(getattr(self, 'page_number_check', None) is not None and self.page_number_check.isChecked())
+        except Exception:
+            enabled = False
+        if enabled and current == auto_value and auto_value >= base_value:
+            setattr(self, '_page_number_bottom_margin_auto_state', {
+                'active': True,
+                'base_value': int(base_value),
+                'auto_value': int(auto_value),
+            })
+        else:
+            try:
+                delattr(self, '_page_number_bottom_margin_auto_state')
+            except Exception:
+                pass
+
+    def _page_number_margin_auto_save_payload(self: MainWindow) -> dict[str, object]:
+        state = self._current_page_number_bottom_margin_auto_state()
+        if state is None:
+            return {
+                'page_number_margin_auto_active': False,
+                'page_number_margin_auto_base_value': self._safe_widget_value('margin_b_spin', 14),
+                'page_number_margin_auto_value': self._safe_widget_value('margin_b_spin', 14),
+            }
+        return {
+            'page_number_margin_auto_active': True,
+            'page_number_margin_auto_base_value': int(state['base_value']),
+            'page_number_margin_auto_value': int(state['auto_value']),
+        }
+
+    def _clear_page_number_margin_auto_state_if_bottom_margin_was_edited(self: MainWindow) -> None:
+        state = getattr(self, '_page_number_bottom_margin_auto_state', None)
+        if not isinstance(state, dict) or not bool(state.get('active')):
+            return
+        widget = getattr(self, 'margin_b_spin', None)
+        try:
+            current = max(0, int(widget.value())) if widget is not None and hasattr(widget, 'value') else 0
+            auto_value = max(0, int(state.get('auto_value', 0)))
+        except Exception:
+            return
+        if current != auto_value:
+            try:
+                delattr(self, '_page_number_bottom_margin_auto_state')
+            except Exception:
+                pass
+
+    def _sync_page_number_bottom_margin_to_ui(
+        self: MainWindow,
+        enabled_override: bool | None = None,
+    ) -> bool:
+        """Sync the visible bottom margin with the page-number requirement.
+
+        Page-number rendering reserves at least ``font_size + 1`` pixels at the
+        bottom.  The spinbox should show that effective value too.  When the
+        page-number size grows, raise the bottom margin as before.  When the
+        size shrinks, lower the spinbox again only if the current value still
+        appears to be the value that this helper previously set automatically.
+        A larger user-set bottom margin is preserved.
+        """
+        required = self._page_number_minimum_bottom_margin(enabled_override)
+        widget = getattr(self, 'margin_b_spin', None)
+        if widget is None or not hasattr(widget, 'value') or not hasattr(widget, 'setValue'):
+            return False
+        try:
+            current = max(0, int(widget.value()))
+        except Exception:
+            current = 0
+
+        state = getattr(self, '_page_number_bottom_margin_auto_state', None)
+        auto_active = isinstance(state, dict) and bool(state.get('active'))
+        auto_value = None
+        base_value = None
+        if auto_active:
+            try:
+                auto_value = max(0, int(state.get('auto_value', 0)))
+            except Exception:
+                auto_value = None
+            try:
+                base_value = max(0, int(state.get('base_value', 0)))
+            except Exception:
+                base_value = None
+            # If the user edited the margin after our previous automatic set,
+            # stop treating it as auto-managed.
+            if auto_value is None or current != auto_value:
+                auto_active = False
+                auto_value = None
+                base_value = None
+                try:
+                    delattr(self, '_page_number_bottom_margin_auto_state')
+                except Exception:
+                    pass
+
+        if required <= 0:
+            # Page numbers are OFF.  If the bottom margin still matches the
+            # value that this helper set automatically, restore the user's
+            # pre-auto margin.  If the user has edited the margin after auto
+            # expansion, keep the user value and simply clear auto-management.
+            if auto_active and auto_value is not None and base_value is not None:
+                target = int(base_value)
+                if target == current:
+                    try:
+                        delattr(self, '_page_number_bottom_margin_auto_state')
+                    except Exception:
+                        pass
+                    return False
+                blocked_old = None
+                block_signals = getattr(widget, 'blockSignals', None)
+                if callable(block_signals):
+                    try:
+                        blocked_old = block_signals(True)
+                    except Exception:
+                        blocked_old = None
+                try:
+                    widget.setValue(int(target))
+                finally:
+                    if callable(block_signals):
+                        try:
+                            block_signals(bool(blocked_old))
+                        except Exception:
+                            pass
+                try:
+                    delattr(self, '_page_number_bottom_margin_auto_state')
+                except Exception:
+                    pass
+                return True
+            return False
+
+        target = current
+        if current < required:
+            if not auto_active:
+                base_value = current
+            target = required
+        elif auto_active and auto_value is not None and base_value is not None:
+            # The page-number requirement shrank.  Follow it downward, but do
+            # not go below the bottom margin the user had before auto-expansion.
+            target = max(base_value, required)
+        else:
+            return False
+
+        if target == current:
+            if auto_active:
+                setattr(self, '_page_number_bottom_margin_auto_state', {
+                    'active': True,
+                    'base_value': int(base_value if base_value is not None else current),
+                    'auto_value': int(current),
+                })
+            return False
+
+        blocked_old = None
+        block_signals = getattr(widget, 'blockSignals', None)
+        if callable(block_signals):
+            try:
+                blocked_old = block_signals(True)
+            except Exception:
+                blocked_old = None
+        try:
+            widget.setValue(int(target))
+        finally:
+            if callable(block_signals):
+                try:
+                    block_signals(bool(blocked_old))
+                except Exception:
+                    pass
+        setattr(self, '_page_number_bottom_margin_auto_state', {
+            'active': True,
+            'base_value': int(base_value if base_value is not None else current),
+            'auto_value': int(target),
+        })
+        return True
+
     def _current_guide_margins(self: MainWindow) -> tuple[int, int, int, int]:
         values: list[int] = []
         for attr_name in ('margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin'):
@@ -5030,7 +5798,10 @@ class MainWindow(QMainWindow):
                 values.append(max(0, int(widget.value())))
             except Exception:
                 values.append(0)
-        return tuple(values) if len(values) == 4 else (0, 0, 0, 0)
+        if len(values) != 4:
+            return (0, 0, 0, 0)
+        values[1] = self._effective_page_number_bottom_margin(values[1])
+        return tuple(values)
 
     def _guide_rect_for_preview_rect(self: MainWindow, rect: QRect, page_width: int, page_height: int) -> QRect:
         margin_t, margin_b, margin_r, margin_l = self._current_guide_margins()
@@ -5157,6 +5928,41 @@ class MainWindow(QMainWindow):
             pix = self._preview_pixmap_from_png_bytes(raw)
             self._store_font_preview_page_pixmap(cache_key, pix)
         self._apply_preview_pixmap(pix)
+
+    def _render_current_xtc_page_in_font_view(self: MainWindow, *, refresh_navigation: bool = True) -> bool:
+        """Render the loaded XTC/XTCH page into the font-view preview area.
+
+        File-viewer mode owns both the device view and font view.  When old
+        conversion preview pages remain cached, switching back to font view must
+        still show the opened XTC/XTCH page instead of a stale generated preview.
+        """
+        blob = self._current_xtc_page_blob(force_loaded_xtc=True)
+        if blob is None:
+            return False
+        cache_key = self._xtc_page_qimage_cache_key()
+        qimg = self._cached_xtc_page_qimage(cache_key)
+        if qimg is None:
+            qimg = xt_page_blob_to_qimage(blob)
+            self._store_xtc_page_qimage(cache_key, qimg)
+        pix = QPixmap.fromImage(qimg)
+        pix_is_null = getattr(pix, 'isNull', None)
+        if callable(pix_is_null) and pix_is_null():
+            raise RuntimeError('ファイルビューワー画像の描画準備に失敗しました。')
+        self._apply_preview_pixmap(pix)
+        try:
+            self._sync_loaded_xtc_display_context_for_device_view()
+        except Exception:
+            pass
+        try:
+            self._update_preview_status_label('ファイルビューワーモード: XTC/XTCHを直接表示中です')
+        except Exception:
+            pass
+        if refresh_navigation:
+            try:
+                self.update_navigation_ui()
+            except Exception:
+                pass
+        return True
 
     def _sync_preview_display_context_for_font_view(self: MainWindow) -> None:
         if not self._runtime_preview_pages():
@@ -5657,26 +6463,89 @@ class MainWindow(QMainWindow):
         self._device_preview_page_cache_tokens = list(tokens_state.get('device_preview_page_cache_tokens', []))
 
     def _apply_preview_button_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
-        button_state = studio_logic.build_preview_button_state(context)
-        if not hasattr(self, 'preview_update_btn'):
+        progress_context = context
+        try:
+            progress_state = studio_logic.build_preview_progress_context_state(context)
+            has_pending_followup = bool(
+                getattr(self, '_settings_preview_refresh_pending', False)
+                or getattr(self, '_target_preview_refresh_scheduled', False)
+            )
+            if has_pending_followup and not bool(progress_state.get('progress_visible', False)):
+                progress_context = preview_controller.build_preview_pending_context(
+                    message='次のプレビュー更新を準備しています…'
+                )
+        except Exception:
+            progress_context = context
+        self._apply_preview_progress_bar_context(progress_context)
+        self._refresh_preview_update_button_for_current_state(context)
+
+    def _apply_preview_progress_bar_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
+        progress_bar = getattr(self, 'preview_progress_bar', None)
+        if progress_bar is None:
             return
-        button_enabled = bool(button_state.get('button_enabled', True))
-        button_text = str(button_state.get('button_text', 'プレビュー更新'))
-        if not button_enabled or button_text == '生成中…':
-            self.preview_update_btn.setEnabled(button_enabled)
-            self.preview_update_btn.setText(button_text)
-            self._set_preview_update_button_visual_state('refreshing')
+        progress_state = studio_logic.build_preview_progress_context_state(context)
+        visible = bool(progress_state.get('progress_visible', False))
+        try:
+            progress_bar.setVisible(visible)
+        except Exception:
+            pass
+        if not visible:
+            try:
+                progress_bar.setRange(0, 1)
+                progress_bar.setValue(0)
+                if hasattr(progress_bar, 'setFormat'):
+                    progress_bar.setFormat('')
+            except Exception:
+                pass
             return
-        if bool(getattr(self, '_settings_preview_refresh_pending', False)):
-            self._mark_preview_update_button_pending()
-            return
-        self.preview_update_btn.setEnabled(button_enabled)
-        self.preview_update_btn.setText(button_text)
-        self._set_preview_update_button_visual_state('idle')
+        busy = bool(progress_state.get('progress_busy', False))
+        current = max(0, self._payload_int_value(progress_state, 'progress_current', 0))
+        total = max(0, self._payload_int_value(progress_state, 'progress_total', 0))
+        try:
+            if busy or total <= 0:
+                progress_bar.setRange(0, 0)
+                progress_bar.setValue(0)
+                if hasattr(progress_bar, 'setFormat'):
+                    progress_bar.setFormat('更新中…')
+            else:
+                safe_total = max(1, total)
+                progress_bar.setRange(0, safe_total)
+                progress_bar.setValue(min(current, safe_total))
+                if hasattr(progress_bar, 'setFormat'):
+                    progress_bar.setFormat('%p%')
+        except Exception:
+            pass
 
     def _apply_preview_progress_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
         progress_state = studio_logic.build_preview_progress_context_state(context)
         self._update_preview_status_label(str(progress_state.get('status_message', '')))
+        self._apply_preview_progress_bar_context(context)
+
+    def _apply_preview_pending_progress_context(self: MainWindow, message: object = 'プレビュー更新を準備しています…') -> None:
+        """Show a busy preview-progress indicator before a debounced refresh starts."""
+        try:
+            context = preview_controller.build_preview_pending_context(message=message)
+            self._apply_preview_progress_context(context)
+            process_events = getattr(QApplication, 'processEvents', None)
+            if callable(process_events):
+                process_events()
+        except Exception:
+            pass
+
+    def _apply_preview_finish_context_after_running_flags_clear(self: MainWindow) -> None:
+        """Restore preview button/progress after all running flags are down.
+
+        v1.3.6.37 introduced a state-reconcile helper that correctly treats
+        active preview/target-refresh flags as authoritative.  However, the
+        old finish path applied the idle context *before* those flags were
+        cleared, so startup/deferred previews could leave the UI looking stuck
+        at 「生成中…」.  Keep one final reconciliation point after the flags have
+        been cleared.
+        """
+        try:
+            self._apply_preview_button_context(preview_controller.build_preview_finish_context())
+        except Exception:
+            pass
 
     def _normalized_preview_pages_for_runtime(self: MainWindow, value: object) -> list[str]:
         try:
@@ -5949,11 +6818,11 @@ class MainWindow(QMainWindow):
                 )
                 return self._apply_preview_failure_context(error_context)
             finally:
-                finish_context = preview_controller.build_preview_finish_context()
-                self._apply_preview_button_context(finish_context)
+                pass
         finally:
             self._preview_running = False
             self._pending_preview_refresh_request = None
+            self._apply_preview_finish_context_after_running_flags_clear()
             try:
                 deferred_live_refresh = bool(
                     getattr(self, '_settings_preview_refresh_deferred_until_preview_finished', False)
@@ -6551,7 +7420,26 @@ class MainWindow(QMainWindow):
     def _xtc_navigation_payload(self: MainWindow) -> dict[str, object]:
         view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
         if view_mode == 'font':
-            total = len(self._runtime_preview_pages())
+            if self._is_file_viewer_mode_active():
+                xtc_pages = self._runtime_xtc_pages()
+                total = len(xtc_pages)
+                current_index = worker_logic._int_config_value({'value': getattr(self, 'current_page_index', 0)}, 'value', 0)
+                if total > 0:
+                    current_index = max(0, min(total - 1, current_index))
+                else:
+                    current_index = 0
+                payload = studio_logic.build_navigation_display_state(
+                    view_mode='font',
+                    total=total,
+                    current_index=current_index,
+                    truncated=False,
+                )
+                payload = dict(payload)
+                payload['file_viewer_navigation'] = True
+                payload['current_page'] = current_index + 1 if total > 0 else 0
+                return payload
+            preview_pages = self._runtime_preview_pages()
+            total = len(preview_pages)
             current_index = worker_logic._int_config_value({'value': getattr(self, 'current_preview_page_index', 0)}, 'value', 0)
             if total > 0:
                 current_index = max(0, min(total - 1, current_index))
@@ -6628,16 +7516,44 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'page_total_label'):
             self.page_total_label.setText(str(apply_state.get('total_label', fallback_total_label)))
         if view_mode == 'font':
-            current_preview_index = max(0, min(total - 1, current_index)) if total > 0 else 0
-            if getattr(self, 'current_preview_page_index', 0) != current_preview_index:
-                self.current_preview_page_index = current_preview_index
+            if self._payload_bool_value(payload, 'file_viewer_navigation', False):
+                current_xtc_index = max(0, min(total - 1, current_index)) if total > 0 else 0
+                if getattr(self, 'current_page_index', 0) != current_xtc_index:
+                    self.current_page_index = current_xtc_index
+                    self._refresh_loaded_xtc_viewer_profile_cache()
+            else:
+                current_preview_index = max(0, min(total - 1, current_index)) if total > 0 else 0
+                if getattr(self, 'current_preview_page_index', 0) != current_preview_index:
+                    self.current_preview_page_index = current_preview_index
         self._reset_xtc_page_input(total, current_page)
+        if not self._apply_file_viewer_mode_preview_button_state():
+            self._restore_preview_update_button_from_file_viewer_state()
 
     def update_navigation_ui(self: MainWindow) -> None:
         self._apply_xtc_navigation_ui(self._xtc_navigation_payload())
 
     def on_page_input_changed(self: MainWindow, value: int) -> None:
         if 'main_view_mode' in self.__dict__ and self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) == 'font':
+            if self._is_file_viewer_mode_active():
+                xtc_pages = self._runtime_xtc_pages()
+                nav_state = studio_logic.build_navigation_input_state(
+                    total=len(xtc_pages),
+                    current_index=getattr(self, 'current_page_index', 0),
+                    input_page=value,
+                )
+                if self._payload_bool_value(nav_state, 'is_valid', False):
+                    new_idx = self._payload_int_value(nav_state, 'target_index', 0)
+                    if new_idx != getattr(self, 'current_page_index', 0):
+                        self.current_page_index = new_idx
+                        self._refresh_loaded_xtc_viewer_profile_cache()
+                        try:
+                            self._render_current_xtc_page_in_font_view(refresh_navigation=False)
+                        except Exception as exc:
+                            self._show_preview_message(f'ファイルビューワー表示エラー\n{exc}')
+                    else:
+                        self._sync_active_display_context_for_visible_page()
+                    self.update_navigation_ui()
+                    return
             pages = self._runtime_preview_pages()
             if pages:
                 nav_state = studio_logic.build_navigation_input_state(
@@ -6686,6 +7602,25 @@ class MainWindow(QMainWindow):
 
     def change_page(self: MainWindow, delta: int) -> None:
         if 'main_view_mode' in self.__dict__ and self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) == 'font':
+            if self._is_file_viewer_mode_active():
+                xtc_pages = self._runtime_xtc_pages()
+                nav_state = studio_logic.build_navigation_delta_state(
+                    total=len(xtc_pages),
+                    current_index=getattr(self, 'current_page_index', 0),
+                    delta=delta,
+                )
+                target_index = self._payload_int_value(nav_state, 'target_index', getattr(self, 'current_page_index', 0))
+                if target_index != getattr(self, 'current_page_index', 0):
+                    self.current_page_index = target_index
+                    self._refresh_loaded_xtc_viewer_profile_cache()
+                    try:
+                        self._render_current_xtc_page_in_font_view(refresh_navigation=False)
+                    except Exception as exc:
+                        self._show_preview_message(f'ファイルビューワー表示エラー\n{exc}')
+                else:
+                    self._sync_active_display_context_for_visible_page()
+                self.update_navigation_ui()
+                return
             pages = self._runtime_preview_pages()
             if pages:
                 nav_state = studio_logic.build_navigation_delta_state(
@@ -6760,6 +7695,9 @@ class MainWindow(QMainWindow):
         if self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) != 'font':
             return
         try:
+            if self._is_file_viewer_mode_active():
+                if self._render_current_xtc_page_in_font_view(refresh_navigation=refresh_navigation):
+                    return
             if self._runtime_preview_pages():
                 try:
                     self._set_current_xtc_display_name_with_fallback('プレビュー')
@@ -6809,11 +7747,15 @@ class MainWindow(QMainWindow):
         self._finalize_setting_change()
 
     def on_preview_zoom_changed(self: MainWindow, value: int) -> None:
+        # 表示倍率は右ペイン上の見え方だけを変える UI で、本文組版・XTC/XTCH
+        # 生成内容には影響しない。ここで preview_dirty を立てると、スピン操作の
+        # 連続 signal 後に「プレビュー更新」待ちが残り、暴走して見えるため、
+        # 保存だけ行い、再生成予約や dirty 表示は作らない。
         self._sync_preview_zoom_control_state()
         self._sync_preview_size()
         if self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) == 'font':
             self._refresh_font_preview_display_if_needed(refresh_navigation=False)
-        self._finalize_setting_change()
+        self._finalize_setting_change(refresh_preview=False)
 
     def on_night_toggled(self: MainWindow, checked: bool) -> None:
         self._schedule_live_preview_refresh(reset_page=False)
@@ -6835,11 +7777,19 @@ class MainWindow(QMainWindow):
                 pass
         self._finalize_setting_change(refresh_preview=False)
 
+    def on_page_number_setting_changed(self: MainWindow, *args: object) -> None:
+        enabled_override = args[0] if args and isinstance(args[0], bool) else None
+        self._sync_page_number_bottom_margin_to_ui(enabled_override=enabled_override)
+        self._apply_viewer_display_runtime_state()
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
+
     def _request_preview_refresh_after_margin_change(self: MainWindow) -> bool:
         """Compatibility wrapper for margin-driven live preview refreshes."""
         return self._schedule_live_preview_refresh(reset_page=False)
 
     def on_margin_changed(self: MainWindow, value: int) -> None:
+        self._clear_page_number_margin_auto_state_if_bottom_margin_was_edited()
         self._apply_viewer_display_runtime_state()
         refreshed = self._request_preview_refresh_after_margin_change()
         if not refreshed:
@@ -6901,6 +7851,9 @@ class MainWindow(QMainWindow):
 
     def current_halfwidth_digit_position_mode(self: MainWindow) -> str:
         return self._current_glyph_position_mode('halfwidth_digit_position_combo')
+
+    def current_halfwidth_alpha_position_mode(self: MainWindow) -> str:
+        return self._current_glyph_position_mode('halfwidth_alpha_position_combo')
 
     def current_tatechuyoko_symbol_position_mode(self: MainWindow) -> str:
         return self._current_glyph_position_mode('tatechuyoko_symbol_position_combo')
@@ -7094,6 +8047,13 @@ class MainWindow(QMainWindow):
             except Exception:
                 ruby_hide = None
 
+        page_number_enabled = None
+        if self.__dict__.get('page_number_check') is not None:
+            try:
+                page_number_enabled = bool(self.page_number_check.isChecked())
+            except Exception:
+                page_number_enabled = None
+
         font_value = self.current_font_value() if self.__dict__.get('font_combo') is not None else None
         return settings_controller.build_live_preset_widget_payload(
             profile=selected_profile,
@@ -7102,6 +8062,8 @@ class MainWindow(QMainWindow):
             font_size=_widget_value('font_size_spin'),
             ruby_size=_widget_value('ruby_size_spin'),
             ruby_hide=ruby_hide,
+            page_number_enabled=page_number_enabled,
+            page_number_font_size=_widget_value('page_number_font_size_spin'),
             line_spacing=_widget_value('line_spacing_spin'),
             margin_t=_widget_value('margin_t_spin'),
             margin_b=_widget_value('margin_b_spin'),
@@ -7116,6 +8078,7 @@ class MainWindow(QMainWindow):
             punctuation_position_mode=self.current_punctuation_position_mode() if self.__dict__.get('punctuation_position_combo') is not None else None,
             ichi_position_mode=self.current_ichi_position_mode() if self.__dict__.get('ichi_position_combo') is not None else None,
             halfwidth_digit_position_mode=self.current_halfwidth_digit_position_mode() if self.__dict__.get('halfwidth_digit_position_combo') is not None else None,
+            halfwidth_alpha_position_mode=self.current_halfwidth_alpha_position_mode() if self.__dict__.get('halfwidth_alpha_position_combo') is not None else None,
             tatechuyoko_symbol_position_mode=self.current_tatechuyoko_symbol_position_mode() if self.__dict__.get('tatechuyoko_symbol_position_combo') is not None else None,
             lower_closing_bracket_position_mode=self.current_lower_closing_bracket_position_mode() if self.__dict__.get('lower_closing_bracket_position_combo') is not None else None,
             wave_dash_drawing_mode=self.current_wave_dash_drawing_mode() if self.__dict__.get('wave_dash_drawing_combo') is not None else None,
@@ -7147,6 +8110,7 @@ class MainWindow(QMainWindow):
         fallback_punctuation_position_mode: str = 'standard',
         fallback_ichi_position_mode: str = 'standard',
         fallback_halfwidth_digit_position_mode: str = 'standard',
+        fallback_halfwidth_alpha_position_mode: str = 'standard',
         fallback_tatechuyoko_symbol_position_mode: str = 'standard',
         fallback_lower_closing_bracket_position_mode: str = 'standard',
         fallback_wave_dash_drawing_mode: str = 'rotate',
@@ -7230,6 +8194,11 @@ class MainWindow(QMainWindow):
         )
         normalized['halfwidth_digit_position_mode'] = self._normalize_choice_value(
             source.get('halfwidth_digit_position_mode', fallback_payload.get('halfwidth_digit_position_mode', fallback_halfwidth_digit_position_mode)),
+            'standard',
+            GLYPH_POSITION_MODE_LABELS,
+        )
+        normalized['halfwidth_alpha_position_mode'] = self._normalize_choice_value(
+            source.get('halfwidth_alpha_position_mode', fallback_payload.get('halfwidth_alpha_position_mode', fallback_halfwidth_alpha_position_mode)),
             'standard',
             GLYPH_POSITION_MODE_LABELS,
         )
@@ -7816,6 +8785,46 @@ class MainWindow(QMainWindow):
                 pass
             return False
 
+    def _preset_save_confirmation_text(self: MainWindow, preset: Mapping[str, object], preset_name: str) -> str:
+        profile_key = str(preset.get('profile', 'x4')).strip().lower() or 'x4'
+        profile_text = profile_key.upper()
+        out_key = str(preset.get('output_format', 'xtc')).strip().lower() or 'xtc'
+        out_text = OUTPUT_FORMAT_LABELS.get(out_key, out_key.upper())
+        font_text = core.describe_font_value(str(preset.get('font_file') or '')) or str(preset.get('font_file') or '未指定')
+        kinsoku_key = str(preset.get('kinsoku_mode', 'standard')).strip().lower() or 'standard'
+        tate_key = studio_logic.normalize_tatechuyoko_digit_mode(preset.get('tatechuyoko_digit_mode', '2'), '2')
+        glyph_default = 'standard'
+        def _int(name: str, default: int) -> int:
+            return worker_logic._int_config_value(preset, name, default)
+        def _bool_text(name: str, default: bool = False) -> str:
+            return 'ON' if worker_logic._bool_config_value(preset, name, default) else 'OFF'
+        def _label(mapping: Mapping[str, str], value: object, default: str = glyph_default) -> str:
+            key = str(value if value is not None else default).strip().lower() or default
+            return mapping.get(key, key)
+        page_number_text = 'ON' if worker_logic._bool_config_value(preset, 'page_number_enabled', False) else 'OFF'
+        page_number_size = _int('page_number_font_size', 12)
+        return '\n'.join([
+            f'保存先プリセット: {preset_name}',
+            '',
+            '[基本]',
+            f'  機種: {profile_text}  /  サイズ: {_int("width", 480)} x {_int("height", 800)}  /  出力形式: {out_text}',
+            f'  フォント: {font_text}',
+            '',
+            '[文字・組版]',
+            f'  本文: {_int("font_size", 26)}  /  ルビ: {_int("ruby_size", 12)}  /  行間: {_int("line_spacing", 44)}  /  ルビ消し: {_bool_text("ruby_hide")}',
+            f'  余白: 上 {_int("margin_t", 12)}  /  下 {_int("margin_b", 14)}  /  左 {_int("margin_l", 12)}  /  右 {_int("margin_r", 12)}',
+            f'  ページ番号: {page_number_text}  /  サイズ: {page_number_size}',
+            '',
+            '[画像処理]',
+            f'  白黒反転: {_bool_text("night_mode")}  /  ディザ: {_bool_text("dither")}  /  しきい値: {_int("threshold", 128)}',
+            '',
+            '[禁則・補正]',
+            f'  禁則: {KINSOKU_MODE_LABELS.get(kinsoku_key, kinsoku_key)}  /  縦中横: {TATECHUYOKO_DIGIT_MODE_LABELS.get(tate_key, tate_key)}',
+            f'  句読点: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("punctuation_position_mode"))}  /  漢数字 一: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("ichi_position_mode"))}  /  半角数字/記号: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("halfwidth_digit_position_mode"))}  /  半角英字: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("halfwidth_alpha_position_mode"))}',
+            f'  縦中横記号: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("tatechuyoko_symbol_position_mode"))}  /  下鍵括弧: {_label(CLOSING_BRACKET_POSITION_MODE_LABELS, preset.get("lower_closing_bracket_position_mode"))}',
+            f'  波線描画: {_label(WAVE_DASH_DRAWING_MODE_LABELS, preset.get("wave_dash_drawing_mode"), "rotate")}  /  波線位置: {_label(WAVE_DASH_POSITION_MODE_LABELS, preset.get("wave_dash_position_mode"))}',
+        ])
+
     def save_preset(self: MainWindow, key: str) -> None:
         p = self.preset_definitions.get(key)
         if not p:
@@ -7829,7 +8838,7 @@ class MainWindow(QMainWindow):
             pending_payload=payload,
         )
         preset_name = self._preset_display_name(p)
-        summary = self._preset_summary_plain_text(summary_payload)
+        summary = self._preset_save_confirmation_text(summary_payload, preset_name)
         yes_button = getattr(QMessageBox, 'Yes', 1)
         no_button = getattr(QMessageBox, 'No', 0)
         ans = self._ask_question_dialog_with_status_fallback(
@@ -7934,14 +8943,70 @@ class MainWindow(QMainWindow):
         normalized_path = worker_logic.normalize_target_path_text(path)
         if not normalized_path:
             return
-        with _bulk_block_signals(getattr(self, 'target_edit', None)):
-            self.target_edit.setText(normalized_path)
+        self._set_target_path_for_normal_preview(normalized_path)
         self._update_top_status()
         self.save_ui_state()
         self._show_ui_status_message_unless_render_failure_visible('ドロップしたファイルを変換対象に設定しました。', 3000)
         self._schedule_target_preview_refresh(reset_page=True)
 
+    def _default_output_folder_start_dir(self: MainWindow) -> str:
+        selected = worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', ''))
+        if selected:
+            return selected
+        current = worker_logic.normalize_target_path_text(self.target_edit.text()) or str(Path.home())
+        lower_current = current.lower()
+        if lower_current.endswith((
+            '.epub', '.zip', '.rar', '.cbz', '.cbr',
+            '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
+            '.xtc', '.xtch',
+        )):
+            slash_pos = max(current.rfind('/'), current.rfind('\\'))
+            if slash_pos > 0:
+                return current[:slash_pos] or current
+        return current
+
+    def _selected_output_dir_label_text(self: MainWindow) -> str:
+        selected = worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', ''))
+        return selected or 'ソースファイルと同じフォルダ'
+
+    def _announce_selected_output_dir(self: MainWindow, timeout: int = 5000) -> None:
+        self._show_ui_status_message_unless_render_failure_visible(
+            f'保存先: {self._selected_output_dir_label_text()}',
+            timeout,
+        )
+
+    def reset_output_folder(self: MainWindow) -> None:
+        self.selected_output_dir = ''
+        # Clear any previously selected output-folder target held by the
+        # completion card.  Without this, pressing [保存先リセット] could leave
+        # the next [保存先を開く] action biased toward an older folder if the next
+        # conversion result did not provide a fresh explicit target.
+        self._completion_card_open_folder_target = ''
+        self.save_ui_state()
+        self._announce_selected_output_dir()
+        try:
+            self._update_top_status()
+        except Exception:
+            pass
+
+    def select_output_folder(self: MainWindow) -> None:
+        start_dir = self._default_output_folder_start_dir()
+        path = self._get_existing_directory_with_status_fallback(
+            '保存先フォルダを選択',
+            start_dir,
+            fallback_status_message='保存先フォルダの選択ダイアログを開けませんでした。',
+        )
+        if not path:
+            return
+        normalized_path = worker_logic.normalize_target_path_text(path)
+        self.selected_output_dir = normalized_path
+        self.save_ui_state()
+        self._announce_selected_output_dir()
+
     def select_target_path(self: MainWindow, as_file: bool) -> None:
+        if not as_file:
+            self.select_output_folder()
+            return
         current = worker_logic.normalize_target_path_text(self.target_edit.text()) or str(Path.home())
         if as_file:
             path, _ = self._get_open_file_name_with_status_fallback(
@@ -7973,8 +9038,7 @@ class MainWindow(QMainWindow):
             )
         if path:
             normalized_path = worker_logic.normalize_target_path_text(path)
-            with _bulk_block_signals(getattr(self, 'target_edit', None)):
-                self.target_edit.setText(normalized_path)
+            self._set_target_path_for_normal_preview(normalized_path)
             self._update_top_status()
             self.save_ui_state()
             # ファイル／フォルダ指定直後はプレビューを更新する。
@@ -8171,6 +9235,9 @@ class MainWindow(QMainWindow):
             worker_logic._int_config_value({'font_size': self._safe_widget_value('font_size_spin', 26)}, 'font_size', 26),
             worker_logic._int_config_value({'line_spacing': self._safe_widget_value('line_spacing_spin', 44)}, 'line_spacing', 44),
         )
+        selected_output_dir = worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', ''))
+        if selected_output_dir:
+            message = f'{message} / 保存先: {selected_output_dir}'
         self._show_ui_status_message_unless_render_failure_visible(message, None)
 
     def _safe_line_edit_text(self: MainWindow, name: str, default: str = '') -> str:
@@ -8188,10 +9255,13 @@ class MainWindow(QMainWindow):
         defaults = DEFAULT_RENDER_SETTINGS
         return {
             'target': worker_logic.normalize_target_path_text(self._safe_line_edit_text('target_edit')),
+            'output_dir': worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', '')),
             'font_file': self.current_font_value() if hasattr(self, 'current_font_value') else str(defaults['font_file']),
             'font_size': self._safe_widget_value('font_size_spin', defaults['font_size']),
             'ruby_size': self._safe_widget_value('ruby_size_spin', defaults['ruby_size']),
             'ruby_hide': self._safe_widget_checked('ruby_hide_check', bool(defaults['ruby_hide'])),
+            'page_number_enabled': self._safe_widget_checked('page_number_check', bool(defaults.get('page_number_enabled', False))),
+            'page_number_font_size': self._safe_widget_value('page_number_font_size_spin', int(defaults.get('page_number_font_size', 12))),
             'line_spacing': self._safe_widget_value('line_spacing_spin', defaults['line_spacing']),
             'margin_t': self._safe_widget_value('margin_t_spin', defaults['margin_t']),
             'margin_b': self._safe_widget_value('margin_b_spin', defaults['margin_b']),
@@ -8205,6 +9275,7 @@ class MainWindow(QMainWindow):
             'punctuation_position_mode': self.current_punctuation_position_mode() if hasattr(self, 'current_punctuation_position_mode') else str(defaults['punctuation_position_mode']),
             'ichi_position_mode': self.current_ichi_position_mode() if hasattr(self, 'current_ichi_position_mode') else str(defaults['ichi_position_mode']),
             'halfwidth_digit_position_mode': self.current_halfwidth_digit_position_mode() if hasattr(self, 'current_halfwidth_digit_position_mode') else str(defaults['halfwidth_digit_position_mode']),
+            'halfwidth_alpha_position_mode': self.current_halfwidth_alpha_position_mode() if hasattr(self, 'current_halfwidth_alpha_position_mode') else str(defaults['halfwidth_alpha_position_mode']),
             'tatechuyoko_symbol_position_mode': self.current_tatechuyoko_symbol_position_mode() if hasattr(self, 'current_tatechuyoko_symbol_position_mode') else str(defaults['tatechuyoko_symbol_position_mode']),
             'lower_closing_bracket_position_mode': self.current_lower_closing_bracket_position_mode() if hasattr(self, 'current_lower_closing_bracket_position_mode') else str(defaults['lower_closing_bracket_position_mode']),
             'wave_dash_drawing_mode': self.current_wave_dash_drawing_mode() if hasattr(self, 'current_wave_dash_drawing_mode') else str(defaults['wave_dash_drawing_mode']),
@@ -8292,6 +9363,7 @@ class MainWindow(QMainWindow):
             allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
             default_preview_page_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
         )
+        payload.update(self._page_number_margin_auto_save_payload())
         payload['preview_zoom_pct'] = self._normalize_preview_zoom_pct()
         return payload
 
@@ -8527,6 +9599,34 @@ class MainWindow(QMainWindow):
         self._clear_xtc_viewer_page(refresh_navigation=False)
         self.update_navigation_ui()
 
+    def _leave_file_viewer_mode_for_target_change(self: MainWindow) -> None:
+        """Exit loaded XTC/XTCH viewer state before normal source preview.
+
+        The XTC/XTCH file viewer intentionally neutralizes the preview update
+        button and owns the right-pane page source.  When the user chooses a
+        normal conversion target via 「ファイルを選択」/drop/folder selection, the
+        new target must switch back to the standard preview path immediately;
+        otherwise the stale viewer identity keeps the button stuck at
+        「ファイル表示中」 and the preview refresh is treated as unnecessary.
+        """
+        was_viewer_active = False
+        try:
+            was_viewer_active = bool(self._is_file_viewer_mode_active())
+        except Exception:
+            was_viewer_active = False
+        if was_viewer_active:
+            try:
+                self._clear_loaded_xtc_state()
+            except Exception:
+                APP_LOGGER.exception('変換対象変更時のファイルビューワー状態解除に失敗しました')
+        try:
+            self._refresh_preview_update_button_for_current_state()
+        except Exception:
+            try:
+                self._restore_preview_update_button_from_file_viewer_state()
+            except Exception:
+                pass
+
     def _set_current_xtc_display_name(self: MainWindow, display_name: object = None) -> None:
         if not hasattr(self, 'current_xtc_label'):
             return
@@ -8754,7 +9854,12 @@ class MainWindow(QMainWindow):
         except Exception:
             view_mode = 'font'
         if view_mode == 'font':
-            if self._runtime_preview_pages():
+            if self._is_file_viewer_mode_active():
+                try:
+                    self._sync_loaded_xtc_display_context_for_device_view()
+                except Exception:
+                    pass
+            elif self._runtime_preview_pages():
                 self._sync_preview_display_context_for_font_view()
             try:
                 self._restore_shared_status_for_visible_display_context()
@@ -10428,16 +11533,17 @@ class MainWindow(QMainWindow):
         return worker_logic._normalized_path_text(self._results_item_path(item)).strip() if item is not None else ''
 
     def open_results_folder_from_results(self: MainWindow) -> None:
+        folder_override = worker_logic._normalized_path_text(
+            getattr(self, '_completion_card_open_folder_target', '')
+        ).strip()
+        if folder_override:
+            if _open_path_in_file_manager(folder_override):
+                return
+            self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先を開けませんでした。\n{folder_override}')
+            return
+
         path = self._preferred_result_path_for_action()
         if not path:
-            folder_override = worker_logic._normalized_path_text(
-                getattr(self, '_completion_card_open_folder_target', '')
-            ).strip()
-            if folder_override:
-                if _open_path_in_file_manager(folder_override):
-                    return
-                self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先を開けませんでした。\n{folder_override}')
-                return
             self._show_result_load_dialog_with_status_fallback('information', '保存先', '開ける変換結果がありません。')
             return
         try:
@@ -10484,6 +11590,10 @@ class MainWindow(QMainWindow):
             self.results_list.addItem(item)
         try:
             self._sync_results_action_buttons_state()
+        except Exception:
+            pass
+        try:
+            self._bind_bottom_panel_external_scrollbar()
         except Exception:
             pass
         try:
@@ -10976,14 +12086,22 @@ class MainWindow(QMainWindow):
             }
         )
 
-    def _current_xtc_page_blob(self: MainWindow) -> bytes | None:
+    def _current_xtc_page_blob(self: MainWindow, *, force_loaded_xtc: bool = False) -> bytes | None:
         if not getattr(self, 'xtc_bytes', b''):
             return None
-        payload = self._xtc_page_state_payload()
-        total = worker_logic._int_config_value(payload, 'total', 0)
-        if total <= 0:
-            return None
-        current_index = worker_logic._int_config_value(payload, 'current_index', 0)
+        if force_loaded_xtc:
+            pages = self._runtime_xtc_pages()
+            total = len(pages)
+            if total <= 0:
+                return None
+            current_index = self._normalized_xtc_page_index(total=total)
+            payload = studio_logic.build_xtc_page_state_payload(pages, current_index)
+        else:
+            payload = self._xtc_page_state_payload()
+            total = worker_logic._int_config_value(payload, 'total', 0)
+            if total <= 0:
+                return None
+            current_index = worker_logic._int_config_value(payload, 'current_index', 0)
         if current_index != getattr(self, 'current_page_index', 0):
             self.current_page_index = current_index
             self._refresh_loaded_xtc_viewer_profile_cache()
@@ -11418,6 +12536,8 @@ class MainWindow(QMainWindow):
         device_view_visible = self._normalized_main_view_mode(
             getattr(self, 'main_view_mode', 'font')
         ) == 'device'
+        if self._has_loaded_xtc_viewer_document():
+            self.device_view_source = 'xtc'
         effective_source = self._effective_device_view_source()
         if effective_source == 'preview':
             try:

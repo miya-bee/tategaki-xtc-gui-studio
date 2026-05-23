@@ -148,12 +148,11 @@ def make_unique_output_path(path: PathLike) -> Path:
         return path
     stem = path.stem
     suffix = path.suffix
-    idx = 1
-    while True:
+    for idx in range(1, 10000):
         candidate = path.with_name(f'{stem}({idx}){suffix}')
         if not candidate.exists():
             return candidate
-        idx += 1
+    raise RuntimeError(f'連番の保存先候補を作成できませんでした: {path.name}')
 
 
 def resolve_output_path_with_conflict(path: PathLike, strategy: str = 'rename') -> tuple[Path, ConflictPlan]:

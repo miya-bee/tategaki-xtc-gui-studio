@@ -177,13 +177,12 @@ def _normalize_match_key(path: Path) -> str:
 
 
 def _unique_renamed_path(base_path: Path, reserved_keys: set[str]) -> Path:
-    index = 2
-    while True:
+    for index in range(2, 10000):
         candidate = _candidate_with_index(base_path, index)
         candidate_key = _normalize_match_key(candidate)
         if candidate_key not in reserved_keys and not candidate.exists():
             return candidate
-        index += 1
+    raise RuntimeError(f'連番の保存先候補を作成できませんでした: {base_path.name}')
 
 
 def _desired_output_path(

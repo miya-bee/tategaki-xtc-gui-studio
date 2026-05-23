@@ -53,6 +53,25 @@ def _callable_attr(obj: object, name: str) -> Callable[..., object] | None:
     return attr if callable(attr) else None
 
 
+def _int_attr_or_default(obj: object, name: str, default: int) -> int:
+    try:
+        value = getattr(obj, name)
+    except Exception:
+        return default
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _text_attr_or_default(obj: object, name: str, default: str = '') -> str:
+    try:
+        value = getattr(obj, name)
+    except Exception:
+        return default
+    return str(value) if value is not None else default
+
+
 def append_log_best_effort(main_window: object, message: str) -> None:
     """Append to the app log if a known logging method exists."""
 
@@ -624,9 +643,9 @@ def make_folder_batch_inner_progress_callback(main_window: object) -> InnerProgr
         if text:
             detail_parts.append(str(text))
         detail = ' / '.join(part for part in detail_parts if part)
-        current_index = getattr(main_window, '_folder_batch_progress_index', 0) or 0
-        current_total = getattr(main_window, '_folder_batch_progress_total', 1) or 1
-        current_item = getattr(main_window, '_folder_batch_progress_item_text', '') or ''
+        current_index = _int_attr_or_default(main_window, '_folder_batch_progress_index', 0)
+        current_total = max(1, _int_attr_or_default(main_window, '_folder_batch_progress_total', 1))
+        current_item = _text_attr_or_default(main_window, '_folder_batch_progress_item_text')
         if current_item or current_index:
             status_text = format_folder_batch_progress_text(
                 int(current_index),

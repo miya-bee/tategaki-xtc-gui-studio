@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import xml.etree.ElementTree as ET
+import zipfile
+
 import tategakiXTC_gui_core as _core
 import tategakiXTC_gui_core_renderer as _renderer
 
@@ -269,6 +272,49 @@ def is_paragraph_like(node: Any) -> bool:
 EPUB_SKIP_TAGS = {"script", "style", "head", "meta", "link", "title"}
 EPUB_NOTEISH_RE = re.compile(r'(?:^|[-_])(note|footnote|annotation|aside|caption|figcaption|colophon|credit|source)(?:[-_]|$)', re.IGNORECASE)
 EPUB_PAGEBREAK_RE = re.compile(r'(?:^|[-_])(pagebreak|page-break|mbp_pagebreak|pbreak|sectionbreak|chapterbreak)(?:[-_]|$)', re.IGNORECASE)
+EPUB_NAVIGATION_TOKENS = {
+    'toc', 'doc-toc', 'landmarks', 'guide', 'page-list', 'pagelist',
+    'page_list', 'loi', 'lot', 'loa', 'lov', 'index', 'navigation',
+}
+EPUB_NOTE_BODY_TOKENS = {
+    'footnote', 'footnotes', 'doc-footnote', 'doc-footnotes',
+    'endnote', 'endnotes', 'doc-endnote', 'doc-endnotes',
+    'rearnote', 'rearnotes', 'doc-rearnote', 'doc-rearnotes',
+    'annotation', 'annotations',
+}
+EPUB_NOTE_REFERENCE_TOKENS = {'noteref', 'doc-noteref'}
+EPUB_BACK_REFERENCE_TOKENS = {
+    'backref', 'backlink', 'back-link', 'doc-backlink', 'doc-backref',
+}
+EPUB_AUXILIARY_DOC_NAME_RE = re.compile(
+    r'(?:^|[-_])(nav|toc|contents?|landmarks?|pagelist|page-list|footnotes?|endnotes?|notes?)(?:[-_]|$)',
+    re.IGNORECASE,
+)
+EPUB_NOTE_REFERENCE_MARKER_RE = re.compile(
+    r'^(?:[\[\]\(\)（）【】〔〕「」『』〈〉《》　\s]*'
+    r'(?:\d+|[０-９]+|[一二三四五六七八九十百千]+|[ivxlcdm]+|[＊*†‡※]+)'
+    r'[\[\]\(\)（）【】〔〕「」『』〈〉《》　\s]*|(?:注|脚注|note)\s*[\d０-９]+)$',
+    re.IGNORECASE,
+)
+EPUB_BACK_REFERENCE_TEXT_RE = re.compile(r'^(?:戻る|本文へ戻る|本文に戻る|戻り|back|return|↩|↵|↑|△|▲)$', re.IGNORECASE)
+
+
+def _epub_auxiliary_doc_stem_kind(stem: object) -> str:
+    """Classify XHTML file-name stems that are likely auxiliary reading-order pages.
+
+    EPUBs in the wild sometimes put ``nav.xhtml`` / ``toc.xhtml`` /
+    ``footnotes.xhtml`` in the spine without ``linear="no"`` and without rich
+    EPUB3 attributes.  File-name based skipping is intentionally limited to
+    well-known auxiliary stems so ordinary chapters are not removed by accident.
+    """
+    normalized = str(stem or '').strip().replace('_', '-').lower()
+    if normalized in {'nav', 'toc', 'contents', 'content', 'landmark', 'landmarks', 'pagelist', 'page-list'}:
+        return 'navigation'
+    if normalized in {'footnote', 'footnotes', 'endnote', 'endnotes', 'rearnote', 'rearnotes'}:
+        return 'notes'
+    if normalized in {'note', 'notes'}:
+        return 'maybe-notes'
+    return ''
 
 
 def _epub_node_token_signature(node: Any) -> tuple[tuple[str, tuple[str, ...] | str], ...]:
@@ -311,6 +357,135 @@ def _epub_node_attr_tokens(node: Any) -> list[str]:
     return tokens
 
 
+
+def _epub_token_matches(tokens: Sequence[str], candidates: set[str]) -> bool:
+    normalized_candidates = {token.replace('_', '-').lower() for token in candidates}
+    for token in tokens:
+        norm = str(token or '').replace('_', '-').lower()
+        if norm in normalized_candidates:
+            return True
+        if any(norm.endswith('-' + candidate) for candidate in normalized_candidates):
+            return True
+    return False
+
+
+def _epub_node_href(node: Any) -> str:
+    if not getattr(node, 'get', None):
+        return ''
+    for attr_name in ('href', 'xlink:href'):
+        try:
+            value = node.get(attr_name, '')
+        except Exception:
+            value = ''
+        if value:
+            return str(value or '').strip()
+    return ''
+
+
+def _epub_node_text(node: Any) -> str:
+    try:
+        return str(node.get_text('', strip=True))
+    except Exception:
+        return ''
+
+
+def _epub_href_fragment(href: object) -> str:
+    text = str(href or '').strip()
+    if not text or '#' not in text:
+        return ''
+    return text.rsplit('#', 1)[-1].strip().lower()
+
+
+def _epub_text_is_note_reference_marker(text: object) -> bool:
+    stripped = re.sub(r'\s+', '', str(text or '').strip())
+    if not stripped or len(stripped) > 12:
+        return False
+    return bool(EPUB_NOTE_REFERENCE_MARKER_RE.fullmatch(stripped))
+
+
+def _epub_is_navigation_node(node_name: str, attr_tokens: Sequence[str]) -> bool:
+    if node_name == 'nav':
+        return _epub_token_matches(attr_tokens, EPUB_NAVIGATION_TOKENS)
+    return _epub_token_matches(attr_tokens, {'doc-toc', 'doc-pagelist', 'doc-page-list', 'navigation'})
+
+
+def _epub_is_note_body_node(node_name: str, attr_tokens: Sequence[str]) -> bool:
+    if node_name in {'aside', 'section', 'div', 'li', 'p'} and _epub_token_matches(attr_tokens, EPUB_NOTE_BODY_TOKENS):
+        return True
+    return _epub_token_matches(attr_tokens, EPUB_NOTE_BODY_TOKENS)
+
+
+def _epub_is_note_reference_link(node_name: str, attr_tokens: Sequence[str], href: str, text: str) -> bool:
+    if node_name != 'a':
+        return False
+    if _epub_token_matches(attr_tokens, EPUB_NOTE_REFERENCE_TOKENS):
+        # Explicit noteref/doc-noteref semantics are more reliable than link text.
+        # Some publishers use labels such as "脚注へ" instead of [1].
+        return True
+    fragment = _epub_href_fragment(href)
+    if not fragment:
+        return False
+    if not re.search(r'(?:^|[-_])(fn|footnote|endnote|note)[-_]?[0-9０-９一二三四五六七八九十]*$', fragment, re.IGNORECASE):
+        return False
+    return _epub_text_is_note_reference_marker(text)
+
+
+def _epub_is_back_reference_link(node_name: str, attr_tokens: Sequence[str], href: str, text: str) -> bool:
+    if node_name != 'a':
+        return False
+    if _epub_token_matches(attr_tokens, EPUB_BACK_REFERENCE_TOKENS):
+        return True
+    if EPUB_BACK_REFERENCE_TEXT_RE.fullmatch(str(text or '').strip()):
+        fragment = _epub_href_fragment(href)
+        return bool(fragment and re.search(r'(?:^|[-_])(ref|noteref|src|back)[-_]?', fragment, re.IGNORECASE))
+    return False
+
+
+def _epub_should_skip_auxiliary_node(node_name: str, attr_tokens: Sequence[str], href: str = '', text: str = '') -> bool:
+    if _epub_is_navigation_node(node_name, attr_tokens):
+        return True
+    if _epub_is_note_body_node(node_name, attr_tokens):
+        return True
+    if _epub_is_note_reference_link(node_name, attr_tokens, href, text):
+        return True
+    if _epub_is_back_reference_link(node_name, attr_tokens, href, text):
+        return True
+    return False
+
+
+def _epub_spine_document_is_auxiliary(item: Any) -> bool:
+    """Return True for navigation/footnote-only XHTML documents in the spine.
+
+    Some EPUBs put nav.xhtml/toc.xhtml or standalone footnote documents in the
+    spine without ``linear="no"``. Skipping these prevents TOC/backref text from
+    becoming body pages while keeping normal chapter XHTML files untouched.
+    """
+    file_name = _normalize_epub_href(getattr(item, 'file_name', ''))
+    basename = posixpath.basename(file_name).lower()
+    stem = basename.rsplit('.', 1)[0]
+    stem_kind = _epub_auxiliary_doc_stem_kind(stem)
+    if not stem_kind and not EPUB_AUXILIARY_DOC_NAME_RE.search(stem):
+        return False
+    if stem_kind in {'navigation', 'notes'}:
+        return True
+    try:
+        content = item.get_content()
+    except Exception:
+        return False
+    if isinstance(content, bytes):
+        text = content.decode('utf-8', errors='ignore').lower()
+    else:
+        text = str(content or '').lower()
+    if any(marker in text for marker in (
+        'epub:type="toc', "epub:type='toc", 'role="doc-toc', "role='doc-toc",
+        'epub:type="landmarks', "epub:type='landmarks", 'page-list',
+        'epub:type="footnote', "epub:type='footnote", 'epub:type="endnote', "epub:type='endnote",
+        'doc-footnote', 'doc-endnote', 'noteref', 'backref', 'backlink',
+    )):
+        return True
+    return False
+
+
 def _epub_node_analysis_signature(node: Any) -> tuple[Any, ...]:
     node_name = (getattr(node, 'name', '') or '').lower()
     hidden = False
@@ -340,11 +515,18 @@ def _epub_node_analysis_signature(node: Any) -> tuple[Any, ...]:
         except Exception:
             value_attr = ''
     style_text = ''
+    href_text = ''
+    text_preview = ''
     if getattr(node, 'get', None):
         try:
             style_text = str(node.get('style', '') or '')
         except Exception:
             style_text = ''
+        href_text = _epub_node_href(node)
+    try:
+        text_preview = _epub_node_text(node)[:32]
+    except Exception:
+        text_preview = ''
     child_block_tags = tuple(
         (getattr(child, 'name', '') or '').lower()
         for child in getattr(node, 'contents', [])
@@ -359,6 +541,8 @@ def _epub_node_analysis_signature(node: Any) -> tuple[Any, ...]:
         parent_start,
         value_attr,
         style_text,
+        href_text,
+        text_preview,
         child_block_tags,
     )
 
@@ -408,7 +592,7 @@ def _epub_node_analysis(node: Any, bold_rules: BoldRuleSets | None = None, css_r
         should_skip = True
     elif style_map.get('display', '') == 'none' or style_map.get('visibility', '') == 'hidden':
         should_skip = True
-    elif node_name == 'nav' and any(token in {'toc', 'landmarks', 'guide'} for token in attr_tokens):
+    elif _epub_should_skip_auxiliary_node(node_name, attr_tokens, _epub_node_href(node), _epub_node_text(node)):
         should_skip = True
 
     requests_pagebreak = False
@@ -543,20 +727,36 @@ def _split_css_selectors(selector_block: object) -> list[str]:
     return [selector.strip() for selector in str(selector_block or '').split(',') if selector and selector.strip()]
 
 
-def _normalize_epub_css_selector(selector: object) -> str:
-    selector = str(selector or '').strip()
-    if not selector:
+def _sanitize_epub_css_selector(selector: object) -> str:
+    """Return a conservative selector string supported by the lightweight EPUB CSS matcher.
+
+    Pseudo selectors and attribute selectors are intentionally stripped because this
+    renderer only needs a safe subset of CSS.  Unlike the legacy normalizer, this
+    helper preserves descendant/child relationships so rules such as ``.note p`` do
+    not accidentally apply to every ``p`` in the document.
+    """
+    selector_text = str(selector or '').strip()
+    if not selector_text:
         return ''
-    selector = re.sub(r'/\*.*?\*/', '', selector)
-    selector = re.sub(r'::?[A-Za-z0-9_-]+(?:\([^)]*\))?', '', selector)
-    selector = re.sub(r'\[[^\]]+\]', '', selector)
-    parts = [part for part in re.split(r'\s*[>+~]\s*|\s+', selector) if part]
+    selector_text = re.sub(r'/\*.*?\*/', '', selector_text)
+    selector_text = re.sub(r'::?[A-Za-z0-9_-]+(?:\([^)]*\))?', '', selector_text)
+    selector_text = re.sub(r'\[[^\]]+\]', '', selector_text)
+    selector_text = re.sub(r'\s*([>+~])\s*', r' \1 ', selector_text)
+    selector_text = re.sub(r'\s+', ' ', selector_text).strip()
+    return selector_text
+
+
+def _normalize_epub_css_selector(selector: object) -> str:
+    selector_text = _sanitize_epub_css_selector(selector)
+    if not selector_text:
+        return ''
+    parts = [part for part in re.split(r'\s*[>+~]\s*|\s+', selector_text) if part]
     return parts[-1].strip() if parts else ''
 
 
 @lru_cache(maxsize=2048)
-def _parse_epub_css_selector_matcher(selector: str) -> tuple[str, tuple[str, ...], tuple[str, ...], bool]:
-    normalized = _normalize_epub_css_selector(selector)
+def _parse_epub_css_simple_selector_matcher(selector: str) -> tuple[str, tuple[str, ...], tuple[str, ...], bool]:
+    normalized = str(selector or '').strip()
     if not normalized:
         return '', (), (), False
     if normalized == '*':
@@ -567,7 +767,7 @@ def _parse_epub_css_selector_matcher(selector: str) -> tuple[str, tuple[str, ...
     if tag_match:
         tag = tag_match.group(0).lower()
         rest = normalized[tag_match.end():]
-    if '[' in rest or ']' in rest:
+    if '[' in rest or ']' in rest or any(ch in rest for ch in ('>', '+', '~', ' ')):
         return tag, (), (), False
     ids = tuple(re.findall(r'#([A-Za-z0-9_-]+)', rest))
     classes = tuple(re.findall(r'\.([A-Za-z0-9_-]+)', rest))
@@ -575,8 +775,13 @@ def _parse_epub_css_selector_matcher(selector: str) -> tuple[str, tuple[str, ...
     return tag, ids, classes, not cleaned.strip()
 
 
-def _epub_css_selector_matches_node(node: Any, selector: object) -> bool:
-    tag, ids, classes, supported = _parse_epub_css_selector_matcher(str(selector or ''))
+@lru_cache(maxsize=2048)
+def _parse_epub_css_selector_matcher(selector: str) -> tuple[str, tuple[str, ...], tuple[str, ...], bool]:
+    return _parse_epub_css_simple_selector_matcher(_normalize_epub_css_selector(selector))
+
+
+def _epub_css_simple_selector_matches_node(node: Any, selector: object) -> bool:
+    tag, ids, classes, supported = _parse_epub_css_simple_selector_matcher(str(selector or ''))
     if not supported or not getattr(node, 'name', None):
         return False
     if tag == '*':
@@ -589,6 +794,52 @@ def _epub_css_selector_matches_node(node: Any, selector: object) -> bool:
     node_classes = set(str(item) for item in (node.get('class', []) or []) if item)
     if any(class_name not in node_classes for class_name in classes):
         return False
+    return True
+
+
+def _epub_css_selector_matches_node(node: Any, selector: object) -> bool:
+    selector_text = _sanitize_epub_css_selector(selector)
+    if not selector_text or not getattr(node, 'name', None):
+        return False
+    if '+' in selector_text or '~' in selector_text:
+        # Adjacent/general sibling combinators are not supported.  Returning False
+        # is safer than applying the rightmost selector too broadly.
+        return False
+
+    tokens = [token for token in selector_text.replace('>', ' > ').split() if token]
+    if not tokens:
+        return False
+    current = node
+    idx = len(tokens) - 1
+    if not _epub_css_simple_selector_matches_node(current, tokens[idx]):
+        return False
+    idx -= 1
+
+    while idx >= 0:
+        if tokens[idx] == '>':
+            idx -= 1
+            if idx < 0:
+                return False
+            parent = getattr(current, 'parent', None)
+            if parent is None or not _epub_css_simple_selector_matches_node(parent, tokens[idx]):
+                return False
+            current = parent
+            idx -= 1
+            continue
+
+        ancestor_selector = tokens[idx]
+        ancestor = getattr(current, 'parent', None)
+        found = None
+        while ancestor is not None:
+            if _epub_css_simple_selector_matches_node(ancestor, ancestor_selector):
+                found = ancestor
+                break
+            ancestor = getattr(ancestor, 'parent', None)
+        if found is None:
+            return False
+        current = found
+        idx -= 1
+
     return True
 
 
@@ -609,7 +860,7 @@ def extract_epub_css_rules(book: Any) -> list[CSSRule]:
             if not declarations:
                 continue
             for selector in _split_css_selectors(selector_block):
-                normalized = _normalize_epub_css_selector(selector)
+                normalized = _sanitize_epub_css_selector(selector)
                 if not normalized:
                     continue
                 rules.append({'selector': normalized, 'declarations': dict(declarations)})
@@ -846,6 +1097,41 @@ def _normalize_epub_href(href: object) -> str:
     return norm.lstrip('/')
 
 
+_EPUB_DATA_IMAGE_RE = re.compile(r'^data:image/[^;,]+(?:;charset=[^;,]+)?;base64,(.+)$', re.IGNORECASE | re.DOTALL)
+_EPUB_CSS_URL_RE = re.compile(r'url\(\s*[\"\']?([^\)\"\']+)[\"\']?\s*\)', re.IGNORECASE)
+
+
+def _decode_epub_data_image_uri(value: object) -> bytes | None:
+    """Decode a base64 data:image URI embedded directly in EPUB HTML.
+
+    Small publisher tools sometimes inline icons or cover fragments as
+    ``data:image/...;base64,...``.  Treat invalid data as an unresolved image
+    rather than failing the whole EPUB conversion.
+    """
+    text = str(value or '').strip()
+    match = _EPUB_DATA_IMAGE_RE.match(text)
+    if not match:
+        return None
+    try:
+        return base64.b64decode(match.group(1), validate=False)
+    except Exception:
+        return None
+
+
+def _extract_epub_css_url(value: object) -> str:
+    """Return the first URL from a CSS url(...) value."""
+    match = _EPUB_CSS_URL_RE.search(str(value or ''))
+    return match.group(1).strip() if match else ''
+
+
+def _first_epub_srcset_candidate(value: object) -> str:
+    """Return the first URL candidate from a srcset-like attribute."""
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    first = text.split(',', 1)[0].strip()
+    return first.split()[0].strip() if first else ''
+
 
 def _build_epub_image_maps(book: Any) -> tuple[EpubImageMap, EpubImageBasenameMap]:
     image_map = {
@@ -864,10 +1150,35 @@ def _build_epub_image_maps(book: Any) -> tuple[EpubImageMap, EpubImageBasenameMa
 
 
 
+def _epub_spine_entry_id(item_id: Any) -> Any:
+    if isinstance(item_id, (tuple, list)) and item_id:
+        return item_id[0]
+    return item_id
+
+
+def _epub_spine_entry_is_linear(item_id: Any) -> bool:
+    """Return False for EPUB spine entries explicitly marked ``linear="no"``.
+
+    ebooklib commonly exposes spine entries as ``(idref, linear)`` tuples, but
+    some fixtures/tools use dictionaries for the second field.  Treat unknown or
+    missing values as linear to preserve legacy behavior while skipping explicit
+    non-reading-order documents such as auxiliary TOC/cover/ad pages.
+    """
+    if not isinstance(item_id, (tuple, list)) or len(item_id) < 2:
+        return True
+    linear_value = item_id[1]
+    if isinstance(linear_value, Mapping):
+        linear_value = linear_value.get('linear', linear_value.get('linear-value', ''))
+    text = str(linear_value or '').strip().lower()
+    return text not in {'no', 'false', '0'}
+
+
 def _collect_epub_spine_documents(book: Any) -> list[Any]:
     docs: list[Any] = []
     for item_id in book.spine:
-        item_key = item_id[0] if isinstance(item_id, tuple) else item_id
+        if not _epub_spine_entry_is_linear(item_id):
+            continue
+        item_key = _epub_spine_entry_id(item_id)
         it = book.get_item_with_id(item_key)
         if not it:
             continue
@@ -877,6 +1188,8 @@ def _collect_epub_spine_documents(book: Any) -> list[Any]:
             media_type in ('application/xhtml+xml', 'text/html')
             or file_name.endswith(('.xhtml', '.html', '.htm'))
         ):
+            if _epub_spine_document_is_auxiliary(it):
+                continue
             docs.append(it)
     return docs
 
@@ -891,8 +1204,17 @@ def load_epub_input_document(epub_path: PathLike) -> EpubInputDocument:
     if isinstance(cached, EpubInputDocument):
         return cached
 
+    _preflight_epub_package(source_path)
+
     epub = _require_ebooklib_epub()
-    book = epub.read_epub(str(source_path))
+    try:
+        book = epub.read_epub(str(source_path))
+    except Exception as exc:
+        if _epub_package_has_encryption_descriptor(source_path):
+            raise RuntimeError(
+                'EPUB の読み込みに失敗しました。META-INF/encryption.xml が見つかったため、DRM付きEPUB、または暗号化/難読化されたフォント・画像を含むEPUBの可能性があります。'
+            ) from exc
+        raise
     image_map, image_basename_map = _build_epub_image_maps(book)
     document = EpubInputDocument(
         source_path=source_path,
@@ -904,6 +1226,173 @@ def load_epub_input_document(epub_path: PathLike) -> EpubInputDocument:
         css_rules=extract_epub_css_rules(book),
     )
     return cast(EpubInputDocument, _store_cached_input_document(_EPUB_INPUT_DOCUMENT_CACHE, cache_key, document))
+
+
+
+
+def _epub_xml_local_name(tag: object) -> str:
+    """Return an XML tag name without its namespace for EPUB package checks."""
+    text = str(tag or '')
+    if '}' in text:
+        return text.rsplit('}', 1)[-1]
+    if ':' in text:
+        return text.rsplit(':', 1)[-1]
+    return text
+
+
+def _epub_structure_error(message: str) -> RuntimeError:
+    """Create a normalized EPUB structure error for user-facing diagnostics."""
+    return RuntimeError(str(message).strip() or 'EPUB構造を解析できませんでした。')
+
+
+def _epub_find_container_rootfile_path(container_bytes: bytes) -> str:
+    try:
+        root = ET.fromstring(container_bytes)
+    except ET.ParseError as exc:
+        raise _epub_structure_error(
+            'EPUB の META-INF/container.xml を解析できません。EPUB構造が壊れている可能性があります。'
+        ) from exc
+
+    fallback_path = ''
+    for elem in root.iter():
+        if _epub_xml_local_name(elem.tag) != 'rootfile':
+            continue
+        full_path = _normalize_epub_href(elem.attrib.get('full-path', ''))
+        if not full_path:
+            continue
+        if not fallback_path:
+            fallback_path = full_path
+        media_type = str(elem.attrib.get('media-type', '') or '').strip().lower()
+        if media_type == 'application/oebps-package+xml':
+            return full_path
+    if fallback_path:
+        return fallback_path
+    raise _epub_structure_error(
+        'EPUB の META-INF/container.xml に OPF パッケージ文書への参照が見つかりません。'
+    )
+
+
+def _epub_read_zip_member(zf: zipfile.ZipFile, name: str, *, label: str) -> bytes:
+    normalized = _normalize_epub_href(name)
+    if not normalized:
+        raise _epub_structure_error(f'EPUB の {label} への参照が空です。')
+    try:
+        return zf.read(normalized)
+    except KeyError as exc:
+        raise _epub_structure_error(
+            f'EPUB の {label}が見つかりません。参照先: {normalized}'
+        ) from exc
+
+
+def _epub_manifest_item_path(opf_path: str, href: object) -> str:
+    href_text = _normalize_epub_href(href)
+    if not href_text:
+        return ''
+    base_dir = posixpath.dirname(_normalize_epub_href(opf_path))
+    return _normalize_epub_href(posixpath.join(base_dir, href_text) if base_dir else href_text)
+
+
+def _epub_spine_linear_text(value: object) -> str:
+    return str(value or '').strip().lower()
+
+
+def _preflight_epub_package(epub_path: PathLike) -> None:
+    """Validate the minimum EPUB package structure before handing it to ebooklib.
+
+    ebooklib can raise terse low-level exceptions for malformed EPUBs.  This
+    lightweight preflight keeps normal EPUBs on the existing route while turning
+    common structural failures into actionable Japanese messages.
+    """
+    source_path = Path(epub_path)
+    try:
+        with zipfile.ZipFile(source_path, 'r') as zf:
+            entries = {_normalize_epub_href(info.filename) for info in zf.infolist()}
+            if not entries:
+                raise _epub_structure_error('EPUB ZIP の中身が空です。EPUBファイルが破損している可能性があります。')
+            if 'META-INF/container.xml' not in entries:
+                raise _epub_structure_error(
+                    'EPUB の META-INF/container.xml が見つかりません。EPUB構造が壊れている可能性があります。'
+                )
+            container_bytes = _epub_read_zip_member(zf, 'META-INF/container.xml', label='container.xml')
+            opf_path = _epub_find_container_rootfile_path(container_bytes)
+            opf_bytes = _epub_read_zip_member(zf, opf_path, label='OPF パッケージ文書')
+            try:
+                opf_root = ET.fromstring(opf_bytes)
+            except ET.ParseError as exc:
+                raise _epub_structure_error(
+                    f'EPUB の OPF パッケージ文書を解析できません。参照先: {opf_path}'
+                ) from exc
+
+            manifest: dict[str, tuple[str, str]] = {}
+            spine_refs: list[tuple[str, str]] = []
+            for elem in opf_root.iter():
+                local_name = _epub_xml_local_name(elem.tag)
+                if local_name == 'item':
+                    item_id = str(elem.attrib.get('id', '') or '').strip()
+                    href = elem.attrib.get('href', '')
+                    media_type = str(elem.attrib.get('media-type', '') or '').strip().lower()
+                    if item_id:
+                        manifest[item_id] = (_epub_manifest_item_path(opf_path, href), media_type)
+                elif local_name == 'itemref':
+                    idref = str(elem.attrib.get('idref', '') or '').strip()
+                    linear = _epub_spine_linear_text(elem.attrib.get('linear', ''))
+                    if idref:
+                        spine_refs.append((idref, linear))
+
+            if not manifest:
+                raise _epub_structure_error('EPUB の manifest が空です。本文ファイルや画像の一覧を確認できません。')
+            if not spine_refs:
+                raise _epub_structure_error('EPUB の読み順情報 spine が見つかりません。本文の順番を判断できません。')
+
+            linear_refs = [(idref, linear) for idref, linear in spine_refs if linear not in {'no', 'false', '0'}]
+            if not linear_refs:
+                raise _epub_structure_error(
+                    'EPUB の読み順情報 spine はありますが、本文対象がすべて linear="no" 扱いです。本文として変換できる章が見つかりません。'
+                )
+
+            html_doc_count = 0
+            for idref, _linear in linear_refs:
+                manifest_entry = manifest.get(idref)
+                if manifest_entry is None:
+                    raise _epub_structure_error(
+                        f'EPUB の spine が manifest に存在しない項目を参照しています。idref: {idref}'
+                    )
+                href_path, media_type = manifest_entry
+                if not href_path:
+                    raise _epub_structure_error(
+                        f'EPUB の manifest 項目に本文ファイルへの href がありません。idref: {idref}'
+                    )
+                is_html = media_type in {'application/xhtml+xml', 'text/html'} or href_path.lower().endswith(('.xhtml', '.html', '.htm'))
+                if is_html:
+                    html_doc_count += 1
+                    if href_path not in entries:
+                        raise _epub_structure_error(
+                            f'EPUB の spine が参照する本文ファイルが見つかりません。参照先: {href_path}'
+                        )
+            if html_doc_count == 0:
+                raise _epub_structure_error(
+                    'EPUB の spine に HTML/XHTML 本文ファイルが見つかりません。対応外の構造、またはDRM付きEPUBの可能性があります。'
+                )
+    except zipfile.BadZipFile as exc:
+        raise _epub_structure_error(
+            'EPUBファイルをZIPとして開けませんでした。ファイルが破損しているか、拡張子だけが .epub の可能性があります。'
+        ) from exc
+    except FileNotFoundError:
+        raise
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise _epub_structure_error(f'EPUB構造の事前確認に失敗しました。詳細: {exc}') from exc
+
+
+def _epub_package_has_encryption_descriptor(epub_path: PathLike) -> bool:
+    """Return True when the EPUB advertises encrypted/obfuscated resources."""
+    try:
+        with zipfile.ZipFile(Path(epub_path), 'r') as zf:
+            entries = {_normalize_epub_href(info.filename) for info in zf.infolist()}
+        return 'META-INF/encryption.xml' in entries
+    except Exception:
+        return False
 
 
 # --- moved from tategakiXTC_gui_core.py lines 9822-10353 ---
@@ -1003,6 +1492,10 @@ def _prepare_inline_epub_image_bytes(img_data: bytes, font_size: int, night_mode
 def _resolve_epub_image_data(doc_file_name: str, raw_src: str, image_map: Mapping[str, bytes], image_basename_map: Mapping[str, Sequence[tuple[str, bytes] | str]]) -> tuple[str | None, bytes | None]:
     """文書相対パスを考慮して EPUB 内画像を解決する。"""
     _refresh_split_globals()
+    data_image = _decode_epub_data_image_uri(raw_src)
+    if data_image:
+        return 'data:image', data_image
+
     src_norm = _normalize_epub_href(raw_src)
     if not src_norm:
         return None, None
@@ -1069,6 +1562,123 @@ def _normalize_epub_text_fragment(text: str, strip_start_text: bool = False, str
 
 
 
+def _epub_text_excluding_ruby_annotations(node: Any) -> str:
+    parts: list[str] = []
+    for child in getattr(node, 'contents', ()):  # BeautifulSoup Tag children
+        child_name = (getattr(child, 'name', '') or '').lower()
+        if child_name in {'rt', 'rp', 'rtc'}:
+            continue
+        if getattr(child, 'contents', None) is not None:
+            parts.append(_epub_text_excluding_ruby_annotations(child))
+        else:
+            parts.append(str(child))
+    if not getattr(node, 'contents', None) and hasattr(node, 'get_text'):
+        try:
+            return str(node.get_text('', strip=False))
+        except Exception:
+            return str(node)
+    return ''.join(parts)
+
+
+def _epub_collect_ruby_text(node: Any) -> str:
+    node_name = (getattr(node, 'name', '') or '').lower()
+    if node_name == 'rtc':
+        rt_parts: list[str] = []
+        try:
+            rt_nodes = list(node.find_all('rt'))
+        except Exception:
+            rt_nodes = []
+        for rt_node in rt_nodes:
+            rt_parts.append(_epub_collect_ruby_text(rt_node))
+        if rt_parts:
+            return ''.join(rt_parts)
+    try:
+        text = str(node.get_text('', strip=False))
+        if text:
+            return text
+    except Exception:
+        pass
+    return ''.join(str(child) for child in getattr(node, 'contents', ())) or str(node)
+
+
+def _extract_epub_ruby_parts(node: Any) -> tuple[str, str]:
+    """Extract base text and ruby text without leaking rtc/rt text into the body.
+
+    EPUBs in the wild use several ruby shapes, including simple
+    ``<ruby>基<rt>ruby</rt></ruby>``, explicit ``rb`` nodes, and grouped
+    ``rtc`` annotations.  The renderer needs the base string and annotation
+    string separately; treating ``rtc`` as normal child text would duplicate ruby
+    readings in the body.
+    """
+    rb_parts: list[str] = []
+    rt_parts: list[str] = []
+    for child in getattr(node, 'contents', ()):  # BeautifulSoup Tag children
+        child_name = (getattr(child, 'name', '') or '').lower()
+        if child_name == 'rt':
+            rt_parts.append(_epub_collect_ruby_text(child))
+            continue
+        if child_name == 'rtc':
+            rt_parts.append(_epub_collect_ruby_text(child))
+            continue
+        if child_name == 'rp':
+            continue
+        if child_name in {'rb', 'rbc'}:
+            rb_parts.append(_epub_text_excluding_ruby_annotations(child))
+            continue
+        if getattr(child, 'contents', None) is not None:
+            rb_parts.append(_epub_text_excluding_ruby_annotations(child))
+        else:
+            rb_parts.append(str(child))
+    return ''.join(rb_parts), ''.join(rt_parts)
+
+
+def _epub_image_node_source(node: Any) -> str:
+    """Return the first supported image href-like attribute for EPUB image nodes."""
+    for attr_name in ('src', 'xlink:href', 'href', 'data-src', 'data-original'):
+        try:
+            value = node.get(attr_name, '')
+        except Exception:
+            value = ''
+        if value:
+            return str(value)
+    for attr_name in ('srcset', 'data-srcset'):
+        try:
+            value = node.get(attr_name, '')
+        except Exception:
+            value = ''
+        candidate = _first_epub_srcset_candidate(value)
+        if candidate:
+            return candidate
+    return ''
+
+
+def _epub_background_image_source(node: Any, css_rules: Sequence[CSSRule] | None = None) -> str:
+    """Return a conservative background-image URL for otherwise image-like EPUB nodes."""
+    style_map = _merged_epub_css_for_node(node, css_rules)
+    return _extract_epub_css_url(style_map.get('background-image', ''))
+
+
+def _epub_picture_node_source(node: Any) -> str:
+    """Return the best fallback source from a <picture> element."""
+    try:
+        img = node.find('img')
+    except Exception:
+        img = None
+    if img is not None:
+        src = _epub_image_node_source(img)
+        if src:
+            return src
+    try:
+        sources = list(node.find_all('source'))
+    except Exception:
+        sources = []
+    for source in sources:
+        src = _epub_image_node_source(source)
+        if src:
+            return src
+    return ''
+
+
 def _render_epub_chapter_pages_from_html(html_content: str | bytes, doc_file_name: str, args: ConversionArgs, font: Any, ruby_font: Any, bold_rules: Mapping[str, set[str]],
                                          image_map: Mapping[str, bytes], image_basename_map: Mapping[str, Sequence[tuple[str, bytes] | str]], css_rules: Sequence[dict[str, Any]] | None = None, primary_font_value: str = '',
                                          code_font_value: str | None = None, should_cancel: Callable[[], bool] | None = None, page_created_cb: Callable[[PageEntry], None] | None = None, store_page_entries: bool = True,
@@ -1092,18 +1702,22 @@ def _render_epub_chapter_pages_from_html(html_content: str | bytes, doc_file_nam
             return font
 
     page_limit = max(1, int(max_output_pages)) if max_output_pages else None
-    # sweep353: EPUB chapter rendering must keep completed pages local until all
-    # delayed ruby overlays have been applied.  The public page_created_cb is
-    # intentionally not wired into the low-level renderer here; callers that want
-    # streaming receive finalized chapter_pages from this function and can invoke
-    # their callback after the overlay-safe boundary.
+    # Ruby overlays may be applied after base text layout and can cross page
+    # boundaries.  Keep ruby-containing chapters in memory until the final overlay
+    # pass has completed.  Ruby-free chapters can stream finalized pages to the
+    # caller immediately, which reduces memory use for large one-chapter EPUBs.
+    try:
+        chapter_has_ruby = body.find('ruby') is not None
+    except Exception:
+        chapter_has_ruby = False
+    stream_completed_pages = bool(page_created_cb is not None and not store_page_entries and not chapter_has_ruby)
     renderer = _VerticalPageRenderer(
         args,
         font,
         ruby_font,
         should_cancel=should_cancel,
-        page_created_cb=None,
-        store_page_entries=True,
+        page_created_cb=page_created_cb if stream_completed_pages else None,
+        store_page_entries=True if chapter_has_ruby else (store_page_entries if not stream_completed_pages else False),
         max_buffered_pages=page_limit,
         default_page_args=args,
         default_page_label='本文ページ',
@@ -1114,10 +1728,11 @@ def _render_epub_chapter_pages_from_html(html_content: str | bytes, doc_file_nam
     def drain_completed_pages() -> None:
         entries = renderer.pop_page_entries()
         if entries:
-            # Pages may still receive delayed ruby overlays when a ruby run crosses
-            # a page boundary.  Defer the streaming callback from this helper and
-            # return the finalized entries instead; process_epub will stream the
-            # returned chapter pages after the overlay-safe boundary.
+            # pop_page_entries() is called at overlay-safe boundaries.  When a
+            # page_created_cb is supplied with store_page_entries=False, the renderer
+            # streams finalized entries to the callback and returns an empty list.
+            # This avoids retaining huge one-chapter EPUBs in memory while preserving
+            # ruby overlay correctness.
             completed_page_entries.extend(entries)
         if page_limit is not None:
             remaining = page_limit - len(completed_page_entries)
@@ -1145,7 +1760,11 @@ def _render_epub_chapter_pages_from_html(html_content: str | bytes, doc_file_nam
         drain_completed_pages()
 
     def _handle_epub_image_node(node: Any, wrap_indent_chars: int) -> None:
-        raw_src = str(node.get('src', node.get('xlink:href', '')) or '')
+        raw_src = _epub_image_node_source(node)
+        if not raw_src and (getattr(node, 'name', '') or '').lower() == 'picture':
+            raw_src = _epub_picture_node_source(node)
+        if not raw_src:
+            raw_src = _epub_background_image_source(node, css_rules)
         cached_resolution = resolved_image_cache.get(raw_src)
         if cached_resolution is None:
             cached_resolution = _resolve_epub_image_data(doc_file_name, raw_src, image_map, image_basename_map)
@@ -1187,25 +1806,6 @@ def _render_epub_chapter_pages_from_html(html_content: str | bytes, doc_file_nam
         except Exception as e:
             LOGGER.warning('画像処理エラー (%s): %s', resolved_src or raw_src, e)
 
-    def _extract_epub_ruby_parts(node: Any) -> tuple[str, str]:
-        rb_parts: list[str] = []
-        rt_parts: list[str] = []
-        for child in getattr(node, 'contents', ()):
-            child_name = getattr(child, 'name', '')
-            if child_name == 'rt':
-                try:
-                    rt_parts.append(child.get_text())
-                except Exception:
-                    rt_parts.append(str(child))
-                continue
-            if child_name == 'rp':
-                continue
-            if hasattr(child, 'get_text'):
-                rb_parts.append(child.get_text())
-            else:
-                rb_parts.append(str(child))
-        return ''.join(rb_parts), ''.join(rt_parts)
-
     def _handle_ruby_node(node: Any, node_bold: bool, node_code: bool, wrap_indent_chars: int) -> None:
         rb, rt = _extract_epub_ruby_parts(node)
         rb = normalize_text(rb, strip_leading_for_indent=renderer.has_pending_paragraph_indent)
@@ -1232,7 +1832,16 @@ def _render_epub_chapter_pages_from_html(html_content: str | bytes, doc_file_nam
             renderer.set_pending_paragraph_indent(True)
             return True
 
-        if node_name in {'img', 'image'} and (node.get('src') or node.get('xlink:href')):
+        if node_name in {'img', 'image', 'source'} and _epub_image_node_source(node):
+            _handle_epub_image_node(node, wrap_indent_chars)
+            return True
+
+        if node_name == 'picture' and _epub_picture_node_source(node):
+            _handle_epub_image_node(node, wrap_indent_chars)
+            return True
+
+        background_src = _epub_background_image_source(node, css_rules)
+        if background_src and _epub_node_is_effectively_empty(node):
             _handle_epub_image_node(node, wrap_indent_chars)
             return True
 
@@ -1359,6 +1968,68 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
     total_rendered_pages = 0
     total_docs = max(1, len(docs))
     _emit_progress(progress_cb, 0, total_docs, f'EPUBを解析しました。({len(docs)} 章)')
+
+    if bool(getattr(args, 'page_number_enabled', False)):
+        page_entries: PageEntries = []
+        page_number_memory_notice_emitted = False
+        for doc_index, item in enumerate(_iter_with_optional_tqdm(docs, desc="描画中", unit="章", leave=False), 1):
+            _raise_if_cancelled(should_cancel)
+            chapter_name = Path(getattr(item, "file_name", "") or f"chapter_{doc_index}").name
+            _emit_progress(progress_cb, doc_index - 1, total_docs, f'章を描画中… ({max(0, doc_index - 1)}/{total_docs} 章) {chapter_name}')
+            try:
+                chapter_pages = _render_epub_chapter_pages_from_html(
+                    item.get_content(),
+                    getattr(item, 'file_name', ''),
+                    args,
+                    font,
+                    ruby_font,
+                    document.bold_rules,
+                    document.image_map,
+                    document.image_basename_map,
+                    document.css_rules,
+                    primary_font_value=str(font_path),
+                    should_cancel=should_cancel,
+                    page_created_cb=None,
+                    store_page_entries=True,
+                )
+            except ConversionCancelled:
+                raise
+            except Exception as exc:
+                report = build_conversion_error_report(epub_path, exc, stage=f'章描画: {chapter_name}')
+                raise RuntimeError(report['display']) from exc
+            page_entries.extend(chapter_pages)
+            total_rendered_pages = len(page_entries)
+            if not page_number_memory_notice_emitted and total_rendered_pages >= 300:
+                page_number_memory_notice_emitted = True
+                _emit_progress(
+                    progress_cb,
+                    doc_index,
+                    total_docs,
+                    'ページ番号表示ONのため、総ページ数確定までEPUBページを一時保持しています。大きいEPUBでは処理に時間やメモリを使います。'
+                )
+            _emit_progress(progress_cb, doc_index, total_docs, f'章の変換を完了しました。({doc_index}/{total_docs} 章 / {total_rendered_pages} 累計ページ)')
+        if not page_entries:
+            report = build_conversion_error_report(epub_path, RuntimeError('変換できるページがありませんでした'), stage='EPUB描画')
+            raise RuntimeError(report['display'])
+        ext = '.xtch' if _normalize_output_format(getattr(args, 'output_format', 'xtc')) == 'xtch' else '.xtc'
+        out_path = Path(output_path) if output_path else epub_path.with_suffix(ext)
+        try:
+            return _write_page_entries_to_xtc(
+                page_entries,
+                epub_path,
+                args,
+                output_path=out_path,
+                should_cancel=should_cancel,
+                progress_cb=progress_cb,
+                message_builder=lambda page_index, total_pages, entry, label: f'EPUBページを変換中… ({page_index}/{total_pages} ページ)',
+                complete_message=lambda page_count, total_pages, last: f'EPUBページ変換が完了しました。({page_count} ページ)',
+            )
+        except ConversionCancelled:
+            raise
+        except Exception as exc:
+            report = build_conversion_error_report(epub_path, exc, stage='出力書込')
+            raise RuntimeError(report['display']) from exc
+
     class _EpubChapterConvertError(RuntimeError):
         """章の本文描画は成功したが、ページ blob 変換で失敗したことを示す。"""
         pass

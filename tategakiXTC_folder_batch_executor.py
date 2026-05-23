@@ -233,8 +233,12 @@ class FolderBatchExecutionResult:
 
 
 def _emit_log(callback: FolderBatchLogCallback | None, message: str) -> None:
-    if callback is not None:
+    if callback is None:
+        return
+    try:
         callback(message)
+    except Exception:
+        pass
 
 
 def _emit_progress(
@@ -267,11 +271,11 @@ def _compact_failure_message(message: object, *, max_chars: int = 120) -> str:
 
 
 def _is_cancellation_exception(exc: BaseException) -> bool:
-    cls_name = exc.__class__.__name__.lower()
-    if 'cancel' in cls_name or 'cancelled' in cls_name:
-        return True
-    message = str(exc).strip()
-    return '停止' in message or '中止' in message or 'cancel' in message.lower()
+    try:
+        from tategakiXTC_gui_core import ConversionCancelled
+    except Exception:
+        return False
+    return isinstance(exc, ConversionCancelled)
 
 
 def execute_folder_batch_plan(

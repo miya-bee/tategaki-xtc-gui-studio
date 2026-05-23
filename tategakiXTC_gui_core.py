@@ -281,6 +281,9 @@ class ConversionArgs:
     font_size: int = 26
     ruby_size: int = 12
     ruby_hide: bool = False
+    page_number_enabled: bool = False
+    page_number_font_size: int = 12
+    page_number_font_file: str = ''
     line_spacing: int = 44
     margin_t: int = 12
     margin_b: int = 14
@@ -294,6 +297,7 @@ class ConversionArgs:
     punctuation_position_mode: str = "standard"
     ichi_position_mode: str = "standard"
     halfwidth_digit_position_mode: str = "standard"
+    halfwidth_alpha_position_mode: str = "standard"
     tatechuyoko_symbol_position_mode: str = "standard"
     lower_closing_bracket_position_mode: str = "standard"
     wave_dash_drawing_mode: str = "rotate"
@@ -302,7 +306,7 @@ class ConversionArgs:
 
     def __post_init__(self: ConversionArgs) -> None:
         int_fields = (
-            'width', 'height', 'font_size', 'ruby_size', 'line_spacing',
+            'width', 'height', 'font_size', 'ruby_size', 'page_number_font_size', 'line_spacing',
             'margin_t', 'margin_b', 'margin_r', 'margin_l', 'threshold',
         )
         for field_name in int_fields:
@@ -314,6 +318,10 @@ class ConversionArgs:
             raise ValueError('font_size は 6 以上である必要があります。')
         if self.ruby_size < 4:
             raise ValueError('ruby_size は 4 以上である必要があります。')
+        if self.page_number_font_size < 1:
+            raise ValueError('ページ番号フォントサイズは 1 以上である必要があります。')
+        if self.page_number_font_size >= 30:
+            raise ValueError('ページ番号フォントサイズは 30 未満である必要があります。')
         if self.line_spacing <= 0:
             raise ValueError('line_spacing は 1 以上である必要があります。')
         for margin_name in ('margin_t', 'margin_b', 'margin_r', 'margin_l'):
@@ -328,11 +336,16 @@ class ConversionArgs:
         self.punctuation_position_mode = str(self.punctuation_position_mode or 'standard')
         self.ichi_position_mode = str(self.ichi_position_mode or 'standard')
         self.halfwidth_digit_position_mode = str(getattr(self, 'halfwidth_digit_position_mode', 'standard') or 'standard')
+        self.halfwidth_alpha_position_mode = str(getattr(self, 'halfwidth_alpha_position_mode', 'standard') or 'standard')
         self.tatechuyoko_symbol_position_mode = str(getattr(self, 'tatechuyoko_symbol_position_mode', 'standard') or 'standard')
         self.lower_closing_bracket_position_mode = str(getattr(self, 'lower_closing_bracket_position_mode', 'standard') or 'standard')
         self.wave_dash_drawing_mode = str(getattr(self, 'wave_dash_drawing_mode', 'rotate') or 'rotate')
         self.wave_dash_position_mode = str(getattr(self, 'wave_dash_position_mode', 'standard') or 'standard')
         self.ruby_hide = bool(getattr(self, 'ruby_hide', False))
+        self.page_number_enabled = bool(getattr(self, 'page_number_enabled', False))
+        self.page_number_font_file = str(getattr(self, 'page_number_font_file', '') or '')
+        if self.page_number_enabled:
+            self.margin_b = max(int(self.margin_b), int(self.page_number_font_size) + 1)
         self.output_format = _normalize_output_format(getattr(self, 'output_format', 'xtc'))
 
 
@@ -706,6 +719,7 @@ from tategakiXTC_gui_core_xtc import (
     _xtc_threshold_lut,
     _xtch_plane_value_lut,
     _xtch_quantization_lut,
+    apply_page_number_overlay_to_canvas,
     apply_xtc_filter,
     apply_xtch_filter,
     build_xtc,
@@ -1112,14 +1126,24 @@ from tategakiXTC_gui_core_epub import (
     _epub_node_token_signature,
     _epub_node_attr_tokens,
     _epub_node_analysis_signature,
+    _epub_token_matches,
+    _epub_node_href,
+    _epub_node_text,
+    _epub_href_fragment,
+    _epub_text_is_note_reference_marker,
+    _epub_should_skip_auxiliary_node,
+    _epub_spine_document_is_auxiliary,
     _epub_node_analysis,
     epub_should_skip_node,
     epub_heading_level,
     _parse_css_style_declarations_cached,
     _parse_css_style_declarations,
     _split_css_selectors,
+    _sanitize_epub_css_selector,
     _normalize_epub_css_selector,
+    _parse_epub_css_simple_selector_matcher,
     _parse_epub_css_selector_matcher,
+    _epub_css_simple_selector_matches_node,
     _epub_css_selector_matches_node,
     extract_epub_css_rules,
     _epub_css_node_cache_signature,
@@ -1135,6 +1159,13 @@ from tategakiXTC_gui_core_epub import (
     epub_node_indent_profile,
     _normalize_epub_href,
     _build_epub_image_maps,
+    _epub_xml_local_name,
+    _epub_structure_error,
+    _epub_find_container_rootfile_path,
+    _preflight_epub_package,
+    _epub_package_has_encryption_descriptor,
+    _epub_spine_entry_id,
+    _epub_spine_entry_is_linear,
     _collect_epub_spine_documents,
     load_epub_input_document,
     _classify_epub_embedded_image,
@@ -1142,8 +1173,17 @@ from tategakiXTC_gui_core_epub import (
     _inspect_epub_embedded_image,
     _prepare_inline_epub_image_bytes,
     _resolve_epub_image_data,
+    _decode_epub_data_image_uri,
+    _extract_epub_css_url,
+    _first_epub_srcset_candidate,
+    _epub_background_image_source,
+    _epub_picture_node_source,
     _epub_runs,
     _normalize_epub_text_fragment,
+    _epub_text_excluding_ruby_annotations,
+    _epub_collect_ruby_text,
+    _extract_epub_ruby_parts,
+    _epub_image_node_source,
     _render_epub_chapter_pages_from_html,
     process_epub,
 )

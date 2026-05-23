@@ -104,7 +104,29 @@ def _process_single_image_file(
 ) -> Path:
     if progress_cb is not None:
         progress_cb(0, 1, '画像を読み込み中…')
-    page_blob = core.process_image_data(path, args, should_cancel=should_cancel)
+    runtime_state = None
+    if bool(getattr(args, 'page_number_enabled', False)):
+        runtime_state = (
+            getattr(args, '_page_number_current', None),
+            getattr(args, '_page_number_total', None),
+            hasattr(args, '_page_number_current'),
+            hasattr(args, '_page_number_total'),
+        )
+        setattr(args, '_page_number_current', 1)
+        setattr(args, '_page_number_total', 1)
+    try:
+        page_blob = core.process_image_data(path, args, should_cancel=should_cancel)
+    finally:
+        if runtime_state is not None:
+            old_current, old_total, had_current, had_total = runtime_state
+            if had_current:
+                setattr(args, '_page_number_current', old_current)
+            elif hasattr(args, '_page_number_current'):
+                delattr(args, '_page_number_current')
+            if had_total:
+                setattr(args, '_page_number_total', old_total)
+            elif hasattr(args, '_page_number_total'):
+                delattr(args, '_page_number_total')
     if page_blob is None:
         raise RuntimeError('変換データがありません。')
     # ``process_image_data`` returns one XTC-family page blob (XTG/XTH), not
@@ -302,7 +324,10 @@ class ConversionWorker(QObject):
         # Keep existing tests/extensions that monkey-patch
         # ``tategakiXTC_gui_studio.plan_output_path_for_target`` effective even
         # after moving the implementation to this split module.
-        planner = cast(Callable[..., tuple[Path | None, core.ConflictPlan | None, str | None]], _entry_module_attr('plan_output_path_for_target', plan_output_path_for_target))
+        planner_obj = _entry_module_attr('plan_output_path_for_target', plan_output_path_for_target)
+        if not callable(planner_obj):
+            planner_obj = plan_output_path_for_target
+        planner = cast(Callable[..., tuple[Path | None, core.ConflictPlan | None, str | None]], planner_obj)
         out_path, plan, warning = planner(
             path,
             args,
@@ -360,7 +385,8 @@ class ConversionWorker(QObject):
         total = len(supported)
         APP_LOGGER.info('変換開始: target=%s files=%s format=%s font=%s conflict=%s', tp, total, getattr(args, 'output_format', 'xtc'), font_value, conflict_strategy)
         self._emit_progress(0, 1000, f'変換準備が完了しました。({total} 件)')
-        output_root = tp if tp.is_dir() else None
+        explicit_output_root = worker_logic.resolve_explicit_output_root(cfg.get('output_dir', ''))
+        output_root = worker_logic.resolve_conversion_output_root(tp, explicit_output_root)
         for idx, path in enumerate(supported, 1):
             if self._is_stop_requested():
                 stopped = True
@@ -388,6 +414,8 @@ class ConversionWorker(QObject):
                     else:
                         planned_desired_sources[desired_key] = str(path)
                 saved = self._process_target(path, font_value, args, out_path, progress_cb=progress_cb)
+                if saved is None:
+                    raise RuntimeError('変換結果が空でした。')
                 if plan and plan.get('renamed'):
                     renamed_items.append(plan)
                     self.log.emit(f'同名あり → 自動連番で保存: {Path(plan["desired_path"]).name} -> {Path(plan["final_path"]).name}')
@@ -412,8 +440,9 @@ class ConversionWorker(QObject):
                     raise RuntimeError(report.get('display', str(exc))) from exc
                 continue
             progress_cb(1, 1, '保存が完了しました。')
-            converted.append(str(saved))
-            self.log.emit(f'保存: {Path(saved).name}')
+            saved_path = Path(saved)
+            converted.append(str(saved_path))
+            self.log.emit(f'保存: {saved_path.name}')
             if self._is_stop_requested():
                 stopped = True
                 self.log.emit('停止しました。')
@@ -422,29 +451,46 @@ class ConversionWorker(QObject):
         postprocess_warnings: list[str] = []
         open_folder_target = ''
         open_folder_requested = worker_logic._bool_config_value(cfg, 'open_folder', True) and bool(converted)
+        # v1.3.6.5: automatic Explorer launch remains disabled by the GUI,
+        # but the completion card still needs a folder target for its manual
+        # [保存先を開く] button.  Resolve the target whenever conversion produced
+        # files; only emit user-visible warnings for the legacy auto-open path.
+        should_resolve_open_folder_target = bool(converted)
         if stopped and not converted:
             try:
                 open_folder_target = str(tp if tp.is_dir() else tp.parent)
             except Exception:
                 open_folder_target = ''
-        if open_folder_requested:
+        if should_resolve_open_folder_target:
             try:
                 tgt = self._resolve_open_folder_target(tp, converted)
                 if not tgt:
                     warning = f'完了後フォルダの対象を特定できませんでした: {tp}'
-                    self.log.emit(warning)
-                    APP_LOGGER.warning(warning)
-                    postprocess_warnings.append(warning)
+                    if open_folder_requested:
+                        self.log.emit(warning)
+                        APP_LOGGER.warning(warning)
+                        postprocess_warnings.append(warning)
                 else:
                     open_folder_target = str(tgt)
             except Exception as exc:
                 APP_LOGGER.exception('完了後フォルダの対象を特定できませんでした (target=%s converted=%s): %s', tp, len(converted), exc)
-                detail = _coerce_ui_message_text(exc).strip()
-                message = f'完了後フォルダを開けませんでした。 / 対象: {tp}'
-                if detail:
-                    message = f'{message} / {detail}'
-                self.log.emit(message)
-                postprocess_warnings.append(message)
+                if open_folder_requested:
+                    detail = _coerce_ui_message_text(exc).strip()
+                    message = f'完了後フォルダを開けませんでした。 / 対象: {tp}'
+                    if detail:
+                        message = f'{message} / {detail}'
+                    self.log.emit(message)
+                    postprocess_warnings.append(message)
+        if converted and not str(open_folder_target or '').strip():
+            # Last-resort safety: the manual [保存先を開く] action should follow
+            # the actual file written by this conversion.  This prevents an
+            # empty/ambiguous resolver result from falling back to the app's
+            # current working directory after [保存先リセット].
+            try:
+                first_saved = Path(converted[0])
+                open_folder_target = str(first_saved.parent if str(first_saved.parent) not in ('', '.') else (tp.parent if tp.is_file() else tp))
+            except Exception:
+                open_folder_target = ''
 
         counts = self._collect_conversion_counts(
             converted,

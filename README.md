@@ -10,32 +10,43 @@
 
 ## バージョン
 
-現在の公開版は **v1.3.5** です。
+現在の公開版は **v1.3.6** です。
 
-v1.3.5 は、公開版 v1.3.4 の縦中横記号表示を改善した小修正版です。note コメント欄で報告された `！？` / `!?` / `？？` / `??` などの見え方を中心に、記号ペアのまとまり、右方向への張り出し、Noto 系フォントでの縦位置調整を改善しています。
+v1.3.6 は、v1.3.5 以降の追加開発をまとめた公開版です。ページ番号表示、EPUB 堅牢化、プレビュー/ファイルビューワーモード改善、保存先処理改善、位置補正機能追加、XTC / XTCH 書き出し信頼性強化を含みます。内部作業版としては v1.3.6.45 を基準にしています。
 
-- 前回公開版: `v1.3.4`
-- 今回公開版: `v1.3.5`
-- GitHub Release tag: `v1.3.5`
-- GitHub Release title: `v1.3.5`
+- 前回公開版: `v1.3.5`
+- 今回公開版: `v1.3.6`
+- GitHub Release tag: `v1.3.6`
+- GitHub Release title: `v1.3.6`
 
-## v1.3.5 の主な更新
+## v1.3.6 の主な更新
 
-- 半角 `??` を、`!!` / `!?` / `?!` と同じく縦中横記号ペアとして扱うようにしました。
-- 半角 `!?` / `??` / `!!` / `?!` を2文字ペアとしてトークン化します。
-- 全角 `！？` / `？？` / `！！` / `？！` の右方向への張り出しを抑えるため、縦中横描画の貼り付けを ink bbox 中心基準へ寄せました。
-- 半角記号ペアが小さくなりすぎないよう、v1.3.4.3 で試した強い縮小は撤回しました。
-- 画像処理セクションに「縦中横記号」の5段階位置補正を追加しました。
-- 「縦中横記号」補正は全角/半角の記号ペア専用で、数字の縦中横には適用しません。
-- XTC / XTCH 保存形式、ルビ描画ルーチン本体、フォルダ一括変換の基本処理は変更していません。
+- TXT / Markdown / EPUB などの主経路 XTC / XTCH 書き出しで、`os.replace()` 前の temp file fsync と自己検証を行うようにしました。
+- page-entry pipeline の自己検証を、ページごとに width / height が異なる既存ケースにも対応させました。
+- フォルダ一括変換のキャンセル判定を文字列推測ではなく `ConversionCancelled` の型判定へ変更しました。
+- `ConversionWorker._convert()` の `None` 戻り値防御、folder batch log callback 防御、連番保存先候補探索の上限を追加しました。
+- v1.3.6.44 の保存先 helper 防御、v1.3.6.42 の保存先 helper 化、v1.3.6.41 の位置補正整理と sample_texts 配布ガードは維持しています。
+- v1.3.6.x 系のページ番号表示、EPUB 堅牢化、プレビュー進捗表示、半角数字/記号位置補正、半角英字位置補正、ファイルビューワーモード改善を維持しています。
 
-詳細は `RELEASE_NOTES_v1_3_5.md` と `CHANGELOG.md` を参照してください。
+詳細は `RELEASE_NOTES_v1_3_6.md` と `CHANGELOG.md` を参照してください。
+
+### 同梱サンプルテキスト
+
+`sample_texts/` に、設定確認用のテキストを同梱しています。
+
+- `tategaki_position_kinsoku_test_text_v3.txt` — TXT / 青空文庫風ルビ / 禁則処理 / 位置補正確認用
+- `tategaki_position_kinsoku_bold_markdown_v1.md` — Markdown の `**太字**` を使った太字確認用
+- `tategaki_tatechuyoko_punctuation_test_text_v1.txt` — 以前の縦中横・記号ペア確認用
+- `tategaki_halfwidth_alpha_position_test_text_v1.txt` — 半角英字位置補正確認用
+- `tategaki_halfwidth_fullwidth_alpha_compare_test_text_v1.txt` — 半角英字と全角英字の比較確認用
+
+TXT入力では、青空文庫風の `［＃ここから太字］...［＃ここで太字終わり］` は現在太字として解釈しません。太字確認は Markdown サンプルを使用してください。
 
 ## 過去の主な公開版
 
 ### v1.3.4
 
-ルビ消しモード、半角数字補正、半角数字の縦中横上限、右ペイン高倍率プレビュー、ドラッグ＆ドロップ、変換完了カード、フォルダ一括変換の中止処理などをまとめた公開版です。
+ルビ消しモード、半角数字補正、半角英字補正、半角数字の縦中横上限、右ペイン高倍率プレビュー、ドラッグ＆ドロップ、変換完了カード、フォルダ一括変換の中止処理などをまとめた公開版です。
 
 ### v1.3.3
 
@@ -66,6 +77,7 @@ GitHub で公開済みの v1.0.2 の次の公開版です。
 - `WINDOWS_SETUP.md` — Windowsでの導入・起動手順
 - `FAQ.md` — よくある質問
 - `KNOWN_LIMITATIONS.md` — 既知の注意点・仕様
+- `RELEASE_NOTES_v1_3_6.md` — v1.3.5 から v1.3.6 までの差分まとめ
 - `RELEASE_NOTES_v1_3_5.md` — v1.3.4 から v1.3.5 までの差分まとめ
 - `RELEASE_NOTES_v1_3_4.md` — v1.3.3 から v1.3.4 までの差分まとめ
 - `RELEASE_NOTES_v1_3_0.md` — v1.3.0 の更新内容
@@ -73,7 +85,7 @@ GitHub で公開済みの v1.0.2 の次の公開版です。
 - `RELEASE_NOTES_v1_2_1.md` — v1.2.1 の更新内容
 - `RELEASE_NOTES_v1_2_0.md` — v1.2.0 の更新内容
 - `RELEASE_NOTES_v1_1_0.md` — v1.1.0 の更新内容
-- `CHANGELOG.md` — 更新履歴
+- `CHANGELOG.md` — 公開版単位の更新履歴
 
 ## 得意な文書
 
@@ -191,7 +203,7 @@ v1.1.0 では、以下のような用途で使用します。
 
 ## 補正設定について
 
-縦書き表示では、フォントによって記号の位置や形が大きく変わることがあります。v1.3.3.29 では、句読点、漢数字一、半角数字、下鍵括弧、波線描画、波線位置をGUIから調整できます。下鍵括弧も、句読点などと同じ5モードで上下補正できます。迷った場合は、まず標準設定のまま使い、気になる記号だけ補正してください。
+縦書き表示では、フォントによって記号の位置や形が大きく変わることがあります。v1.3.3.29 では、句読点、漢数字一、半角数字/記号、半角英字、下鍵括弧、波線描画、波線位置をGUIから調整できます。下鍵括弧も、句読点などと同じ5モードで上下補正できます。迷った場合は、まず標準設定のまま使い、気になる記号だけ補正してください。
 
 ## 出力ファイル名の衝突設定
 
@@ -257,7 +269,7 @@ release zip は以下で作成できます。
     .venv\Scripts\python.exe -B ^
       build_release_zip.py ^
       --verify ^
-      dist\tategaki-xtc-gui-studio_v1.3.5-release.zip
+      dist\tategaki-xtc-gui-studio_v1.3.6-release.zip
 
 release zip の作成は、環境に応じて以下でも実行できます。
 
@@ -269,26 +281,26 @@ release zip の作成は、環境に応じて以下でも実行できます。
 
     python build_release_zip.py --verify <zipパス>
 
-    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.3.5-release.zip
+    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.3.6-release.zip
 
-v1.3.5 の release zip は Python GUI版の source 構成に加えて `Font/` を同梱できます。Font フォルダが同梱されている release zip では、別コピー手順は不要です。source-only 配布に切り替える場合は、対応するフォント本体と `LICENSE_OFL.txt` の扱いを合わせてください。
+v1.3.6 の release zip は Python GUI版の source 構成に加えて `Font/` を同梱できます。Font フォルダが同梱されている release zip では、別コピー手順は不要です。source-only 配布に切り替える場合は、対応するフォント本体と `LICENSE_OFL.txt` の扱いを合わせてください。
 
 ## GitHub Release での公開方針
 
-v1.3.5 は、GitHub 上では以下の扱いで公開します。
+v1.3.6 は、GitHub 上では以下の扱いで公開します。
 
-- Release tag: `v1.3.5`
-- Release title: `v1.3.5`
-- Previous tag: `v1.3.4`
-- 添付ファイル: `tategaki-xtc-gui-studio_v1.3.5-release.zip`
+- Release tag: `v1.3.6`
+- Release title: `v1.3.6`
+- Previous tag: `v1.3.5`
+- 添付ファイル: `tategaki-xtc-gui-studio_v1.3.6-release.zip`
 
-Release 本文には `RELEASE_NOTES_v1_3_5.md` の内容を使用します。
+Release 本文には `RELEASE_NOTES_v1_3_6.md` の内容を使用します。
 
 開発用の `.venv/` や `node_modules/` は release 対象外です。
 
 ## 公開対象について
 
-v1.3.5 の公開対象は **Python GUI版のみ**です。
+v1.3.6 の公開対象は **Python GUI版のみ**です。
 
 以下の旧ローカル Web 試作版関連ファイルは、公開用 payload / release 検査の対象外です。
 

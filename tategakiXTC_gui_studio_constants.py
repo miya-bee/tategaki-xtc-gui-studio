@@ -54,6 +54,8 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'font_size': 26,
     'ruby_size': 12,
     'ruby_hide': False,
+    'page_number_enabled': False,
+    'page_number_font_size': 12,
     'line_spacing': 44,
     'margin_t': 12,
     'margin_b': 14,
@@ -67,11 +69,13 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'punctuation_position_mode': 'standard',
     'ichi_position_mode': 'standard',
     'halfwidth_digit_position_mode': 'standard',
+    'halfwidth_alpha_position_mode': 'standard',
     'tatechuyoko_symbol_position_mode': 'standard',
     'lower_closing_bracket_position_mode': 'standard',
     'wave_dash_drawing_mode': 'rotate',
     'wave_dash_position_mode': 'standard',
     'output_format': 'xtc',
+    'output_dir': '',
 }
 
 DEFAULT_UI_SETTINGS: dict[str, object] = {
@@ -81,6 +85,9 @@ DEFAULT_UI_SETTINGS: dict[str, object] = {
     'nav_buttons_reversed': False,
     'open_folder': True,
     'output_conflict': 'rename',
+    'page_number_margin_auto_active': False,
+    'page_number_margin_auto_base_value': 14,
+    'page_number_margin_auto_value': 14,
     'target': '',
     'main_view_mode': 'font',
     'bottom_tab_index': 0,
@@ -160,11 +167,11 @@ DEFAULT_PRESET_DEFINITIONS = {
 
 PRESET_FIELDS = [
     'profile', 'width', 'height', 'font_file',
-    'font_size', 'ruby_size', 'ruby_hide', 'line_spacing',
+    'font_size', 'ruby_size', 'ruby_hide', 'page_number_enabled', 'page_number_font_size', 'line_spacing',
     'margin_t', 'margin_b', 'margin_r', 'margin_l',
     'night_mode', 'dither', 'threshold', 'kinsoku_mode',
     'tatechuyoko_digit_mode',
-    'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'tatechuyoko_symbol_position_mode',
+    'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'halfwidth_alpha_position_mode', 'tatechuyoko_symbol_position_mode',
     'lower_closing_bracket_position_mode', 'wave_dash_drawing_mode', 'wave_dash_position_mode', 'output_format',
 ]
 
@@ -182,19 +189,19 @@ TATECHUYOKO_DIGIT_MODE_OPTIONS = [
 ]
 TATECHUYOKO_DIGIT_MODE_LABELS = {key: label for key, label in TATECHUYOKO_DIGIT_MODE_OPTIONS}
 GLYPH_POSITION_MODE_OPTIONS = [
-    ('down_strong', '下補正 強'),
-    ('down_weak', '下補正 弱'),
+    ('up_strong', '上補正強'),
+    ('up_weak', '上補正弱'),
     ('standard', '標準'),
-    ('up_weak', '上補正 弱'),
-    ('up_strong', '上補正 強'),
+    ('down_weak', '下補正弱'),
+    ('down_strong', '下補正強'),
 ]
 GLYPH_POSITION_MODE_LABELS = {key: label for key, label in GLYPH_POSITION_MODE_OPTIONS}
 CLOSING_BRACKET_POSITION_MODE_OPTIONS = [
-    ('down_strong', '下補正 強'),
-    ('down_weak', '下補正 弱'),
+    ('up_strong', '上補正強'),
+    ('up_weak', '上補正弱'),
     ('standard', '標準'),
-    ('up_weak', '上補正 弱'),
-    ('up_strong', '上補正 強'),
+    ('down_weak', '下補正弱'),
+    ('down_strong', '下補正強'),
 ]
 CLOSING_BRACKET_POSITION_MODE_LABELS = {key: label for key, label in CLOSING_BRACKET_POSITION_MODE_OPTIONS}
 WAVE_DASH_DRAWING_MODE_OPTIONS = [

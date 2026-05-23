@@ -384,7 +384,9 @@ def normalize_results_path_key(path: object) -> str:
     if windows_like:
         normalized = ntpath.normcase(ntpath.normpath(normalized)).replace('/', '\\')
     else:
-        normalized = os.path.normcase(os.path.normpath(normalized))
+        # On non-Windows paths, case is significant.  Keep the resolved spelling
+        # and only normalize separators / redundant path segments.
+        normalized = os.path.normpath(normalized)
     return normalized
 
 

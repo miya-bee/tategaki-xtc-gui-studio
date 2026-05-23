@@ -124,6 +124,7 @@ def _apply_draw_glyph_position_modes(draw: Any, args: Any) -> Any:
         setattr(draw, '_tategaki_punctuation_position_mode', _glyph_position_mode(getattr(args, 'punctuation_position_mode', 'standard')))
         setattr(draw, '_tategaki_ichi_position_mode', _glyph_position_mode(getattr(args, 'ichi_position_mode', 'standard')))
         setattr(draw, '_tategaki_halfwidth_digit_position_mode', _glyph_position_mode(getattr(args, 'halfwidth_digit_position_mode', 'standard')))
+        setattr(draw, '_tategaki_halfwidth_alpha_position_mode', _glyph_position_mode(getattr(args, 'halfwidth_alpha_position_mode', 'standard')))
         setattr(draw, '_tategaki_tatechuyoko_symbol_position_mode', _glyph_position_mode(getattr(args, 'tatechuyoko_symbol_position_mode', 'standard')))
         setattr(draw, '_tategaki_tatechuyoko_digit_mode', _normalize_tatechuyoko_digit_mode(getattr(args, 'tatechuyoko_digit_mode', '2')))
         setattr(draw, '_tategaki_lower_closing_bracket_position_mode', _glyph_position_mode(getattr(args, 'lower_closing_bracket_position_mode', 'standard')))
@@ -134,54 +135,132 @@ def _apply_draw_glyph_position_modes(draw: Any, args: Any) -> Any:
     return draw
 
 
+@lru_cache(maxsize=128)
+def _glyph_position_adjustment_amount(
+    f_size: int,
+    *,
+    weak: bool = False,
+    weak_factor: float,
+    strong_factor: float,
+    min_weak: int,
+    min_strong: int,
+) -> int:
+    factor = weak_factor if weak else strong_factor
+    return max(min_weak if weak else min_strong, int(round(f_size * factor)))
+
+
+@lru_cache(maxsize=128)
+def _glyph_position_extra_y_for_mode(
+    f_size: int,
+    position_mode: str,
+    *,
+    weak_factor: float,
+    strong_factor: float,
+    min_weak: int,
+    min_strong: int,
+) -> int:
+    mode = _glyph_position_mode(position_mode)
+    if mode == 'standard':
+        return 0
+    if mode == 'down_strong':
+        return _glyph_position_adjustment_amount(
+            f_size,
+            weak=False,
+            weak_factor=weak_factor,
+            strong_factor=strong_factor,
+            min_weak=min_weak,
+            min_strong=min_strong,
+        )
+    if mode == 'down_weak':
+        return _glyph_position_adjustment_amount(
+            f_size,
+            weak=True,
+            weak_factor=weak_factor,
+            strong_factor=strong_factor,
+            min_weak=min_weak,
+            min_strong=min_strong,
+        )
+    if mode == 'up_weak':
+        return -_glyph_position_adjustment_amount(
+            f_size,
+            weak=True,
+            weak_factor=weak_factor,
+            strong_factor=strong_factor,
+            min_weak=min_weak,
+            min_strong=min_strong,
+        )
+    if mode == 'up_strong':
+        return -_glyph_position_adjustment_amount(
+            f_size,
+            weak=False,
+            weak_factor=weak_factor,
+            strong_factor=strong_factor,
+            min_weak=min_weak,
+            min_strong=min_strong,
+        )
+    return 0
+
+
 def _punctuation_adjusted_drop(f_size: int, *, weak: bool = False) -> int:
-    factor = 0.15 if weak else 0.30
-    return max(2 if weak else 3, int(round(f_size * factor)))
+    return _glyph_position_adjustment_amount(
+        f_size,
+        weak=weak,
+        weak_factor=0.15,
+        strong_factor=0.30,
+        min_weak=2,
+        min_strong=3,
+    )
 
 
 def _ichi_adjusted_raise(f_size: int, *, weak: bool = False) -> int:
-    factor = 0.11 if weak else 0.22
-    return max(2 if weak else 3, int(round(f_size * factor)))
+    return _glyph_position_adjustment_amount(
+        f_size,
+        weak=weak,
+        weak_factor=0.11,
+        strong_factor=0.22,
+        min_weak=2,
+        min_strong=3,
+    )
 
 
 LOWER_CLOSING_KAGIKAKKO_POSITION_CHARS = frozenset({'」', '』', '﹂', '﹄'})
 
 
 def _lower_closing_bracket_adjusted_raise(f_size: int, *, weak: bool = False) -> int:
-    factor = 0.18 if weak else 0.35
-    return max(3 if weak else 5, int(round(f_size * factor)))
+    return _glyph_position_adjustment_amount(
+        f_size,
+        weak=weak,
+        weak_factor=0.18,
+        strong_factor=0.35,
+        min_weak=3,
+        min_strong=5,
+    )
 
 
 @lru_cache(maxsize=64)
 def _lower_closing_bracket_extra_y_for_mode(original_char: str, f_size: int, position_mode: str) -> int:
     if original_char not in LOWER_CLOSING_KAGIKAKKO_POSITION_CHARS:
         return 0
-    mode = _glyph_position_mode(position_mode)
-    # PIL / image coordinates use positive Y for downward movement.
-    if mode == 'down_strong':
-        return _lower_closing_bracket_adjusted_raise(f_size)
-    if mode == 'down_weak':
-        return _lower_closing_bracket_adjusted_raise(f_size, weak=True)
-    if mode == 'up_weak':
-        return -_lower_closing_bracket_adjusted_raise(f_size, weak=True)
-    if mode == 'up_strong':
-        return -_lower_closing_bracket_adjusted_raise(f_size)
-    return 0
+    return _glyph_position_extra_y_for_mode(
+        f_size,
+        position_mode,
+        weak_factor=0.18,
+        strong_factor=0.35,
+        min_weak=3,
+        min_strong=5,
+    )
 
 
 @lru_cache(maxsize=64)
 def _punctuation_extra_y_for_mode(f_size: int, position_mode: str) -> int:
-    mode = _glyph_position_mode(position_mode)
-    if mode == 'down_strong':
-        # PIL / image coordinates use positive Y for downward movement.
-        return _punctuation_adjusted_drop(f_size)
-    if mode == 'down_weak':
-        return _punctuation_adjusted_drop(f_size, weak=True)
-    if mode == 'up_weak':
-        return -_punctuation_adjusted_drop(f_size, weak=True)
-    if mode == 'up_strong':
-        return -_punctuation_adjusted_drop(f_size)
-    return 0
+    return _glyph_position_extra_y_for_mode(
+        f_size,
+        position_mode,
+        weak_factor=0.15,
+        strong_factor=0.30,
+        min_weak=2,
+        min_strong=3,
+    )
 
 
 @lru_cache(maxsize=64)
@@ -193,17 +272,14 @@ def _scaled_kutoten_offset_for_mode(f_size: int, position_mode: str) -> tuple[in
 
 @lru_cache(maxsize=64)
 def _ichi_extra_y_for_mode(f_size: int, position_mode: str) -> int:
-    mode = _glyph_position_mode(position_mode)
-    if mode == 'down_strong':
-        # PIL / image coordinates use positive Y for downward movement.
-        return _ichi_adjusted_raise(f_size)
-    if mode == 'down_weak':
-        return _ichi_adjusted_raise(f_size, weak=True)
-    if mode == 'up_weak':
-        return -_ichi_adjusted_raise(f_size, weak=True)
-    if mode == 'up_strong':
-        return -_ichi_adjusted_raise(f_size)
-    return 0
+    return _glyph_position_extra_y_for_mode(
+        f_size,
+        position_mode,
+        weak_factor=0.11,
+        strong_factor=0.22,
+        min_weak=2,
+        min_strong=3,
+    )
 
 
 
@@ -211,26 +287,69 @@ def _ichi_extra_y_for_mode(f_size: int, position_mode: str) -> int:
 def _halfwidth_digit_adjusted_drop(f_size: int, *, weak: bool = False) -> int:
     # v1.3.3.26: 半角数字だけ、フォント差に対する縦位置補正を少し強める。
     # 句読点 / 漢数字 一 / 下鍵括弧 / 波線の補正量は変更しない。
-    factor = 0.14 if weak else 0.28
-    return max(3 if weak else 4, int(round(f_size * factor)))
+    return _glyph_position_adjustment_amount(
+        f_size,
+        weak=weak,
+        weak_factor=0.14,
+        strong_factor=0.28,
+        min_weak=3,
+        min_strong=4,
+    )
 
 
 @lru_cache(maxsize=64)
 def _halfwidth_digit_extra_y_for_mode(f_size: int, position_mode: str) -> int:
-    mode = _glyph_position_mode(position_mode)
-    if mode == 'down_strong':
-        return _halfwidth_digit_adjusted_drop(f_size)
-    if mode == 'down_weak':
-        return _halfwidth_digit_adjusted_drop(f_size, weak=True)
-    if mode == 'up_weak':
-        return -_halfwidth_digit_adjusted_drop(f_size, weak=True)
-    if mode == 'up_strong':
-        return -_halfwidth_digit_adjusted_drop(f_size)
-    return 0
+    return _glyph_position_extra_y_for_mode(
+        f_size,
+        position_mode,
+        weak_factor=0.14,
+        strong_factor=0.28,
+        min_weak=3,
+        min_strong=4,
+    )
+
+
+@lru_cache(maxsize=64)
+def _halfwidth_alpha_adjusted_drop(f_size: int, *, weak: bool = False) -> int:
+    # v1.3.6.40: 半角英字だけを、半角数字/記号とは独立して上下補正する。
+    return _glyph_position_adjustment_amount(
+        f_size,
+        weak=weak,
+        weak_factor=0.14,
+        strong_factor=0.28,
+        min_weak=3,
+        min_strong=4,
+    )
+
+
+@lru_cache(maxsize=64)
+def _halfwidth_alpha_extra_y_for_mode(f_size: int, position_mode: str) -> int:
+    return _glyph_position_extra_y_for_mode(
+        f_size,
+        position_mode,
+        weak_factor=0.14,
+        strong_factor=0.28,
+        min_weak=3,
+        min_strong=4,
+    )
+
+
+def _is_single_halfwidth_alpha_position_char(token: str) -> bool:
+    return isinstance(token, str) and len(token) == 1 and token.isascii() and token.isalpha()
+
+
+_HALFWIDTH_NUMBER_POSITION_CHARS = frozenset('0123456789/.,:;+-=%')
 
 
 def _is_single_halfwidth_digit(token: str) -> bool:
     return isinstance(token, str) and len(token) == 1 and token.isascii() and token.isdigit()
+
+
+def _is_single_halfwidth_number_position_char(token: str) -> bool:
+    # v1.3.6.30: 半角数字の位置補正は、日付・小数・比率などで数字と
+    # 連続して見える半角数値記号も対象にする。
+    # ただし !! / !? / ?? などの感嘆・疑問符ペアは「縦中横記号」補正側で扱う。
+    return isinstance(token, str) and len(token) == 1 and token in _HALFWIDTH_NUMBER_POSITION_CHARS
 
 
 def _is_halfwidth_digit_tatechuyoko_token(token: str) -> bool:
@@ -241,22 +360,26 @@ def _is_halfwidth_digit_tatechuyoko_token(token: str) -> bool:
 def _tatechuyoko_symbol_adjusted_drop(f_size: int, *, weak: bool = False) -> int:
     # v1.3.5: v1.3.4.5 の補正量をわずかに強め、Noto 系フォントなどで
     # 縦中横記号ペアがまだ上寄りに見えるケースに対応する。
-    factor = 0.12 if weak else 0.22
-    return max(3 if weak else 5, int(round(f_size * factor)))
+    return _glyph_position_adjustment_amount(
+        f_size,
+        weak=weak,
+        weak_factor=0.12,
+        strong_factor=0.22,
+        min_weak=3,
+        min_strong=5,
+    )
 
 
 @lru_cache(maxsize=64)
 def _tatechuyoko_symbol_extra_y_for_mode(f_size: int, position_mode: str) -> int:
-    mode = _glyph_position_mode(position_mode)
-    if mode == 'down_strong':
-        return _tatechuyoko_symbol_adjusted_drop(f_size)
-    if mode == 'down_weak':
-        return _tatechuyoko_symbol_adjusted_drop(f_size, weak=True)
-    if mode == 'up_weak':
-        return -_tatechuyoko_symbol_adjusted_drop(f_size, weak=True)
-    if mode == 'up_strong':
-        return -_tatechuyoko_symbol_adjusted_drop(f_size)
-    return 0
+    return _glyph_position_extra_y_for_mode(
+        f_size,
+        position_mode,
+        weak_factor=0.12,
+        strong_factor=0.22,
+        min_weak=3,
+        min_strong=5,
+    )
 
 
 @lru_cache(maxsize=64)
@@ -3016,9 +3139,13 @@ def draw_char_tate(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, 
 
     if draw_kind == 'ascii_center':
         extra_y = 0
-        if (not ruby_mode) and _is_single_halfwidth_digit(original_char):
-            digit_position_mode = _draw_glyph_position_mode(draw, '_tategaki_halfwidth_digit_position_mode')
-            extra_y = _halfwidth_digit_extra_y_for_mode(f_size, digit_position_mode)
+        if not ruby_mode:
+            if _is_single_halfwidth_number_position_char(original_char):
+                digit_position_mode = _draw_glyph_position_mode(draw, '_tategaki_halfwidth_digit_position_mode')
+                extra_y = _halfwidth_digit_extra_y_for_mode(f_size, digit_position_mode)
+            elif _is_single_halfwidth_alpha_position_char(original_char):
+                alpha_position_mode = _draw_glyph_position_mode(draw, '_tategaki_halfwidth_alpha_position_mode')
+                extra_y = _halfwidth_alpha_extra_y_for_mode(f_size, alpha_position_mode)
         draw_centered(
             draw, original_char, (curr_x, curr_y + extra_y), font, f_size,
             is_bold=is_bold, align_to_text_flow=False, is_italic=is_italic,
@@ -3557,10 +3684,12 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
     threshold = _mapping_get_int(args, 'threshold', 128)
     night_mode = _mapping_get_bool(args, 'night_mode', False)
     ruby_hide = _mapping_get_bool(args, 'ruby_hide', False)
+    page_number_enabled = _mapping_get_bool(args, 'page_number_enabled', False)
+    page_number_font_size = _mapping_get_int(args, 'page_number_font_size', 12)
     output_format = _normalize_output_format(args.get('output_format', 'xtc'))
     max_pages = max(1, _mapping_get_int(args, 'max_pages', PREVIEW_PAGE_LIMIT))
 
-    common = (mode, width, height, dither, threshold, night_mode, ruby_hide, output_format, max_pages)
+    common = (mode, width, height, dither, threshold, night_mode, ruby_hide, page_number_enabled, page_number_font_size, output_format, max_pages)
     if mode == 'image':
         file_b64 = args.get('file_b64')
         digest = hashlib.sha1(file_b64.encode('utf-8')).hexdigest() if isinstance(file_b64, str) and file_b64 else '<default-gradient>'
@@ -3580,6 +3709,7 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
         _glyph_position_mode(args.get('punctuation_position_mode', 'standard')),
         _glyph_position_mode(args.get('ichi_position_mode', 'standard')),
         _glyph_position_mode(args.get('halfwidth_digit_position_mode', 'standard')),
+        _glyph_position_mode(args.get('halfwidth_alpha_position_mode', 'standard')),
         _glyph_position_mode(args.get('tatechuyoko_symbol_position_mode', 'standard')),
         _normalize_tatechuyoko_digit_mode(args.get('tatechuyoko_digit_mode', '2')),
         _glyph_position_mode(args.get('lower_closing_bracket_position_mode', 'standard')),
@@ -3692,11 +3822,40 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
         h = _mapping_get_int(_args, 'height', DEF_HEIGHT)
         dither = _mapping_get_bool(_args, 'dither', False)
         threshold = _mapping_get_int(_args, 'threshold', 128)
-        mode = _args.get('mode', 'text')
         night_mode = _mapping_get_bool(_args, 'night_mode', False)
         kinsoku_mode = _normalize_kinsoku_mode(_args.get('kinsoku_mode', 'standard'))
         output_format = _normalize_output_format(_args.get('output_format', 'xtc'))
         max_pages = max(1, _mapping_get_int(_args, 'max_pages', PREVIEW_PAGE_LIMIT))
+        font_value = _args.get('font_file', '')
+        preview_args = ConversionArgs(
+            width=w,
+            height=h,
+            font_size=_mapping_get_int(_args, 'font_size', 26),
+            ruby_size=_mapping_get_int(_args, 'ruby_size', 12),
+            ruby_hide=_mapping_get_bool(_args, 'ruby_hide', False),
+            page_number_enabled=_mapping_get_bool(_args, 'page_number_enabled', False),
+            page_number_font_size=_mapping_get_int(_args, 'page_number_font_size', 12),
+            page_number_font_file=str(font_value or ''),
+            line_spacing=_mapping_get_int(_args, 'line_spacing', 44),
+            margin_t=_mapping_get_int(_args, 'margin_t', 12),
+            margin_b=_mapping_get_int(_args, 'margin_b', 14),
+            margin_r=_mapping_get_int(_args, 'margin_r', 12),
+            margin_l=_mapping_get_int(_args, 'margin_l', 12),
+            dither=dither,
+            night_mode=night_mode,
+            threshold=threshold,
+            kinsoku_mode=kinsoku_mode,
+            punctuation_position_mode=_glyph_position_mode(_args.get('punctuation_position_mode', 'standard')),
+            ichi_position_mode=_glyph_position_mode(_args.get('ichi_position_mode', 'standard')),
+            halfwidth_digit_position_mode=_glyph_position_mode(_args.get('halfwidth_digit_position_mode', 'standard')),
+            halfwidth_alpha_position_mode=_glyph_position_mode(_args.get('halfwidth_alpha_position_mode', 'standard')),
+            tatechuyoko_symbol_position_mode=_glyph_position_mode(_args.get('tatechuyoko_symbol_position_mode', 'standard')),
+            tatechuyoko_digit_mode=_normalize_tatechuyoko_digit_mode(_args.get('tatechuyoko_digit_mode', '2')),
+            lower_closing_bracket_position_mode=_glyph_position_mode(_args.get('lower_closing_bracket_position_mode', 'standard')),
+            wave_dash_drawing_mode=_wave_dash_drawing_mode(_args.get('wave_dash_drawing_mode', 'rotate')),
+            wave_dash_position_mode=_wave_dash_position_mode(_args.get('wave_dash_position_mode', 'standard')),
+            output_format=output_format,
+        )
 
         if mode == 'image':
             _emit_progress(progress_cb, 0, 3, 'プレビュー画像を準備しています…')
@@ -3719,35 +3878,9 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
             truncated = False
             preview_source_count = 1
         else:
-            font_value = _args.get('font_file', "")
             target_path = _args.get('target_path', '')
             preview_sources = list(preview_sources) if preview_sources is not None else _resolve_preview_source_paths(target_path)
             preview_source_count = len(preview_sources)
-            preview_args = ConversionArgs(
-                width=w,
-                height=h,
-                font_size=_mapping_get_int(_args, 'font_size', 26),
-                ruby_size=_mapping_get_int(_args, 'ruby_size', 12),
-                ruby_hide=_mapping_get_bool(_args, 'ruby_hide', False),
-                line_spacing=_mapping_get_int(_args, 'line_spacing', 44),
-                margin_t=_mapping_get_int(_args, 'margin_t', 12),
-                margin_b=_mapping_get_int(_args, 'margin_b', 14),
-                margin_r=_mapping_get_int(_args, 'margin_r', 12),
-                margin_l=_mapping_get_int(_args, 'margin_l', 12),
-                dither=dither,
-                night_mode=night_mode,
-                threshold=threshold,
-                kinsoku_mode=kinsoku_mode,
-                punctuation_position_mode=_glyph_position_mode(_args.get('punctuation_position_mode', 'standard')),
-                ichi_position_mode=_glyph_position_mode(_args.get('ichi_position_mode', 'standard')),
-                halfwidth_digit_position_mode=_glyph_position_mode(_args.get('halfwidth_digit_position_mode', 'standard')),
-                tatechuyoko_symbol_position_mode=_glyph_position_mode(_args.get('tatechuyoko_symbol_position_mode', 'standard')),
-                tatechuyoko_digit_mode=_normalize_tatechuyoko_digit_mode(_args.get('tatechuyoko_digit_mode', '2')),
-                lower_closing_bracket_position_mode=_glyph_position_mode(_args.get('lower_closing_bracket_position_mode', 'standard')),
-                wave_dash_drawing_mode=_wave_dash_drawing_mode(_args.get('wave_dash_drawing_mode', 'rotate')),
-                wave_dash_position_mode=_wave_dash_position_mode(_args.get('wave_dash_position_mode', 'standard')),
-                output_format=output_format,
-            )
             if _preview_target_requires_font(target_path, preview_sources=preview_sources):
                 require_font_path(font_value)
             page_images, truncated = _render_preview_pages_from_target(target_path, font_value, preview_args, max_pages=max_pages, progress_cb=progress_cb, preview_sources=preview_sources)
@@ -3756,6 +3889,9 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
         encoded_pages = []
         for idx, image in enumerate(page_images, 1):
             _emit_progress(progress_cb, idx - 1, total_pages, f'プレビュー画像を整えています… ({idx - 1}/{total_pages} ページ)')
+            overlay = globals().get('apply_page_number_overlay_to_canvas')
+            if callable(overlay):
+                image = overlay(image, preview_args, idx, total_pages)
             processed = _apply_preview_postprocess(
                 image,
                 mode=mode,

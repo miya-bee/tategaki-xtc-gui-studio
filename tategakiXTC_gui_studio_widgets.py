@@ -9,6 +9,7 @@ This module keeps PySide6 widget subclasses outside the main entry module while
 import logging
 import math
 import sys
+import weakref
 from typing import Any, Callable
 
 from PySide6.QtCore import Qt, QPoint, QRect, QRectF, QSize, QTimer, Signal
@@ -179,6 +180,18 @@ class SourceDropLineEdit(QLineEdit):
         self.sourcePathDropped.emit(path)
 
 
+def _scroll_combo_popup_to_top_later(combo: QComboBox, delay_ms: int) -> None:
+    combo_ref = weakref.ref(combo)
+
+    def _scroll_if_alive() -> None:
+        live_combo = combo_ref()
+        if live_combo is None:
+            return
+        _scroll_combo_popup_to_top_helper()(live_combo)
+
+    QTimer.singleShot(delay_ms, _scroll_if_alive)
+
+
 class FontPopupTopComboBox(QComboBox):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -188,10 +201,10 @@ class FontPopupTopComboBox(QComboBox):
         scroll_to_top = _scroll_combo_popup_to_top_helper()
         scroll_to_top(self)
         try:
-            QTimer.singleShot(0, lambda: _scroll_combo_popup_to_top_helper()(self))
-            QTimer.singleShot(25, lambda: _scroll_combo_popup_to_top_helper()(self))
+            _scroll_combo_popup_to_top_later(self, 0)
+            _scroll_combo_popup_to_top_later(self, 25)
             if bool(getattr(self, '_first_popup_shown', False)):
-                QTimer.singleShot(80, lambda: _scroll_combo_popup_to_top_helper()(self))
+                _scroll_combo_popup_to_top_later(self, 80)
         except Exception:
             pass
 

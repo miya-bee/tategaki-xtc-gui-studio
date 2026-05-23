@@ -59,23 +59,58 @@ def _resolve_page_entry(entry: PageEntryLike, default_args: ConversionArgs) -> t
     return cast(Image.Image, entry), default_args, 'ページ'
 
 
+def _set_page_number_runtime(args: ConversionArgs, current: int | None, total: int | None) -> tuple[object, object, bool, bool]:
+    had_current = hasattr(args, '_page_number_current')
+    had_total = hasattr(args, '_page_number_total')
+    old_current = getattr(args, '_page_number_current', None)
+    old_total = getattr(args, '_page_number_total', None)
+    if current is None or total is None:
+        if had_current:
+            delattr(args, '_page_number_current')
+        if had_total:
+            delattr(args, '_page_number_total')
+    else:
+        setattr(args, '_page_number_current', int(current))
+        setattr(args, '_page_number_total', int(total))
+    return old_current, old_total, had_current, had_total
+
+
+def _restore_page_number_runtime(args: ConversionArgs, state: tuple[object, object, bool, bool]) -> None:
+    old_current, old_total, had_current, had_total = state
+    if had_current:
+        setattr(args, '_page_number_current', old_current)
+    elif hasattr(args, '_page_number_current'):
+        delattr(args, '_page_number_current')
+    if had_total:
+        setattr(args, '_page_number_total', old_total)
+    elif hasattr(args, '_page_number_total'):
+        delattr(args, '_page_number_total')
+
+
 def _append_page_entries_to_spool(page_entries: Sequence[PageEntryLike], spooled_pages: 'XTCSpooledPages', args: ConversionArgs, should_cancel: Callable[[], bool] | None = None, progress_cb: Callable[[int, int, str], None] | None = None,
                                   message_builder: Callable[[int, int, PageEntryLike, str], str] | None = None, complete_message: str | Callable[[int, int, str | None], str] | None = None) -> None:
     _refresh_core_globals()
     total_pages = max(1, len(page_entries))
+    renderable_pages = max(1, sum(1 for entry in page_entries if _resolve_page_entry(entry, args)[0] is not None))
     last_message = None
+    rendered_page_index = 0
     for page_index, entry in enumerate(page_entries, 1):
         _raise_if_cancelled(should_cancel)
         page_image, page_args, label = _resolve_page_entry(entry, args)
         if page_image is None:
             continue
+        rendered_page_index += 1
         if callable(message_builder):
             message = message_builder(page_index, total_pages, entry, label)
         else:
             message = f'{label}を変換中… ({page_index}/{total_pages} ページ)'
         last_message = message
         _emit_progress(progress_cb, page_index - 1, total_pages, message)
-        spooled_pages.add_blob(ensure_valid_xt_page_blob(page_image_to_xt_bytes(page_image, page_args.width, page_args.height, page_args), page_image, page_args.width, page_args.height, page_args))
+        runtime_state = _set_page_number_runtime(page_args, rendered_page_index, renderable_pages)
+        try:
+            spooled_pages.add_blob(ensure_valid_xt_page_blob(page_image_to_xt_bytes(page_image, page_args.width, page_args.height, page_args), page_image, page_args.width, page_args.height, page_args))
+        finally:
+            _restore_page_number_runtime(page_args, runtime_state)
 
     if complete_message is None:
         complete_message = f'ページ変換が完了しました。({spooled_pages.page_count} ページ)'
@@ -103,6 +138,7 @@ def _write_page_entries_to_xtc(page_entries: Sequence[PageEntryLike], source_pat
         total_pages = max(1, len(page_entries))
         page_specs: list[tuple[int, int, int]] = []
         last_message = None
+        rendered_page_index = 0
 
         with open(tmp_path, 'w+b') as dst:
             dst.seek(data_off)
@@ -111,13 +147,18 @@ def _write_page_entries_to_xtc(page_entries: Sequence[PageEntryLike], source_pat
                 page_image, page_args, label = _resolve_page_entry(entry, args)
                 if page_image is None:
                     continue
+                rendered_page_index += 1
                 if callable(message_builder):
                     message = message_builder(page_index, total_pages, entry, label)
                 else:
                     message = f'{label}を変換中… ({page_index}/{total_pages} ページ)'
                 last_message = message
                 _emit_progress(progress_cb, page_index - 1, total_pages, message)
-                blob = page_image_to_xt_bytes(page_image, page_args.width, page_args.height, page_args)
+                runtime_state = _set_page_number_runtime(page_args, rendered_page_index, renderable_pages)
+                try:
+                    blob = page_image_to_xt_bytes(page_image, page_args.width, page_args.height, page_args)
+                finally:
+                    _restore_page_number_runtime(page_args, runtime_state)
                 dst.write(blob)
                 page_specs.append((len(blob), page_args.width, page_args.height))
 
@@ -145,7 +186,16 @@ def _write_page_entries_to_xtc(page_entries: Sequence[PageEntryLike], source_pat
             dst.write(header)
             dst.write(idx_table)
             dst.flush()
+            os.fsync(dst.fileno())
 
+        _verify_xt_container_file(
+            tmp_path,
+            int(getattr(args, 'width', page_specs[0][1] if page_specs else 0)),
+            int(getattr(args, 'height', page_specs[0][2] if page_specs else 0)),
+            _normalize_output_format(getattr(args, 'output_format', 'xtc')),
+            expected_count=len(page_specs),
+            expected_page_specs=page_specs,
+        )
         os.replace(tmp_path, out_path)
         _emit_progress(progress_cb, renderable_pages + 1, renderable_pages + 1, f'XTCを書き出しました。({len(page_specs)} ページ)')
         return out_path

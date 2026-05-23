@@ -25,6 +25,10 @@ def _default_value(key: str, fallback: object) -> object:
     return _DEFAULT_SETTINGS_VALUES.get(key, fallback)
 
 
+def _settings_default(key: str) -> object:
+    return _DEFAULT_SETTINGS_VALUES[key]
+
+
 _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('profile', _default_value('profile', 'x4')),
     ('actual_size', _default_value('actual_size', False)),
@@ -34,6 +38,11 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('font_size', _default_value('font_size', 26)),
     ('ruby_size', _default_value('ruby_size', 12)),
     ('ruby_hide', _default_value('ruby_hide', False)),
+    ('page_number_enabled', _default_value('page_number_enabled', False)),
+    ('page_number_font_size', _default_value('page_number_font_size', 12)),
+    ('page_number_margin_auto_active', _settings_default('page_number_margin_auto_active')),
+    ('page_number_margin_auto_base_value', _settings_default('page_number_margin_auto_base_value')),
+    ('page_number_margin_auto_value', _settings_default('page_number_margin_auto_value')),
     ('line_spacing', _default_value('line_spacing', 44)),
     ('margin_t', _default_value('margin_t', 12)),
     ('margin_b', _default_value('margin_b', 14)),
@@ -52,11 +61,13 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('punctuation_position_mode', _default_value('punctuation_position_mode', 'standard')),
     ('ichi_position_mode', _default_value('ichi_position_mode', 'standard')),
     ('halfwidth_digit_position_mode', _default_value('halfwidth_digit_position_mode', 'standard')),
+    ('halfwidth_alpha_position_mode', _default_value('halfwidth_alpha_position_mode', 'standard')),
     ('tatechuyoko_symbol_position_mode', _default_value('tatechuyoko_symbol_position_mode', 'standard')),
     ('lower_closing_bracket_position_mode', _default_value('lower_closing_bracket_position_mode', 'standard')),
     ('wave_dash_drawing_mode', _default_value('wave_dash_drawing_mode', 'rotate')),
     ('wave_dash_position_mode', _default_value('wave_dash_position_mode', 'standard')),
     ('target', _default_value('target', '')),
+    ('output_dir', _default_value('output_dir', '')),
     ('main_view_mode', _default_value('main_view_mode', 'font')),
     ('bottom_tab_index', _default_value('bottom_tab_index', 0)),
 )
@@ -139,6 +150,7 @@ def build_settings_restore_payload(
     payload['width'] = width
     payload['height'] = height
     payload['target'] = normalize_target_path_text(str(payload.get('target') or ''))
+    payload['output_dir'] = normalize_target_path_text(str(payload.get('output_dir') or ''))
     payload['font_file'] = normalize_font_setting_value(payload.get('font_file'), default_font_name)
     return payload
 
@@ -152,6 +164,8 @@ def build_settings_ui_apply_defaults(
     font_size: object,
     ruby_size: object,
     ruby_hide: object = False,
+    page_number_enabled: object = False,
+    page_number_font_size: object = 12,
     line_spacing: object,
     margin_t: object,
     margin_b: object,
@@ -169,6 +183,7 @@ def build_settings_ui_apply_defaults(
     punctuation_position_mode: object = 'standard',
     ichi_position_mode: object = 'standard',
     halfwidth_digit_position_mode: object = 'standard',
+    halfwidth_alpha_position_mode: object = 'standard',
     tatechuyoko_symbol_position_mode: object = 'standard',
     lower_closing_bracket_position_mode: object = 'standard',
     wave_dash_drawing_mode: object = 'rotate',
@@ -183,6 +198,8 @@ def build_settings_ui_apply_defaults(
         'font_size': studio_logic._config_int_value(font_size, 0),
         'ruby_size': studio_logic._config_int_value(ruby_size, 0),
         'ruby_hide': studio_logic._config_bool_value(ruby_hide, bool(_DEFAULT_RENDER_SETTINGS['ruby_hide'])),
+        'page_number_enabled': studio_logic._config_bool_value(page_number_enabled, bool(_DEFAULT_RENDER_SETTINGS['page_number_enabled'])),
+        'page_number_font_size': studio_logic._config_int_value(page_number_font_size, _DEFAULT_RENDER_SETTINGS['page_number_font_size']),
         'line_spacing': studio_logic._config_int_value(line_spacing, 0),
         'margin_t': studio_logic._config_int_value(margin_t, 0),
         'margin_b': studio_logic._config_int_value(margin_b, 0),
@@ -200,6 +217,7 @@ def build_settings_ui_apply_defaults(
         'punctuation_position_mode': punctuation_position_mode,
         'ichi_position_mode': ichi_position_mode,
         'halfwidth_digit_position_mode': halfwidth_digit_position_mode,
+        'halfwidth_alpha_position_mode': halfwidth_alpha_position_mode,
         'tatechuyoko_symbol_position_mode': tatechuyoko_symbol_position_mode,
         'lower_closing_bracket_position_mode': lower_closing_bracket_position_mode,
         'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(wave_dash_drawing_mode),
@@ -337,6 +355,7 @@ def build_current_preset_payload(
         'height': studio_logic._config_int_value(render_settings.get('height'), _DEFAULT_RENDER_SETTINGS['height']),
         'font_size': studio_logic._config_int_value(render_settings.get('font_size'), _DEFAULT_RENDER_SETTINGS['font_size']),
         'ruby_size': studio_logic._config_int_value(render_settings.get('ruby_size'), _DEFAULT_RENDER_SETTINGS['ruby_size']),
+        'page_number_font_size': studio_logic._config_int_value(render_settings.get('page_number_font_size'), _DEFAULT_RENDER_SETTINGS['page_number_font_size']),
         'line_spacing': studio_logic._config_int_value(render_settings.get('line_spacing'), _DEFAULT_RENDER_SETTINGS['line_spacing']),
         'margin_t': studio_logic._config_int_value(render_settings.get('margin_t'), _DEFAULT_RENDER_SETTINGS['margin_t']),
         'margin_b': studio_logic._config_int_value(render_settings.get('margin_b'), _DEFAULT_RENDER_SETTINGS['margin_b']),
@@ -345,6 +364,7 @@ def build_current_preset_payload(
         'threshold': studio_logic._config_int_value(render_settings.get('threshold'), _DEFAULT_RENDER_SETTINGS['threshold']),
         'night_mode': studio_logic._config_bool_value(render_settings.get('night_mode'), bool(_DEFAULT_RENDER_SETTINGS['night_mode'])),
         'ruby_hide': studio_logic._config_bool_value(render_settings.get('ruby_hide'), bool(_DEFAULT_RENDER_SETTINGS['ruby_hide'])),
+        'page_number_enabled': studio_logic._config_bool_value(render_settings.get('page_number_enabled'), bool(_DEFAULT_RENDER_SETTINGS['page_number_enabled'])),
         'dither': studio_logic._config_bool_value(render_settings.get('dither'), bool(_DEFAULT_RENDER_SETTINGS['dither'])),
         'kinsoku_mode': str(render_settings.get('kinsoku_mode') or fallback_kinsoku_mode),
         'output_format': str(render_settings.get('output_format') or fallback_output_format),
@@ -352,6 +372,7 @@ def build_current_preset_payload(
         'punctuation_position_mode': str(render_settings.get('punctuation_position_mode') or _DEFAULT_RENDER_SETTINGS['punctuation_position_mode']),
         'ichi_position_mode': str(render_settings.get('ichi_position_mode') or _DEFAULT_RENDER_SETTINGS['ichi_position_mode']),
         'halfwidth_digit_position_mode': str(render_settings.get('halfwidth_digit_position_mode') or _DEFAULT_RENDER_SETTINGS['halfwidth_digit_position_mode']),
+        'halfwidth_alpha_position_mode': str(render_settings.get('halfwidth_alpha_position_mode') or _DEFAULT_RENDER_SETTINGS['halfwidth_alpha_position_mode']),
         'tatechuyoko_symbol_position_mode': str(render_settings.get('tatechuyoko_symbol_position_mode') or _DEFAULT_RENDER_SETTINGS['tatechuyoko_symbol_position_mode']),
         'lower_closing_bracket_position_mode': str(render_settings.get('lower_closing_bracket_position_mode') or _DEFAULT_RENDER_SETTINGS['lower_closing_bracket_position_mode']),
         'wave_dash_drawing_mode': str(render_settings.get('wave_dash_drawing_mode') or fallback_wave_dash_drawing_mode),
@@ -378,6 +399,8 @@ def build_live_preset_widget_payload(
     font_size: object,
     ruby_size: object,
     ruby_hide: object = False,
+    page_number_enabled: object = False,
+    page_number_font_size: object = 12,
     line_spacing: object,
     margin_t: object,
     margin_b: object,
@@ -392,6 +415,7 @@ def build_live_preset_widget_payload(
     punctuation_position_mode: object = None,
     ichi_position_mode: object = None,
     halfwidth_digit_position_mode: object = None,
+    halfwidth_alpha_position_mode: object = None,
     tatechuyoko_symbol_position_mode: object = None,
     lower_closing_bracket_position_mode: object = None,
     wave_dash_drawing_mode: object = None,
@@ -420,6 +444,10 @@ def build_live_preset_widget_payload(
         payload['ruby_size'] = studio_logic._config_int_value(ruby_size, _DEFAULT_RENDER_SETTINGS['ruby_size'])
     if ruby_hide is not None:
         payload['ruby_hide'] = studio_logic._config_bool_value(ruby_hide, bool(_DEFAULT_RENDER_SETTINGS['ruby_hide']))
+    if page_number_enabled is not None:
+        payload['page_number_enabled'] = studio_logic._config_bool_value(page_number_enabled, bool(_DEFAULT_RENDER_SETTINGS['page_number_enabled']))
+    if page_number_font_size is not None:
+        payload['page_number_font_size'] = studio_logic._config_int_value(page_number_font_size, _DEFAULT_RENDER_SETTINGS['page_number_font_size'])
     if line_spacing is not None:
         payload['line_spacing'] = studio_logic._config_int_value(line_spacing, _DEFAULT_RENDER_SETTINGS['line_spacing'])
     if margin_t is not None:
@@ -461,6 +489,12 @@ def build_live_preset_widget_payload(
         payload['halfwidth_digit_position_mode'] = normalize_choice_value(
             halfwidth_digit_position_mode,
             str(_DEFAULT_RENDER_SETTINGS['halfwidth_digit_position_mode']),
+            allowed_glyph_position_modes,
+        )
+    if halfwidth_alpha_position_mode is not None:
+        payload['halfwidth_alpha_position_mode'] = normalize_choice_value(
+            halfwidth_alpha_position_mode,
+            str(_DEFAULT_RENDER_SETTINGS['halfwidth_alpha_position_mode']),
             allowed_glyph_position_modes,
         )
     if tatechuyoko_symbol_position_mode is not None:

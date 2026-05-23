@@ -193,6 +193,8 @@ def build_preview_payload(
         'font_size': render_settings_base['font_size'],
         'ruby_size': render_settings_base['ruby_size'],
         'ruby_hide': 'true' if studio_logic._config_bool_value(render_settings_base.get('ruby_hide'), False) else 'false',
+        'page_number_enabled': 'true' if studio_logic._config_bool_value(render_settings_base.get('page_number_enabled'), False) else 'false',
+        'page_number_font_size': studio_logic._config_int_value(render_settings_base.get('page_number_font_size'), 12),
         'line_spacing': render_settings_base['line_spacing'],
         'margin_t': render_settings_base['margin_t'],
         'margin_b': render_settings_base['margin_b'],
@@ -208,6 +210,7 @@ def build_preview_payload(
         'punctuation_position_mode': render_settings_base.get('punctuation_position_mode', 'standard'),
         'ichi_position_mode': render_settings_base.get('ichi_position_mode', 'standard'),
         'halfwidth_digit_position_mode': render_settings_base.get('halfwidth_digit_position_mode', 'standard'),
+        'halfwidth_alpha_position_mode': render_settings_base.get('halfwidth_alpha_position_mode', 'standard'),
         'tatechuyoko_symbol_position_mode': render_settings_base.get('tatechuyoko_symbol_position_mode', 'standard'),
         'lower_closing_bracket_position_mode': render_settings_base.get('lower_closing_bracket_position_mode', 'standard'),
         'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(
@@ -251,11 +254,34 @@ def build_preview_request_plan(
 
 
 def build_preview_start_context(*, preview_limit: int) -> dict[str, Any]:
-    """Build button/status state to apply when preview generation starts."""
+    """Build button/status/progress state to apply when preview generation starts."""
     return {
         'button_enabled': False,
         'button_text': '生成中…',
         'status_message': studio_logic.build_preview_status_message('running', preview_limit=preview_limit),
+        'progress_visible': True,
+        'progress_busy': True,
+        'progress_current': 0,
+        'progress_total': 0,
+    }
+
+
+def build_preview_pending_context(
+    *,
+    message: object = 'プレビュー更新を準備しています…',
+) -> dict[str, Any]:
+    """Build status/progress state while a debounced preview update is queued.
+
+    Live-preview changes such as output-format switches are intentionally
+    debounced.  Without an immediate visible busy indicator, a large EPUB
+    preview can look frozen or runaway before the actual refresh starts.
+    """
+    return {
+        'status_message': str(message or 'プレビュー更新を準備しています…'),
+        'progress_visible': True,
+        'progress_busy': True,
+        'progress_current': 0,
+        'progress_total': 0,
     }
 
 
@@ -266,22 +292,32 @@ def build_preview_progress_context(
     *,
     preview_limit: int,
 ) -> dict[str, Any]:
-    """Build preview progress label state without touching Qt widgets."""
+    """Build preview progress label/bar state without touching Qt widgets."""
+    current_value = max(0, studio_logic._config_int_value(current, 0))
+    total_value = max(0, studio_logic._config_int_value(total, 0))
     return {
         'status_message': studio_logic.build_preview_progress_message(
-            current,
-            total,
+            current_value,
+            total_value,
             message,
             preview_limit=preview_limit,
         ),
+        'progress_visible': True,
+        'progress_busy': total_value <= 0,
+        'progress_current': current_value,
+        'progress_total': total_value,
     }
 
 
 def build_preview_finish_context() -> dict[str, Any]:
-    """Build button state to apply after preview generation ends."""
+    """Build button/progress state to apply after preview generation ends."""
     return {
         'button_enabled': True,
         'button_text': 'プレビュー更新',
+        'progress_visible': False,
+        'progress_busy': False,
+        'progress_current': 0,
+        'progress_total': 1,
     }
 
 

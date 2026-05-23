@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ntpath
 import os
+from urllib.parse import unquote
 import math
 from collections.abc import Collection
 from pathlib import Path, PureWindowsPath
@@ -36,6 +37,8 @@ class WorkerConversionSettings(TypedDict, total=False):
     font_size: ConfigScalar
     ruby_size: ConfigScalar
     ruby_hide: ConfigScalar
+    page_number_enabled: ConfigScalar
+    page_number_font_size: ConfigScalar
     line_spacing: ConfigScalar
     margin_t: ConfigScalar
     margin_b: ConfigScalar
@@ -49,6 +52,7 @@ class WorkerConversionSettings(TypedDict, total=False):
     punctuation_position_mode: str
     ichi_position_mode: str
     halfwidth_digit_position_mode: str
+    halfwidth_alpha_position_mode: str
     tatechuyoko_symbol_position_mode: str
     lower_closing_bracket_position_mode: str
     wave_dash_drawing_mode: str
@@ -248,6 +252,8 @@ __all__ = [
     'extract_error_headline',
     'summarize_error_headlines',
     'collect_conversion_counts',
+    'resolve_explicit_output_root',
+    'resolve_conversion_output_root',
     'resolve_open_folder_target',
     'build_conversion_summary',
     'coerce_postprocess_warning_messages',
@@ -262,6 +268,9 @@ def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
         font_size=_int_config_value(cfg, 'font_size', 26),
         ruby_size=_int_config_value(cfg, 'ruby_size', 12),
         ruby_hide=_bool_config_value(cfg, 'ruby_hide', False),
+        page_number_enabled=_bool_config_value(cfg, 'page_number_enabled', False),
+        page_number_font_size=_int_config_value(cfg, 'page_number_font_size', 12),
+        page_number_font_file=_str_config_value(cfg, 'font_file', ''),
         line_spacing=_int_config_value(cfg, 'line_spacing', 44),
         margin_t=_int_config_value(cfg, 'margin_t', 12),
         margin_b=_int_config_value(cfg, 'margin_b', 14),
@@ -275,6 +284,7 @@ def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
         punctuation_position_mode=_str_config_value(cfg, 'punctuation_position_mode', 'standard'),
         ichi_position_mode=_str_config_value(cfg, 'ichi_position_mode', 'standard'),
         halfwidth_digit_position_mode=_str_config_value(cfg, 'halfwidth_digit_position_mode', 'standard'),
+        halfwidth_alpha_position_mode=_str_config_value(cfg, 'halfwidth_alpha_position_mode', 'standard'),
         tatechuyoko_symbol_position_mode=_str_config_value(cfg, 'tatechuyoko_symbol_position_mode', 'standard'),
         lower_closing_bracket_position_mode=_str_config_value(cfg, 'lower_closing_bracket_position_mode', 'standard'),
         wave_dash_drawing_mode=core._wave_dash_drawing_mode(_str_config_value(cfg, 'wave_dash_drawing_mode', 'rotate')),
@@ -303,6 +313,25 @@ _WINDOWS_RESERVED_FILENAMES = frozenset({
 })
 
 
+def _decode_percent_escaped_filename_stem(stem: str) -> str:
+    """Return a human-readable file stem for URL-escaped source names.
+
+    Some file pickers / drag-and-drop routes can preserve a URL-style name
+    such as ``%5B夏目漱石%5D 三四郎``.  Showing that text in the output-name
+    prompt is confusing, so decode percent escapes before the normal Windows
+    filename validation step.  Invalid decoded separators such as ``%2F`` are
+    still rejected by ``sanitize_output_stem`` below.
+    """
+    text = str(stem or '')
+    if '%' not in text:
+        return text
+    try:
+        decoded = unquote(text)
+    except Exception:
+        return text
+    return decoded if decoded else text
+
+
 def sanitize_output_stem(name: str) -> str:
     raw = str(name or '').strip()
     if not raw:
@@ -310,6 +339,7 @@ def sanitize_output_stem(name: str) -> str:
     basename = ntpath.basename(raw)
     basename = os.path.basename(basename)
     stem = Path(basename).stem.strip().rstrip(' .')
+    stem = _decode_percent_escaped_filename_stem(stem).strip().rstrip(' .')
     if not stem or stem in {'.', '..'}:
         return ''
     if stem.startswith('.'):
@@ -330,6 +360,39 @@ def normalize_target_path_text(value: object) -> str:
         if quoted:
             return quoted
     return raw
+
+
+def resolve_explicit_output_root(output_dir_raw: object) -> Path | None:
+    """Return a validated explicit output folder, or None for source-folder output.
+
+    Keep this filesystem-facing decision in worker_logic so GUI/worker call sites
+    share the same behavior: blank output_dir means "same folder as source",
+    non-blank values must already exist and must be directories.
+    """
+    # Preserve the pre-helper behavior for defensive/falsy config values
+    # such as False or 0: treat them the same as a blank output_dir.
+    if not output_dir_raw:
+        return None
+    normalized = normalize_target_path_text(output_dir_raw)
+    if not normalized:
+        return None
+    candidate = Path(normalized)
+    if not candidate.exists():
+        raise RuntimeError(f'保存先フォルダが見つかりません: {candidate}')
+    if not candidate.is_dir():
+        raise RuntimeError(f'保存先がフォルダではありません: {candidate}')
+    return candidate
+
+
+def resolve_conversion_output_root(target_path: Path, explicit_output_root: Path | None) -> Path | None:
+    """Return the output_root argument for conversion planning.
+
+    Folder-batch conversion keeps the input folder as the root so relative output
+    structure is preserved.  Single-file conversion uses the explicit output
+    folder when one was selected, otherwise the existing source-folder behavior
+    is left unchanged by returning None.
+    """
+    return target_path if target_path.is_dir() else explicit_output_root
 
 
 
@@ -355,16 +418,23 @@ def plan_output_path_for_target(
     if requested_name and not use_custom:
         warning = '出力名の指定は単一ファイル変換時のみ使用します。今回は自動命名にします。'
     desired: Path | None
+    ext = '.xtch' if str(getattr(args, 'output_format', 'xtc')).strip().lower() == 'xtch' else '.xtc'
     if use_custom:
         stem = sanitize_output_stem(requested_name)
         if not stem:
             raise RuntimeError('出力ファイル名が不正です。')
-        ext = '.xtch' if str(getattr(args, 'output_format', 'xtc')).strip().lower() == 'xtch' else '.xtc'
         desired_base = output_root if output_root else path.parent
         desired = desired_base / f'{stem}{ext}'
         out_path, plan = apply_conflict_strategy(desired, conflict_strategy)
         return out_path, plan, warning
-    desired = output_path_getter(path, str(getattr(args, 'output_format', 'xtc')), output_root)
+    # For a single-file conversion, an explicit save folder may be completely
+    # outside the source folder.  In that case use the source stem directly
+    # instead of the folder-batch-oriented ``_outside_<name>_<hash>`` fallback.
+    if output_root is not None and supported_count == 1:
+        stem = sanitize_output_stem(path.stem) or 'output'
+        desired = Path(output_root) / f'{stem}{ext}'
+    else:
+        desired = output_path_getter(path, str(getattr(args, 'output_format', 'xtc')), output_root)
     if not desired:
         return None, None, warning
     out_path, plan = apply_conflict_strategy(desired, conflict_strategy)
@@ -386,13 +456,15 @@ def reserve_unique_output_path_for_batch(
     desired_path = Path(desired_raw)
     stem = desired_path.stem
     suffix = desired_path.suffix
-    idx = 1
-    while True:
-        candidate = desired_path.with_name(f'{stem}({idx}){suffix}')
-        candidate_key = _normalize_path_match_key(candidate) or str(candidate)
-        if candidate_key not in reserved and not candidate.exists():
+    candidate: Path | None = None
+    for idx in range(1, 10000):
+        current_candidate = desired_path.with_name(f'{stem}({idx}){suffix}')
+        candidate_key = _normalize_path_match_key(current_candidate) or str(current_candidate)
+        if candidate_key not in reserved and not current_candidate.exists():
+            candidate = current_candidate
             break
-        idx += 1
+    if candidate is None:
+        raise RuntimeError(f'連番の保存先候補を作成できませんでした: {desired_path.name}')
 
     new_plan: ConflictPlan | None
     if isinstance(plan, dict):
@@ -552,37 +624,52 @@ def _parent_for_path_like(value: str | bytes | os.PathLike[str] | os.PathLike[by
     return Path(raw).parent
 
 
+def _resolve_converted_output_parent(
+    input_path: Path,
+    converted_item: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+) -> Path | None:
+    raw = _normalized_path_text(converted_item).strip()
+    if not raw:
+        return None
+    parent = _parent_for_path_like(converted_item)
+    if _is_absolute_path_text(raw):
+        return Path(ntpath.normpath(str(parent))) if _is_windows_like_path(str(parent)) else Path(os.path.normpath(str(parent)))
+    base_dir: Path | None = None
+    try:
+        if input_path.is_dir():
+            base_dir = input_path
+        elif input_path.is_file():
+            base_dir = input_path.parent
+    except Exception:
+        base_dir = None
+    if base_dir is None:
+        return Path(ntpath.normpath(str(parent))) if _is_windows_like_path(str(parent)) else Path(os.path.normpath(str(parent)))
+    if _is_windows_like_path(raw):
+        rel_parts = [part for part in PureWindowsPath(str(parent)).parts if part not in ('', '.')]
+        return base_dir.joinpath(*rel_parts) if rel_parts else base_dir
+    parent_text = str(parent)
+    if parent_text in ('', '.'):
+        return base_dir
+    return base_dir / parent
+
+
 def resolve_open_folder_target(
     input_path: Path,
     converted_files: Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes]] | str | bytes | os.PathLike[str] | os.PathLike[bytes] | None = None,
 ) -> Path | None:
-    # Single-file conversion should return the source file folder.
-    # This keeps the post-conversion Explorer target aligned with the user's
-    # current source context even when the actual output path is redirected or
-    # auto-renamed elsewhere. Folder-batch conversion keeps the older output
-    # parent resolution below.
-    if input_path.is_file():
-        return input_path.parent
+    # Prefer the actual output parent when conversion produced files.  This is
+    # important for single-file conversions where the user selected an explicit
+    # save folder outside the source folder; the manual [保存先を開く] button must
+    # open the folder that received the .xtc/.xtch, not the source folder.
     if isinstance(converted_files, (str, bytes, bytearray, os.PathLike)):
         converted_items: Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes]] = [converted_files]
     else:
         converted_items = converted_files or []
-    base_dir: Path | None = None
-    if input_path.is_dir():
-        base_dir = input_path
     parents_by_key: dict[str, Path] = {}
     for item in converted_items:
-        raw = _normalized_path_text(item).strip()
-        if not raw:
+        parent = _resolve_converted_output_parent(input_path, item)
+        if parent is None:
             continue
-        parent = _parent_for_path_like(item)
-        if base_dir is not None and not _is_absolute_path_text(raw):
-            if _is_windows_like_path(raw):
-                rel_parts = [part for part in PureWindowsPath(str(parent)).parts if part not in ('', '.')]
-                parent = base_dir.joinpath(*rel_parts) if rel_parts else base_dir
-            else:
-                parent = base_dir / parent
-        parent = Path(ntpath.normpath(str(parent))) if _is_windows_like_path(str(parent)) else Path(os.path.normpath(str(parent)))
         key = _normalize_path_match_key(parent)
         if not key:
             continue

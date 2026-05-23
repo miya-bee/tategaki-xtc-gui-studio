@@ -139,12 +139,34 @@ def build_conversion_error_report(source_path: PathLike | None, exc: BaseExcepti
         headline = '入力ファイルを開けませんでした。'
         hint = 'ファイルが移動・削除されていないか確認してください。'
     elif suffix == '.epub':
-        if '本文章が見つかりません' in raw_detail:
+        raw_lower = raw_detail.lower()
+        if 'zipとして開けません' in raw_detail or 'badzipfile' in raw_lower or 'zip file' in raw_lower:
+            headline = 'EPUB を ZIP として開けませんでした。'
+            hint = 'ファイルが破損しているか、拡張子だけが .epub になっていないか確認してください。'
+        elif 'container.xml' in raw_detail:
+            headline = 'EPUB の構造ファイル container.xml に問題があります。'
+            hint = 'EPUB の META-INF/container.xml が存在するか、OPF への参照が壊れていないか確認してください。'
+        elif 'opf' in raw_lower or 'パッケージ文書' in raw_detail:
+            headline = 'EPUB の OPF パッケージ文書に問題があります。'
+            hint = 'content.opf などのパッケージ文書が存在し、XMLとして読めるか確認してください。'
+        elif 'manifest' in raw_lower:
+            headline = 'EPUB の manifest に問題があります。'
+            hint = '本文ファイルや画像の一覧が空、または spine からの参照先が欠けていないか確認してください。'
+        elif 'spine が' in raw_detail or 'spine は' in raw_detail or 'spine に' in raw_detail or '読み順情報 spine' in raw_detail:
+            headline = 'EPUB の読み順情報 spine に問題があります。'
+            hint = '本文章が spine に含まれている EPUB か、linear="no" の補助ページだけになっていないか確認してください。'
+        elif 'drm' in raw_lower or 'encryption.xml' in raw_lower or '暗号化' in raw_detail:
+            headline = 'EPUB が DRM付き、または暗号化要素を含む可能性があります。'
+            hint = 'DRM付きEPUBには対応していません。購入サイトの制限や暗号化の有無を確認してください。'
+        elif '画像' in raw_detail and ('見つかりません' in raw_detail or 'cannot identify image file' in raw_lower or 'broken data stream' in raw_lower):
+            headline = 'EPUB 内の画像参照または画像データに問題があります。'
+            hint = '画像リンク切れ、破損画像、未対応画像形式が混在していないか確認してください。'
+        elif '本文章が見つかりません' in raw_detail or '本文が見つかりません' in raw_detail:
             headline = 'EPUB の本文が見つかりませんでした。'
             hint = '本文が spine に含まれている EPUB か確認してください。'
-        elif 'pagebreak' in raw_detail.lower() or 'html' in raw_detail.lower() or '章' in stage:
+        elif 'pagebreak' in raw_lower or 'html' in raw_lower or 'xhtml' in raw_lower or '章' in stage:
             headline = 'EPUB の本文描画中に失敗しました。'
-            hint = '該当章の HTML / CSS が特殊な可能性があります。問題の EPUB をログと一緒に確認してください。'
+            hint = '該当章の HTML / XHTML / CSS が特殊、または壊れている可能性があります。問題の EPUB をログと一緒に確認してください。'
         else:
             headline = 'EPUB の読み込みまたは解析に失敗しました。'
             hint = 'EPUB が壊れていないか、DRM 付きでないか、必要ライブラリが入っているか確認してください。'

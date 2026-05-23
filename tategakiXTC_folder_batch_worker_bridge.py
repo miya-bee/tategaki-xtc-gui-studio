@@ -225,10 +225,6 @@ def make_worker_bridge_converter(
                 log_cb(f'[WORKER] {item.relative_source_path} -> {output}')
 
             def bridged_progress(current: int, total: int, message: str) -> None:
-                if should_cancel_cb is not None and should_cancel_cb():
-                    stopper = getattr(worker, 'stop', None)
-                    if callable(stopper):
-                        stopper()
                 if inner_progress_cb is not None:
                     inner_progress_cb(current, total, message)
                 if should_cancel_cb is not None and should_cancel_cb():

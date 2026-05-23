@@ -12,8 +12,10 @@ else:
         from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
     except Exception:  # pragma: no cover - runtime fallback for test environments without PySide6
         class _QtFallback:
-            NoFocus = 'no_focus'
-            FocusPolicy = object
+            # Match Qt's numeric no-focus policy closely enough for headless tests
+            # without leaking the user-facing token string into runtime fallback.
+            NoFocus = 0
+            FocusPolicy = int
 
         class _MissingQtWidget:
             def __init__(self, *args: Any, **kwargs: Any) -> None:

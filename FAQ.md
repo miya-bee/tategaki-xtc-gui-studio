@@ -147,6 +147,8 @@ py -3.10 -m pip install ebooklib beautifulsoup4
 
 通常の依存関係は `requirements.txt` から入れてください。
 
+EPUB自体が壊れている場合は、`container.xml`、OPF、`manifest`、`spine`、本文XHTML参照など、原因に近いメッセージをログへ表示します。`DRM` や `encryption.xml` が表示される場合、DRM付きEPUBまたは暗号化/難読化されたリソースを含むEPUBの可能性があります。DRM付きEPUBには対応していません。
+
 ## 古い版で作った画像由来の .xtc が開けません
 
 v1.2.2.25 以前の開発版で画像をフォルダ一括変換した `.xtc` は、XTC / XTCH コンテナではなくページ blob として保存されている場合があります。
