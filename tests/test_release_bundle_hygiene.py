@@ -85,6 +85,22 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
         zf.writestr(self._zipinfo_raw_member(member_name), data)
 
 
+
+    def test_required_sample_text_files_are_release_members(self):
+        required_samples = set(rel.REQUIRED_PROJECT_SAMPLE_TEXT_FILES)
+        self.assertIn('sample_texts/README_sample_texts.md', required_samples)
+        self.assertIn('sample_texts/tategaki_halfwidth_fullwidth_alpha_compare_test_text_v1.txt', required_samples)
+        for rel_path in required_samples:
+            self.assertIn(rel_path, rel.REQUIRED_PROJECT_RELEASE_FILES)
+            self.assertTrue((Path(rel.__file__).resolve().parent / rel_path).exists(), rel_path)
+
+    def test_sample_texts_include_halfwidth_fullwidth_alpha_compare_text(self):
+        sample_path = Path(rel.__file__).resolve().parent / 'sample_texts' / 'tategaki_halfwidth_fullwidth_alpha_compare_test_text_v1.txt'
+        text = sample_path.read_text(encoding='utf-8')
+        self.assertIn('半角 XTC と全角 ＸＴＣ', text)
+        self.assertIn('GitHub と全角 ＧｉｔＨｕｂ', text)
+        self.assertIn('全角英字は半角英字補正では動かない', text)
+
     def test_python_gui_release_excludes_work_payload_web_trial_files(self):
         prohibited = set(rel.PROHIBITED_WEB_RELEASE_FILES)
         self.assertIn('requirements-web.txt', prohibited)

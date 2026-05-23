@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import re
 import unittest
 
 import tategakiXTC_gui_settings_controller as controller
@@ -33,6 +34,33 @@ class SettingsControllerRegressionTests(unittest.TestCase):
         self.assertIn(('font_file', 'safe.ttf'), seen)
         self.assertIn(('preview_page_limit', 5), seen)
 
+    def test_page_number_margin_auto_defaults_come_from_constants(self):
+        keys = (
+            'page_number_margin_auto_active',
+            'page_number_margin_auto_base_value',
+            'page_number_margin_auto_value',
+        )
+        for key in keys:
+            self.assertIn(key, controller.studio_constants.DEFAULT_UI_SETTINGS)
+            self.assertIn(key, controller.studio_constants.DEFAULT_SETTINGS_VALUES)
+
+        seen: dict[str, object] = {}
+
+        def reader(key: str, default: object) -> object:
+            seen[key] = default
+            return default
+
+        payload = controller.build_settings_restore_raw_payload(
+            read_default_value=reader,
+            default_font_name='safe.ttf',
+            default_preview_page_limit=5,
+        )
+
+        for key in keys:
+            expected = controller.studio_constants.DEFAULT_UI_SETTINGS[key]
+            self.assertEqual(seen[key], expected)
+            self.assertEqual(payload[key], expected)
+
     def test_build_current_settings_payload_merges_runtime_fields(self):
         payload = controller.build_current_settings_payload(
             render_settings_base={'target': 'sample.epub', 'output_format': 'xtch'},
@@ -49,7 +77,7 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             render_settings_base={
                 'target': 'sample.epub',
                 'wave_dash_drawing_mode': '別描画方式',
-                'wave_dash_position_mode': '下補正 強',
+                'wave_dash_position_mode': '下補正強',
             },
             output_conflict='rename',
             open_folder=False,
@@ -134,7 +162,7 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             allowed_view_modes={'font', 'device'},
             allowed_profiles={'x3': object(), 'x4': object()},
             allowed_kinsoku_modes={'standard': '標準'},
-            allowed_glyph_position_modes={'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'},
+            allowed_glyph_position_modes={'down_strong': '下補正強', 'down_weak': '下補正弱', 'standard': '標準', 'up_weak': '上補正弱', 'up_strong': '上補正強'},
             allowed_output_formats={'xtc': 'XTC', 'xtch': 'XTCH'},
             allowed_output_conflicts={'rename': 'rename'},
             normalize_font_setting_value=lambda value, default: str(value or '').strip() or default,
@@ -168,7 +196,7 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             allowed_view_modes={'font', 'device'},
             allowed_profiles={'x4': object()},
             allowed_kinsoku_modes={'standard': '標準'},
-            allowed_glyph_position_modes={'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'},
+            allowed_glyph_position_modes={'down_strong': '下補正強', 'down_weak': '下補正弱', 'standard': '標準', 'up_weak': '上補正弱', 'up_strong': '上補正強'},
             allowed_output_formats={'xtc': 'XTC'},
             allowed_output_conflicts={'rename': 'rename'},
             normalize_font_setting_value=lambda value, default: str(value or '').strip() or default,
@@ -215,7 +243,7 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             defaults=defaults,
             allowed_view_modes={'font', 'device'},
             allowed_kinsoku_modes={'standard': '標準', 'strict': '強め'},
-            allowed_glyph_position_modes={'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'},
+            allowed_glyph_position_modes={'down_strong': '下補正強', 'down_weak': '下補正弱', 'standard': '標準', 'up_weak': '上補正弱', 'up_strong': '上補正強'},
             allowed_output_formats={'xtc': 'XTC', 'xtch': 'XTCH'},
             allowed_output_conflicts={'rename': 'rename', 'overwrite': 'overwrite'},
             bottom_tab_count=3,
@@ -254,7 +282,7 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             ichi_position_mode='standard',
             lower_closing_bracket_position_mode='standard',
             wave_dash_drawing_mode='別描画方式',
-            wave_dash_position_mode='下補正 強',
+            wave_dash_position_mode='下補正強',
             main_view_mode='font',
         )
         self.assertEqual(alias_defaults['wave_dash_drawing_mode'], 'separate')
@@ -292,7 +320,7 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             allowed_view_modes={'font', 'device'},
             allowed_profiles={'x3': object(), 'x4': object()},
             allowed_kinsoku_modes={'standard': '標準'},
-            allowed_glyph_position_modes={'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'},
+            allowed_glyph_position_modes={'down_strong': '下補正強', 'down_weak': '下補正弱', 'standard': '標準', 'up_weak': '上補正弱', 'up_strong': '上補正強'},
             allowed_output_formats={'xtc': 'XTC', 'xtch': 'XTCH'},
             allowed_output_conflicts={'rename': 'rename', 'overwrite': 'overwrite'},
             default_preview_page_limit=6,
@@ -406,13 +434,13 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             ichi_position_mode='invalid',
             lower_closing_bracket_position_mode=' up_strong ',
             wave_dash_drawing_mode='別描画方式',
-            wave_dash_position_mode='下補正 強',
+            wave_dash_position_mode='下補正強',
             font_file='',
             default_font_name='fallback.ttf',
             allowed_profiles={'x3': object(), 'x4': object()},
             allowed_kinsoku_modes={'standard': '標準', 'simple': '簡易'},
             allowed_output_formats={'xtc': 'XTC', 'xtch': 'XTCH'},
-            allowed_glyph_position_modes={'down_strong': '下補正 強', 'down_weak': '下補正 弱', 'standard': '標準', 'up_weak': '上補正 弱', 'up_strong': '上補正 強'},
+            allowed_glyph_position_modes={'down_strong': '下補正強', 'down_weak': '下補正弱', 'standard': '標準', 'up_weak': '上補正弱', 'up_strong': '上補正強'},
             normalize_choice_value=lambda value, default, allowed: str(value or default).strip().lower() if str(value or default).strip().lower() in {str(k).lower() for k in allowed} else default,
             normalize_font_setting_value=lambda value, default: str(value or '').strip() or default,
         )
@@ -589,25 +617,36 @@ class SettingsControllerRegressionTests(unittest.TestCase):
         import tategakiXTC_gui_studio_constants as constants
 
         self.assertEqual(constants.GLYPH_POSITION_MODE_OPTIONS, [
-            ('down_strong', '下補正 強'),
-            ('down_weak', '下補正 弱'),
+            ('up_strong', '上補正強'),
+            ('up_weak', '上補正弱'),
             ('standard', '標準'),
-            ('up_weak', '上補正 弱'),
-            ('up_strong', '上補正 強'),
+            ('down_weak', '下補正弱'),
+            ('down_strong', '下補正強'),
         ])
         self.assertEqual(constants.CLOSING_BRACKET_POSITION_MODE_OPTIONS, [
-            ('down_strong', '下補正 強'),
-            ('down_weak', '下補正 弱'),
+            ('up_strong', '上補正強'),
+            ('up_weak', '上補正弱'),
             ('standard', '標準'),
-            ('up_weak', '上補正 弱'),
-            ('up_strong', '上補正 強'),
+            ('down_weak', '下補正弱'),
+            ('down_strong', '下補正強'),
         ])
         source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        self.assertIn("_dim_label('句読点')", source)
-        self.assertIn("_dim_label('下鍵括弧')", source)
+
+        def _control_label_index(row_name: str, label: str) -> int:
+            match = re.search(
+                rf"_add_glyph_position_control\(\s*{row_name},\s*{re.escape(repr(label))}",
+                source,
+                re.MULTILINE,
+            )
+            self.assertIsNotNone(match, f'missing glyph-position control label: {label}')
+            return int(match.start())
+
+        punctuation_index = _control_label_index('image_glyph_position_row', '句読点')
+        ichi_index = _control_label_index('image_glyph_position_row', '漢数字 一')
+        lower_bracket_index = _control_label_index('image_wave_dash_row', '下鍵括弧')
         self.assertNotIn('image_lower_bracket_position_row', source)
-        self.assertLess(source.index("_dim_label('句読点')"), source.index("_dim_label('漢数字 一')"))
-        self.assertLess(source.index("_dim_label('漢数字 一')"), source.index("_dim_label('下鍵括弧')"))
+        self.assertLess(punctuation_index, ichi_index)
+        self.assertLess(ichi_index, lower_bracket_index)
         self.assertNotIn("_dim_label('ぶら下がり句読点')", source)
         self.assertNotIn("_dim_label('句読点位置')", source)
 

@@ -1,3 +1,4 @@
+import struct
 import sys
 import tempfile
 import unittest
@@ -135,7 +136,8 @@ class LayoutRegressionTests(unittest.TestCase):
 
         def fake_page_image_to_xt_bytes(image, width, height, page_args):
             captured_pages.append(image.copy())
-            return b'page'
+            payload = b'page'
+            return struct.pack('<4sHHBBI8s', b'XTG\x00', width, height, 0, 0, len(payload), b'\x00' * 8) + payload
 
         with tempfile.TemporaryDirectory() as tmpdir:
             out_path = Path(tmpdir) / 'layout.xtc'

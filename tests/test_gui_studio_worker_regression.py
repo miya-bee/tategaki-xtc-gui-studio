@@ -80,6 +80,8 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
             self.assertNotIn(doc, targets)
 
             self.assertEqual(self.studio.sanitize_output_stem('nested/name.txt'), 'name')
+            self.assertEqual(self.studio.sanitize_output_stem('%5B夏目漱石%5D 三四郎'), '[夏目漱石] 三四郎')
+            self.assertEqual(self.studio.sanitize_output_stem('book%2Fchapter'), '')
             summary, lines = self.studio.build_conversion_summary(2, 1, 0, [], False, skipped_count=1)
             self.assertIn('2 件', summary)
             self.assertTrue(lines)
@@ -151,8 +153,9 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIn('log_tab_plan = gui_layouts.build_log_tab_plan', source)
         self.assertIn("log_path_read_only = self._plan_bool_value(log_tab_plan, 'log_path_edit_read_only', True)", source)
         self.assertIn("log_edit_read_only = self._plan_bool_value(log_tab_plan, 'log_edit_read_only', True)", source)
-        self.assertIn('self.log_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)', source)
-        self.assertIn('self.log_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)', source)
+        self.assertIn("log_scroll_policy = self._qt_constant('ScrollBarAsNeeded'", source)
+        self.assertIn('self.log_edit.setVerticalScrollBarPolicy(log_scroll_policy)', source)
+        self.assertIn('self.log_edit.setHorizontalScrollBarPolicy(log_scroll_policy)', source)
         self.assertIn("log_tab_plan.get('open_folder_button_text', 'ログフォルダを開く')", source)
 
 
@@ -165,8 +168,9 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIn("results_tab_plan.get('summary_label_object_name', 'resultsPlaceholderLabel')", source)
         self.assertIn("self._plan_bool_value(results_tab_plan, 'summary_label_word_wrap', True)", source)
         self.assertIn("self._plan_list_selection_mode_value(results_tab_plan, 'results_list_selection_mode', 'single_selection')", source)
-        self.assertIn('self.results_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)', source)
-        self.assertIn('self.results_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)', source)
+        self.assertIn("results_scroll_policy = self._qt_constant('ScrollBarAsNeeded'", source)
+        self.assertIn('self.results_list.setVerticalScrollBarPolicy(results_scroll_policy)', source)
+        self.assertIn('self.results_list.setHorizontalScrollBarPolicy(results_scroll_policy)', source)
 
 
     def test_bottom_status_strip_chrome_is_read_from_layout_plan(self):
@@ -1269,6 +1273,22 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, '表示用エラー'):
                     worker._convert()
 
+    def test_convert_treats_none_saved_path_as_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src = Path(tmpdir) / 'empty.txt'
+            src.write_text('x', encoding='utf-8')
+            font_path = Path(tmpdir) / 'dummy.ttf'
+            font_path.write_text('font', encoding='utf-8')
+            worker = self.studio.ConversionWorker(self.make_settings(str(src), open_folder=False, font_file=str(font_path)))
+            report = {'headline': '変換結果なし', 'display': '表示用エラー: 変換結果が空でした。'}
+            with mock.patch.object(worker, '_resolve_supported_targets', return_value=[src]), \
+                 mock.patch.object(self.studio.core, 'resolve_font_path', return_value=str(font_path)), \
+                 mock.patch.object(worker, '_output_path_for_target', return_value=(Path(tmpdir) / 'empty.xtc', {'final_path': 'empty.xtc'})), \
+                 mock.patch.object(worker, '_process_target', return_value=None), \
+                 mock.patch.object(self.studio.core, 'build_conversion_error_report', return_value=report):
+                with self.assertRaisesRegex(RuntimeError, '表示用エラー: 変換結果が空でした。'):
+                    worker._convert()
+
     def test_convert_handles_cancellation_and_stop_request(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             src = Path(tmpdir) / 'cancel.txt'
@@ -1961,6 +1981,31 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn(r'a\one.xtc', message)
         self.assertIn(r'b\two.xtc', message)
 
+    def test_completion_card_open_button_enabled_when_result_paths_exist_without_target(self):
+        window = self.make_window()
+        window.conversion_completion_card = _ButtonStub()
+        window.conversion_completion_title_label = _LabelStub()
+        window.conversion_completion_message_label = _LabelStub()
+        window.card_open_results_folder_btn = _ButtonStub()
+
+        shown = window._show_conversion_completion_card(['C:/out/book.xtc'], {'open_folder_target': ''})
+
+        self.assertTrue(shown)
+        self.assertTrue(window.card_open_results_folder_btn.enabled)
+        self.assertTrue(window.conversion_completion_card.visible)
+
+    def test_open_results_folder_prefers_completion_card_target(self):
+        window = self.make_window()
+        window._completion_card_open_folder_target = 'C:/manual-target'
+        window._preferred_result_path_for_action = lambda: 'C:/out/book.xtc'
+        window._show_result_load_dialog_with_status_fallback = mock.Mock()
+
+        with mock.patch.object(self.studio, '_open_path_in_file_manager', return_value=True) as opener:
+            window.open_results_folder_from_results()
+
+        opener.assert_called_once_with('C:/manual-target')
+        window._show_result_load_dialog_with_status_fallback.assert_not_called()
+
     def test_load_xtc_from_bytes_preserves_previous_state_when_parse_fails(self):
         window = self.make_window()
         window.xtc_bytes = b'old-bytes'
@@ -2428,6 +2473,148 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertFalse(window.next_btn.enabled)
         self.assertEqual(window.page_input.value(), 3)
 
+    def test_font_view_file_viewer_navigation_uses_loaded_xtc_pages(self):
+        window = self.make_window()
+        window.prev_btn = _ButtonStub()
+        window.next_btn = _ButtonStub()
+        window.page_input = _SpinStub(0)
+        window.page_total_label = _LabelStub()
+        window.preview_update_btn = _ButtonStub()
+        window.main_view_mode = 'font'
+        window.device_view_source = 'xtc'
+        window.nav_buttons_reversed = False
+        window.preview_pages_b64 = []
+        window.xtc_pages = ['p1', 'p2', 'p3']
+        window.current_preview_page_index = 0
+        window.current_page_index = 1
+        window._loaded_xtc_display_name = 'opened.xtc'
+
+        payload = window._xtc_navigation_payload()
+
+        self.assertTrue(payload['file_viewer_navigation'])
+        self.assertEqual(payload['total'], 3)
+        self.assertEqual(payload['current_index'], 1)
+        self.assertEqual(payload['current_page'], 2)
+
+        window._apply_xtc_navigation_ui(payload)
+
+        self.assertTrue(window.prev_btn.enabled)
+        self.assertTrue(window.next_btn.enabled)
+        self.assertTrue(window.page_input.enabled)
+        self.assertEqual(window.page_input.range, (1, 3))
+        self.assertEqual(window.page_input.value(), 2)
+        self.assertEqual(window.page_total_label.text(), '/ 3')
+        self.assertEqual(window.current_preview_page_index, 0)
+        self.assertEqual(window.current_page_index, 1)
+
+    def test_font_view_file_viewer_navigation_prefers_loaded_xtc_over_stale_preview_pages(self):
+        window = self.make_window()
+        window.main_view_mode = 'font'
+        window.device_view_source = 'xtc'
+        window.nav_buttons_reversed = False
+        window.preview_pages_b64 = ['吾輩プレビュー1', '吾輩プレビュー2']
+        window.xtc_pages = ['opened-page-1', 'opened-page-2', 'opened-page-3']
+        window.current_preview_page_index = 0
+        window.current_page_index = 1
+        window._loaded_xtc_display_name = 'opened.xtc'
+
+        payload = window._xtc_navigation_payload()
+
+        self.assertTrue(payload['file_viewer_navigation'])
+        self.assertEqual(payload['total'], 3)
+        self.assertEqual(payload['current_index'], 1)
+        self.assertEqual(payload['current_page'], 2)
+
+    def test_change_page_in_font_file_viewer_mode_moves_loaded_xtc_page(self):
+        window = self.make_window()
+        window.main_view_mode = 'font'
+        window.device_view_source = 'xtc'
+        window.preview_pages_b64 = []
+        window.xtc_pages = ['p1', 'p2', 'p3']
+        window.current_preview_page_index = 0
+        window.current_page_index = 1
+        window._loaded_xtc_display_name = 'opened.xtc'
+        renders = []
+        nav_updates = []
+        window._refresh_loaded_xtc_viewer_profile_cache = lambda: None
+        window._render_current_xtc_page_in_font_view = lambda refresh_navigation=True: renders.append((window.current_page_index, refresh_navigation)) or True
+        window.update_navigation_ui = lambda: nav_updates.append((window.current_preview_page_index, window.current_page_index))
+
+        window.change_page(1)
+
+        self.assertEqual(window.current_preview_page_index, 0)
+        self.assertEqual(window.current_page_index, 2)
+        self.assertEqual(renders, [(2, False)])
+        self.assertEqual(nav_updates, [(0, 2)])
+
+    def test_change_page_in_font_file_viewer_mode_ignores_stale_preview_pages(self):
+        window = self.make_window()
+        window.main_view_mode = 'font'
+        window.device_view_source = 'xtc'
+        window.preview_pages_b64 = ['吾輩プレビュー1', '吾輩プレビュー2']
+        window.xtc_pages = ['opened-page-1', 'opened-page-2', 'opened-page-3']
+        window.current_preview_page_index = 0
+        window.current_page_index = 1
+        window._loaded_xtc_display_name = 'opened.xtc'
+        renders = []
+        nav_updates = []
+        window._refresh_loaded_xtc_viewer_profile_cache = lambda: None
+        window._render_current_xtc_page_in_font_view = lambda refresh_navigation=True: renders.append((window.current_page_index, refresh_navigation)) or True
+        window.render_current_preview_page = lambda: (_ for _ in ()).throw(AssertionError('stale generated preview must not render in file-viewer mode'))
+        window.update_navigation_ui = lambda: nav_updates.append((window.current_preview_page_index, window.current_page_index))
+
+        window.change_page(1)
+
+        self.assertEqual(window.current_preview_page_index, 0)
+        self.assertEqual(window.current_page_index, 2)
+        self.assertEqual(renders, [(2, False)])
+        self.assertEqual(nav_updates, [(0, 2)])
+
+    def test_page_input_in_font_file_viewer_mode_moves_loaded_xtc_page(self):
+        window = self.make_window()
+        window.main_view_mode = 'font'
+        window.device_view_source = 'xtc'
+        window.preview_pages_b64 = []
+        window.xtc_pages = ['p1', 'p2', 'p3']
+        window.current_preview_page_index = 0
+        window.current_page_index = 1
+        window._loaded_xtc_display_name = 'opened.xtc'
+        renders = []
+        nav_updates = []
+        window._refresh_loaded_xtc_viewer_profile_cache = lambda: None
+        window._render_current_xtc_page_in_font_view = lambda refresh_navigation=True: renders.append((window.current_page_index, refresh_navigation)) or True
+        window.update_navigation_ui = lambda: nav_updates.append((window.current_preview_page_index, window.current_page_index))
+
+        window.on_page_input_changed(3)
+
+        self.assertEqual(window.current_preview_page_index, 0)
+        self.assertEqual(window.current_page_index, 2)
+        self.assertEqual(renders, [(2, False)])
+        self.assertEqual(nav_updates, [(0, 2)])
+
+    def test_page_input_in_font_file_viewer_mode_ignores_stale_preview_pages(self):
+        window = self.make_window()
+        window.main_view_mode = 'font'
+        window.device_view_source = 'xtc'
+        window.preview_pages_b64 = ['吾輩プレビュー1', '吾輩プレビュー2']
+        window.xtc_pages = ['opened-page-1', 'opened-page-2', 'opened-page-3']
+        window.current_preview_page_index = 0
+        window.current_page_index = 1
+        window._loaded_xtc_display_name = 'opened.xtc'
+        renders = []
+        nav_updates = []
+        window._refresh_loaded_xtc_viewer_profile_cache = lambda: None
+        window._render_current_xtc_page_in_font_view = lambda refresh_navigation=True: renders.append((window.current_page_index, refresh_navigation)) or True
+        window.render_current_preview_page = lambda: (_ for _ in ()).throw(AssertionError('stale generated preview must not render in file-viewer mode'))
+        window.update_navigation_ui = lambda: nav_updates.append((window.current_preview_page_index, window.current_page_index))
+
+        window.on_page_input_changed(3)
+
+        self.assertEqual(window.current_preview_page_index, 0)
+        self.assertEqual(window.current_page_index, 2)
+        self.assertEqual(renders, [(2, False)])
+        self.assertEqual(nav_updates, [(0, 2)])
+
     def test_update_navigation_ui_resets_stale_current_index_when_pages_are_empty(self):
         window = self.make_window()
         window.prev_btn = _ButtonStub()
@@ -2588,6 +2775,65 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.current_page_index, 2)
         self.assertEqual(window.loaded_xtc_viewer_profile.key, 'x3')
         self.assertEqual(blob, b'fghi')
+
+    def test_current_xtc_page_blob_can_force_loaded_xtc_over_stale_device_preview(self):
+        window = self.make_window()
+        window.xtc_bytes = b'LOADED_STALE'
+        window.xtc_pages = [types.SimpleNamespace(offset=0, length=6, width=480, height=800)]
+        window.device_preview_pages_b64 = ['stale-preview-page']
+        window.device_view_source = 'preview'
+        window.current_page_index = 0
+        window.current_device_preview_page_index = 0
+        window._loaded_xtc_display_name = 'opened.xtc'
+
+        blob = window._current_xtc_page_blob(force_loaded_xtc=True)
+
+        self.assertEqual(blob, b'LOADED')
+
+    def test_file_viewer_mode_survives_stale_preview_source_after_loaded_xtc_open(self):
+        window = self.make_window()
+        window.preview_pages_b64 = ['吾輩プレビュー']
+        window.device_preview_pages_b64 = ['stale-device-preview']
+        window.device_view_source = 'preview'
+        window.xtc_pages = [types.SimpleNamespace(offset=0, length=6, width=480, height=800)]
+        window._loaded_xtc_display_name = 'opened.xtc'
+
+        self.assertTrue(window._is_file_viewer_mode_active())
+
+    def test_mark_preview_dirty_keeps_file_viewer_button_neutral_with_stale_preview_source(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.preview_pages_b64 = ['吾輩プレビュー']
+        window.device_preview_pages_b64 = ['stale-device-preview']
+        window.device_view_source = 'preview'
+        window.xtc_pages = [types.SimpleNamespace(offset=0, length=6, width=480, height=800)]
+        window._loaded_xtc_display_name = 'opened.xtc'
+
+        window.mark_preview_dirty()
+
+        self.assertFalse(window.preview_dirty)
+        self.assertFalse(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'ファイル表示中')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'viewer')
+
+    def test_finalize_setting_change_keeps_file_viewer_neutral_with_stale_preview_source(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.preview_pages_b64 = ['吾輩プレビュー']
+        window.device_preview_pages_b64 = ['stale-device-preview']
+        window.device_view_source = 'preview'
+        window.xtc_pages = [types.SimpleNamespace(offset=0, length=6, width=480, height=800)]
+        window._loaded_xtc_display_name = 'opened.xtc'
+        window.save_ui_state = lambda: None
+
+        window._finalize_setting_change()
+
+        self.assertFalse(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'ファイル表示中')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'viewer')
+        self.assertIn('ファイルビューワーモード', window.preview_status_label.text())
 
     def test_set_current_page_index_clamps_and_optionally_refreshes_navigation(self):
         window = self.make_window()
@@ -8394,6 +8640,25 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'idle')
 
+    def test_preview_finish_context_after_running_flags_clear_restores_startup_generating_state(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window._preview_running = True
+        window._target_preview_refresh_running = False
+        window._settings_preview_refresh_pending = False
+
+        window._apply_preview_button_context(self.studio.preview_controller.build_preview_finish_context())
+
+        self.assertEqual(window.preview_update_btn.text_value, '生成中…')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'refreshing')
+
+        window._preview_running = False
+        window._apply_preview_finish_context_after_running_flags_clear()
+
+        self.assertTrue(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'idle')
+
     def test_apply_preview_button_context_preserves_pending_state_after_finish_context(self):
         window = self.make_window()
         window.preview_update_btn = _ButtonStub()
@@ -8406,11 +8671,310 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
         self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'pending')
 
+    def test_apply_preview_button_context_neutralizes_button_in_file_viewer_mode(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.preview_pages_b64 = []
+        window.device_preview_pages_b64 = []
+        window.device_view_source = 'xtc'
+        window.xtc_pages = ['p1']
+        window._loaded_xtc_display_name = 'opened.xtc'
+
+        window._apply_preview_button_context({'button_enabled': True, 'button_text': 'プレビュー更新'})
+
+        self.assertFalse(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'ファイル表示中')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'viewer')
+        self.assertIn('ファイルビューワーモード', window.preview_status_label.text())
+
+    def test_restore_preview_button_clears_stale_viewer_text_even_without_visual_state(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_update_btn.setEnabled(False)
+        window.preview_update_btn.setText('ファイル表示中')
+        window._preview_update_button_visual_state = 'idle'
+
+        window._restore_preview_update_button_from_file_viewer_state()
+
+        self.assertTrue(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'idle')
+
+    def test_refresh_preview_button_state_recovers_stale_viewer_button_when_viewer_inactive(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_update_btn.setEnabled(False)
+        window.preview_update_btn.setText('ファイル表示中')
+        window._preview_update_button_visual_state = 'viewer'
+        window.xtc_pages = []
+        window._loaded_xtc_display_name = ''
+
+        window._refresh_preview_update_button_for_current_state({'button_enabled': True, 'button_text': 'プレビュー更新'})
+
+        self.assertTrue(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'idle')
+
+    def test_refresh_preview_button_state_marks_settings_refresh_pending(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window._settings_preview_refresh_pending = True
+
+        window._refresh_preview_update_button_for_current_state({'button_enabled': True, 'button_text': 'プレビュー更新'})
+
+        self.assertTrue(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'pending')
+
+    def test_mark_preview_update_button_pending_keeps_file_viewer_button_neutral(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.preview_pages_b64 = []
+        window.device_preview_pages_b64 = []
+        window.device_view_source = 'xtc'
+        window.xtc_pages = ['p1', 'p2']
+        window._loaded_xtc_display_name = 'opened.xtc'
+
+        window._mark_preview_update_button_pending()
+
+        self.assertFalse(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'ファイル表示中')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'viewer')
+
     def test_apply_preview_progress_context_ignores_non_mapping_context_without_crashing(self):
         window = self.make_window()
         window.preview_status_label = _LabelStub()
         window._apply_preview_progress_context('bad-context')
         self.assertEqual(window.preview_status_label.text(), '')
+
+    def test_apply_preview_progress_context_updates_progress_bar_when_total_known(self):
+        class _PreviewProgressBarStub:
+            def __init__(self):
+                self.visible = None
+                self.range = None
+                self.value = None
+                self.format_text = None
+
+            def setVisible(self, visible):
+                self.visible = bool(visible)
+
+            def setRange(self, low, high):
+                self.range = (low, high)
+
+            def setValue(self, value):
+                self.value = value
+
+            def setFormat(self, text):
+                self.format_text = text
+
+        window = self.make_window()
+        window.preview_status_label = _LabelStub()
+        window.preview_progress_bar = _PreviewProgressBarStub()
+
+        window._apply_preview_progress_context({
+            'status_message': 'プレビューを更新しています… (25/100)',
+            'progress_visible': True,
+            'progress_busy': False,
+            'progress_current': 25,
+            'progress_total': 100,
+        })
+
+        self.assertEqual(window.preview_status_label.text(), 'プレビューを更新しています… (25/100)')
+        self.assertTrue(window.preview_progress_bar.visible)
+        self.assertEqual(window.preview_progress_bar.range, (0, 100))
+        self.assertEqual(window.preview_progress_bar.value, 25)
+        self.assertEqual(window.preview_progress_bar.format_text, '%p%')
+
+    def test_apply_preview_button_finish_context_hides_preview_progress_bar(self):
+        class _PreviewProgressBarStub:
+            def __init__(self):
+                self.visible = True
+                self.range = None
+                self.value = None
+                self.format_text = None
+
+            def setVisible(self, visible):
+                self.visible = bool(visible)
+
+            def setRange(self, low, high):
+                self.range = (low, high)
+
+            def setValue(self, value):
+                self.value = value
+
+            def setFormat(self, text):
+                self.format_text = text
+
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_progress_bar = _PreviewProgressBarStub()
+
+        window._apply_preview_button_context({
+            'button_enabled': True,
+            'button_text': 'プレビュー更新',
+            'progress_visible': False,
+        })
+
+        self.assertFalse(window.preview_progress_bar.visible)
+        self.assertEqual(window.preview_progress_bar.range, (0, 1))
+        self.assertEqual(window.preview_progress_bar.value, 0)
+        self.assertEqual(window.preview_progress_bar.format_text, '')
+
+    def test_schedule_live_preview_refresh_shows_progress_immediately(self):
+        class _PreviewProgressBarStub:
+            def __init__(self):
+                self.visible = False
+                self.range = None
+                self.value = None
+                self.format_text = None
+
+            def setVisible(self, visible):
+                self.visible = bool(visible)
+
+            def setRange(self, low, high):
+                self.range = (low, high)
+
+            def setValue(self, value):
+                self.value = value
+
+            def setFormat(self, text):
+                self.format_text = text
+
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.preview_progress_bar = _PreviewProgressBarStub()
+        window._has_active_preview_for_live_refresh = lambda: True
+        window.mark_preview_dirty = lambda: setattr(window, 'preview_dirty', True)
+        window._queue_live_preview_refresh_timer = lambda callback, delay_ms: True
+
+        scheduled = window._schedule_live_preview_refresh(reset_page=False, delay_ms=500)
+
+        self.assertTrue(scheduled)
+        self.assertTrue(window.preview_progress_bar.visible)
+        self.assertEqual(window.preview_progress_bar.range, (0, 0))
+        self.assertEqual(window.preview_progress_bar.format_text, '更新中…')
+        self.assertIn('準備しています', window.preview_status_label.text())
+        self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
+
+
+    def test_large_preview_limit_blocks_automatic_live_preview_refresh(self):
+        class _PreviewProgressBarStub:
+            def __init__(self):
+                self.visible = True
+                self.range = None
+                self.value = None
+                self.format_text = None
+
+            def setVisible(self, visible):
+                self.visible = bool(visible)
+
+            def setRange(self, low, high):
+                self.range = (low, high)
+
+            def setValue(self, value):
+                self.value = value
+
+            def setFormat(self, text):
+                self.format_text = text
+
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.progress_label = _LabelStub()
+        window.preview_progress_bar = _PreviewProgressBarStub()
+        window.preview_page_limit_spin = _SpinStub(21)
+        window.preview_pages_b64 = ['page-1']
+        window._settings_preview_refresh_pending = True
+        window._settings_preview_refresh_scheduled = True
+        window._settings_preview_refresh_pending_reset_page = True
+        window._settings_preview_refresh_deferred_until_preview_finished = True
+        dirty_marks = []
+        window.mark_preview_dirty = lambda: dirty_marks.append(True)
+        window._has_active_preview_for_live_refresh = lambda: True
+        scheduled = []
+        window._queue_live_preview_refresh_timer = lambda callback, delay_ms: scheduled.append((delay_ms, callback)) or True
+
+        handled = window._schedule_live_preview_refresh(reset_page=False, delay_ms=10)
+
+        self.assertTrue(handled)
+        self.assertEqual(dirty_marks, [True])
+        self.assertEqual(scheduled, [])
+        self.assertFalse(getattr(window, '_settings_preview_refresh_pending', False))
+        self.assertFalse(getattr(window, '_settings_preview_refresh_scheduled', False))
+        self.assertFalse(getattr(window, '_settings_preview_refresh_pending_reset_page', False))
+        self.assertFalse(getattr(window, '_settings_preview_refresh_deferred_until_preview_finished', False))
+        self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'pending')
+        self.assertIn('プレビュー更新が必要です', window.preview_status_label.text())
+        self.assertIn('21 ページ', window.preview_status_label.text())
+        self.assertEqual(window.progress_label.text(), window.preview_status_label.text())
+        self.assertFalse(window.preview_progress_bar.visible)
+        self.assertEqual(window.preview_progress_bar.format_text, '')
+
+    def test_preview_limit_signal_over_20_cancels_pending_auto_preview(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.progress_label = _LabelStub()
+        window.preview_page_limit_spin = _SpinStub(100)
+        window.preview_pages_b64 = ['page-1']
+        window._settings_preview_refresh_pending = True
+        window._settings_preview_refresh_scheduled = True
+        window._settings_preview_refresh_pending_reset_page = True
+        window._settings_preview_refresh_deferred_until_preview_finished = True
+        dirty_marks = []
+        window.mark_preview_dirty = lambda: dirty_marks.append(True)
+        window._apply_preview_progress_bar_context = lambda context: setattr(window, '_progress_context', context)
+
+        window._mark_preview_dirty_from_signal(100)
+
+        self.assertEqual(dirty_marks, [True])
+        self.assertFalse(getattr(window, '_settings_preview_refresh_pending', False))
+        self.assertFalse(getattr(window, '_settings_preview_refresh_scheduled', False))
+        self.assertFalse(getattr(window, '_settings_preview_refresh_pending_reset_page', False))
+        self.assertFalse(getattr(window, '_settings_preview_refresh_deferred_until_preview_finished', False))
+        self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
+        self.assertIn('プレビュー更新が必要です', window.preview_status_label.text())
+        self.assertIn('100 ページ', window.preview_status_label.text())
+
+    def test_apply_preview_button_finish_keeps_progress_visible_for_pending_followup(self):
+        class _PreviewProgressBarStub:
+            def __init__(self):
+                self.visible = False
+                self.range = None
+                self.value = None
+                self.format_text = None
+
+            def setVisible(self, visible):
+                self.visible = bool(visible)
+
+            def setRange(self, low, high):
+                self.range = (low, high)
+
+            def setValue(self, value):
+                self.value = value
+
+            def setFormat(self, text):
+                self.format_text = text
+
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_progress_bar = _PreviewProgressBarStub()
+        window._settings_preview_refresh_pending = True
+
+        window._apply_preview_button_context({
+            'button_enabled': True,
+            'button_text': 'プレビュー更新',
+            'progress_visible': False,
+        })
+
+        self.assertTrue(window.preview_progress_bar.visible)
+        self.assertEqual(window.preview_progress_bar.range, (0, 0))
+        self.assertEqual(window.preview_progress_bar.format_text, '更新中…')
+        self.assertEqual(window.preview_update_btn.text_value, '● プレビュー更新')
 
     def test_apply_preview_success_context_tolerates_preview_status_label_failure(self):
         class _BrokenLabel:
@@ -13239,6 +13803,35 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(window.font_view_btn.checked)
         self.assertFalse(window.device_view_btn.checked)
 
+    def test_set_main_view_mode_font_renders_loaded_xtc_page_instead_of_stale_preview(self):
+        window = self.make_window()
+        window.preview_stack = _StackStub()
+        window.font_view_btn = _ButtonStub()
+        window.device_view_btn = _ButtonStub()
+        window.view_help_btn = _ButtonStub()
+        window.viewer_widget = _ViewerWidgetStub()
+        window.statusBar = lambda: _StatusBarStub()
+        window.save_ui_state = lambda: None
+        window.update_navigation_ui = lambda: None
+        window.device_view_source = 'xtc'
+        window.preview_pages_b64 = ['吾輩プレビュー']
+        window.device_preview_pages_b64 = []
+        window.xtc_pages = ['opened-1', 'opened-2']
+        window._loaded_xtc_display_name = 'opened.xtc'
+        loaded_font_renders = []
+        window._render_current_xtc_page_in_font_view = lambda refresh_navigation=True: loaded_font_renders.append(refresh_navigation) or True
+        window.render_current_preview_page = lambda: (_ for _ in ()).throw(AssertionError('stale preview must not be rendered'))
+        window.render_current_page = lambda refresh_navigation=True: None
+
+        with mock.patch.object(self.studio.QTimer, 'singleShot', side_effect=lambda delay, cb: cb(), create=True):
+            window.set_main_view_mode('font', initial=False)
+
+        self.assertEqual(loaded_font_renders, [False])
+        self.assertEqual(window.preview_stack.index, 0)
+        self.assertTrue(window.font_view_btn.checked)
+        self.assertFalse(window.device_view_btn.checked)
+
+
     def test_set_main_view_mode_refreshes_device_view_when_switching_to_device(self):
         window = self.make_window()
         window.preview_stack = _StackStub()
@@ -16415,6 +17008,86 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(result.get('open_folder_requested'))
         self.assertEqual(result.get('open_folder_target'), str(Path(tmpdir)))
 
+    def test_convert_open_folder_false_still_reports_manual_open_target(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src = Path(tmpdir) / 'single.txt'
+            src.write_text('x', encoding='utf-8')
+            font_path = Path(tmpdir) / 'dummy.ttf'
+            font_path.write_text('font', encoding='utf-8')
+            worker = self.studio.ConversionWorker({
+                'target': str(src),
+                'font_file': str(font_path),
+                'width': 480,
+                'height': 800,
+                'font_size': 26,
+                'ruby_size': 12,
+                'line_spacing': 44,
+                'margin_t': 12,
+                'margin_b': 14,
+                'margin_r': 12,
+                'margin_l': 12,
+                'dither': False,
+                'threshold': 128,
+                'night_mode': False,
+                'kinsoku_mode': 'standard',
+                'output_format': 'xtc',
+                'output_conflict': 'rename',
+                'output_name': '',
+                'open_folder': False,
+            })
+            with mock.patch.object(worker, '_resolve_supported_targets', return_value=[src]), \
+                 mock.patch.object(self.studio.core, 'resolve_font_path', return_value=str(font_path)), \
+                 mock.patch.object(worker, '_output_path_for_target', return_value=(Path(tmpdir) / 'single.xtc', {'final_path': str(Path(tmpdir) / 'single.xtc')})), \
+                 mock.patch.object(worker, '_process_target', return_value=Path(tmpdir) / 'single.xtc'), \
+                 mock.patch.object(worker, '_resolve_open_folder_target', return_value=Path(tmpdir)), \
+                 mock.patch.object(self.studio, '_open_path_in_file_manager', return_value=True) as opener:
+                result = worker._convert()
+        opener.assert_not_called()
+        self.assertFalse(result.get('open_folder_requested'))
+        self.assertEqual(result.get('open_folder_target'), str(Path(tmpdir)))
+
+    def test_single_file_conversion_reports_explicit_output_folder_as_open_target(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            src_dir = root / 'source'
+            out_dir = root / 'chosen-output'
+            src_dir.mkdir()
+            out_dir.mkdir()
+            src = src_dir / 'book.txt'
+            src.write_text('本文', encoding='utf-8')
+            font_path = root / 'dummy.ttf'
+            font_path.write_text('font', encoding='utf-8')
+            expected_out = out_dir / 'book.xtc'
+            worker = self.studio.ConversionWorker({
+                'target': str(src),
+                'output_dir': str(out_dir),
+                'font_file': str(font_path),
+                'width': 480,
+                'height': 800,
+                'font_size': 26,
+                'ruby_size': 12,
+                'line_spacing': 44,
+                'margin_t': 12,
+                'margin_b': 14,
+                'margin_r': 12,
+                'margin_l': 12,
+                'dither': False,
+                'threshold': 128,
+                'night_mode': False,
+                'kinsoku_mode': 'standard',
+                'output_format': 'xtc',
+                'output_conflict': 'rename',
+                'output_name': '',
+                'open_folder': False,
+            })
+            with mock.patch.object(worker, '_resolve_supported_targets', return_value=[src]), \
+                 mock.patch.object(self.studio.core, 'resolve_font_path', return_value=str(font_path)), \
+                 mock.patch.object(worker, '_process_target', return_value=expected_out), \
+                 mock.patch.object(self.studio, '_open_path_in_file_manager', return_value=False):
+                result = worker._convert()
+        self.assertEqual(result.get('converted_files'), [str(expected_out)])
+        self.assertEqual(result.get('open_folder_target'), str(out_dir))
+
     def test_convert_open_folder_string_false_does_not_open_folder(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             src = Path(tmpdir) / 'single.txt'
@@ -16921,6 +17594,180 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         self.assertEqual(marks, ['target-dirty', ('refresh', {'reset_page': True})])
 
+    def test_target_text_changed_exits_file_viewer_mode_as_safety_net(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.current_xtc_label = _LabelStub()
+        window.xtc_bytes = b'abcdef'
+        window.xtc_pages = [types.SimpleNamespace(offset=0, length=6, width=480, height=800)]
+        window.device_preview_pages_b64 = ['stale-device-preview']
+        window.preview_pages_b64 = ['stale-font-preview']
+        window.current_page_index = 0
+        window.current_device_preview_page_index = 0
+        window.device_view_source = 'preview'
+        window._loaded_xtc_display_name = 'opened.xtc'
+        window._loaded_xtc_path_text = 'C:/viewer/opened.xtc'
+        window.loaded_xtc_viewer_profile = object()
+        window.loaded_xtc_profile_ui_override = True
+        window._preview_update_button_visual_state = 'viewer'
+        window.preview_update_btn.setText('ファイル表示中')
+        window.preview_update_btn.setEnabled(False)
+        window.preview_update_btn.setProperty('previewState', 'viewer')
+        window._clear_xtc_viewer_page = lambda **kwargs: setattr(window, '_cleared_from_text_changed', kwargs)
+        window.update_navigation_ui = lambda: setattr(window, '_nav_updated_from_text_changed', True)
+
+        self.assertTrue(window._is_file_viewer_mode_active())
+
+        window.on_target_text_changed('C:/books/new.epub')
+
+        self.assertFalse(window._is_file_viewer_mode_active())
+        self.assertEqual(window.xtc_pages, [])
+        self.assertEqual(window.xtc_bytes, b'')
+        self.assertIsNone(window._loaded_xtc_display_name)
+        self.assertIsNone(window._loaded_xtc_path_text)
+        self.assertTrue(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'idle')
+        self.assertTrue(getattr(window, '_nav_updated_from_text_changed', False))
+
+    def test_target_setter_helper_centralizes_normal_target_changes(self):
+        import inspect
+
+        source = inspect.getsource(self.studio.MainWindow._set_target_path_for_normal_preview)
+        self.assertIn('_leave_file_viewer_mode_for_target_change()', source)
+        apply_source = inspect.getsource(self.studio.MainWindow._apply_settings_payload_to_ui)
+        drop_source = inspect.getsource(self.studio.MainWindow._apply_dropped_target_path)
+        select_source = inspect.getsource(self.studio.MainWindow.select_target_path)
+        self.assertIn('_set_target_path_for_normal_preview', apply_source)
+        self.assertIn('_set_target_path_for_normal_preview', drop_source)
+        self.assertIn('_set_target_path_for_normal_preview', select_source)
+
+    def test_target_editing_finished_exits_file_viewer_mode_before_deferred_preview(self):
+        window = self.make_window()
+        window.target_edit = _LineEditStub('C:/books/new.epub')
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.current_xtc_label = _LabelStub()
+        window.xtc_bytes = b'abcdef'
+        window.xtc_pages = [types.SimpleNamespace(offset=0, length=6, width=480, height=800)]
+        window.device_preview_pages_b64 = ['stale-device-preview']
+        window.preview_pages_b64 = ['stale-font-preview']
+        window.current_page_index = 0
+        window.current_device_preview_page_index = 0
+        window.device_view_source = 'preview'
+        window._loaded_xtc_display_name = 'opened.xtc'
+        window._loaded_xtc_path_text = 'C:/viewer/opened.xtc'
+        window.loaded_xtc_viewer_profile = object()
+        window.loaded_xtc_profile_ui_override = True
+        window._preview_update_button_visual_state = 'viewer'
+        window.preview_update_btn.setText('ファイル表示中')
+        window.preview_update_btn.setEnabled(False)
+        window.preview_update_btn.setProperty('previewState', 'viewer')
+        cleared_pages = []
+        nav_updates = []
+        marks = []
+        scheduled = []
+        refresh_calls = []
+        window._clear_xtc_viewer_page = lambda **kwargs: cleared_pages.append(kwargs)
+        window.update_navigation_ui = lambda: nav_updates.append(True)
+        window.mark_preview_dirty_for_target_change = lambda: marks.append('target-dirty')
+        window.mark_preview_dirty = lambda: marks.append('generic-dirty')
+        window.request_preview_refresh = lambda **kwargs: refresh_calls.append(kwargs)
+
+        self.assertTrue(window._is_file_viewer_mode_active())
+
+        with mock.patch.object(self.studio.QTimer, 'singleShot', side_effect=lambda delay, cb: scheduled.append((delay, cb)), create=True):
+            window.on_target_editing_finished()
+
+        self.assertFalse(window._is_file_viewer_mode_active())
+        self.assertEqual(window.xtc_pages, [])
+        self.assertEqual(window.xtc_bytes, b'')
+        self.assertIsNone(window._loaded_xtc_display_name)
+        self.assertIsNone(window._loaded_xtc_path_text)
+        self.assertIsNone(window.loaded_xtc_viewer_profile)
+        self.assertFalse(window.loaded_xtc_profile_ui_override)
+        self.assertEqual(window.current_xtc_label.text(), '表示中: なし')
+        self.assertTrue(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'idle')
+        self.assertEqual(marks, ['target-dirty'])
+        self.assertEqual(refresh_calls, [])
+        self.assertEqual(len(scheduled), 1)
+        self.assertTrue(cleared_pages)
+        self.assertTrue(nav_updates)
+
+        scheduled[0][1]()
+
+        self.assertEqual(refresh_calls, [{'reset_page': True}])
+
+    def test_apply_settings_payload_target_exits_file_viewer_mode(self):
+        window = self.make_window()
+        window.target_edit = _LineEditStub('C:/viewer/opened.xtc')
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.current_xtc_label = _LabelStub()
+        window.xtc_bytes = b'abcdef'
+        window.xtc_pages = [types.SimpleNamespace(offset=0, length=6, width=480, height=800)]
+        window.device_preview_pages_b64 = ['stale-device-preview']
+        window.preview_pages_b64 = ['stale-font-preview']
+        window.current_page_index = 0
+        window.current_device_preview_page_index = 0
+        window.device_view_source = 'preview'
+        window._loaded_xtc_display_name = 'opened.xtc'
+        window._loaded_xtc_path_text = 'C:/viewer/opened.xtc'
+        window.loaded_xtc_viewer_profile = object()
+        window.loaded_xtc_profile_ui_override = True
+        window._preview_update_button_visual_state = 'viewer'
+        window.preview_update_btn.setText('ファイル表示中')
+        window.preview_update_btn.setEnabled(False)
+        window.preview_update_btn.setProperty('previewState', 'viewer')
+        window.current_profile_key = 'x4'
+        window.profile_combo = _ComboStub([('X4', 'x4')], current_index=0)
+        window.custom_size_row = _LabelStub()
+        window.width_spin = _SpinStub(480)
+        window.height_spin = _SpinStub(800)
+        window.actual_size_check = _CheckStub(False)
+        window.guides_check = _CheckStub(False)
+        window.calib_spin = _SpinStub(100)
+        window.nav_reverse_check = _CheckStub(False)
+        window.nav_buttons_reversed = False
+        window.prev_btn = _ButtonStub()
+        window.next_btn = _ButtonStub()
+        window.font_size_spin = _SpinStub(26)
+        window.ruby_size_spin = _SpinStub(12)
+        window.line_spacing_spin = _SpinStub(44)
+        window.margin_t_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(14)
+        window.margin_r_spin = _SpinStub(12)
+        window.margin_l_spin = _SpinStub(12)
+        window.threshold_spin = _SpinStub(128)
+        window.dither_check = _CheckStub(False)
+        window.night_check = _CheckStub(False)
+        window.open_folder_check = _CheckStub(False)
+        window.output_conflict_combo = _ComboStub([('連番', 'rename')], current_index=0)
+        window.output_format_combo = _ComboStub([('XTC', 'xtc')], current_index=0)
+        window.kinsoku_mode_combo = _ComboStub([('標準', 'standard')], current_index=0)
+        window.bottom_tabs = types.SimpleNamespace(count=lambda: 1, setCurrentIndex=lambda index: None)
+        window.set_main_view_mode = lambda mode, initial=False: None
+        window._set_current_font_value = lambda value: None
+        window._clear_xtc_viewer_page = lambda **kwargs: setattr(window, '_cleared_viewer_page', kwargs)
+        window.update_navigation_ui = lambda: setattr(window, '_nav_updated_after_payload', True)
+
+        self.assertTrue(window._is_file_viewer_mode_active())
+
+        window._apply_settings_payload_to_ui({'target': 'C:/books/new.epub'})
+
+        self.assertEqual(window.target_edit.text(), 'C:/books/new.epub')
+        self.assertFalse(window._is_file_viewer_mode_active())
+        self.assertEqual(window.xtc_pages, [])
+        self.assertEqual(window.xtc_bytes, b'')
+        self.assertIsNone(window._loaded_xtc_display_name)
+        self.assertIsNone(window._loaded_xtc_path_text)
+        self.assertEqual(window.preview_update_btn.text_value, 'プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'idle')
+        self.assertTrue(getattr(window, '_nav_updated_after_payload', False))
+
     def test_init_does_not_request_preview_refresh_before_show_event(self):
         import inspect
 
@@ -17009,6 +17856,35 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(statuses, ['前回の作業ファイルが見つからないため、サンプルを表示しました。'])
         self.assertEqual(saved, [True])
 
+    def test_startup_preview_idle_reconcile_clears_stale_generating_controls(self):
+        window = self.make_window()
+        window.preview_update_btn = _ButtonStub()
+        window.preview_update_btn.setText('生成中…')
+        window.preview_update_btn.setEnabled(False)
+        window.preview_status_label = _LabelStub()
+        window.preview_status_label.setText('先頭 20 ページまでプレビューを更新しています…')
+        window.preview_progress_bar = _SpinStub(0)
+        window.preview_progress_bar.setVisible(True)
+        window.preview_progress_bar.setRange(0, 0)
+        window.preview_pages_b64 = ['page1', 'page2']
+        window.device_preview_pages_b64 = ['page1', 'page2']
+        window.preview_pages_truncated = False
+        window.last_preview_requested_limit = 20
+        window._preview_running = False
+        window._target_preview_refresh_running = False
+        window._settings_preview_refresh_pending = False
+        window.xtc_pages = []
+        window._loaded_xtc_display_name = None
+        window._loaded_xtc_path_text = None
+
+        window._reconcile_startup_preview_idle_state()
+
+        self.assertTrue(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'プレビュー更新')
+        self.assertFalse(window.preview_progress_bar.visible)
+        self.assertEqual(window.preview_status_label.text(), 'プレビュー更新完了（2 / 上限 20 ページ）')
+        self.assertFalse(window.preview_dirty)
+
     def test_file_selection_defers_preview_without_full_conversion(self):
         window = self.make_window()
         window.target_edit = _LineEditStub('')
@@ -17042,6 +17918,64 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         self.assertFalse(window._conversion_started)
         self.assertEqual(refresh_calls, [{'reset_page': True}])
+
+    def test_file_selection_exits_file_viewer_mode_before_deferred_preview(self):
+        window = self.make_window()
+        window.target_edit = _LineEditStub('')
+        window.preview_update_btn = _ButtonStub()
+        window.preview_status_label = _LabelStub()
+        window.current_xtc_label = _LabelStub()
+        window.xtc_bytes = b'abcdef'
+        window.xtc_pages = [types.SimpleNamespace(offset=0, length=6, width=480, height=800)]
+        window.device_preview_pages_b64 = ['stale-device-preview']
+        window.preview_pages_b64 = ['stale-font-preview']
+        window.current_page_index = 0
+        window.current_device_preview_page_index = 0
+        window.device_view_source = 'preview'
+        window._loaded_xtc_display_name = 'opened.xtc'
+        window._loaded_xtc_path_text = 'C:/viewer/opened.xtc'
+        window.loaded_xtc_viewer_profile = object()
+        window.loaded_xtc_profile_ui_override = True
+        window._preview_update_button_visual_state = 'viewer'
+        window.preview_update_btn.setText('ファイル表示中')
+        window.preview_update_btn.setEnabled(False)
+        window.preview_update_btn.setProperty('previewState', 'viewer')
+        cleared_pages = []
+        nav_updates = []
+        window._clear_xtc_viewer_page = lambda **kwargs: cleared_pages.append(kwargs)
+        window.update_navigation_ui = lambda: nav_updates.append(True)
+        window._update_top_status = lambda: setattr(window, '_updated_top', True)
+        window.save_ui_state = lambda: setattr(window, '_saved', True)
+        refresh_calls = []
+        window.request_preview_refresh = lambda **kwargs: refresh_calls.append(kwargs)
+        scheduled = []
+
+        self.assertTrue(window._is_file_viewer_mode_active())
+
+        with mock.patch.object(self.studio.QFileDialog, 'getOpenFileName', return_value=('C:/books/new.epub', ''), create=True), \
+             mock.patch.object(self.studio.QTimer, 'singleShot', side_effect=lambda delay, cb: scheduled.append((delay, cb)), create=True):
+            window.select_target_path(True)
+
+        self.assertEqual(window.target_edit.text(), 'C:/books/new.epub')
+        self.assertFalse(window._is_file_viewer_mode_active())
+        self.assertEqual(window.xtc_pages, [])
+        self.assertEqual(window.xtc_bytes, b'')
+        self.assertIsNone(window._loaded_xtc_display_name)
+        self.assertIsNone(window._loaded_xtc_path_text)
+        self.assertIsNone(window.loaded_xtc_viewer_profile)
+        self.assertFalse(window.loaded_xtc_profile_ui_override)
+        self.assertEqual(window.current_xtc_label.text(), '表示中: なし')
+        self.assertTrue(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.text_value, 'プレビュー更新')
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'idle')
+        self.assertEqual(window.preview_status_label.text(), 'プレビュー対象を読み込んでいます…')
+        self.assertTrue(window._updated_top)
+        self.assertTrue(window._saved)
+        self.assertTrue(window.preview_dirty)
+        self.assertEqual(refresh_calls, [])
+        self.assertEqual(len(scheduled), 1)
+        self.assertTrue(cleared_pages)
+        self.assertTrue(nav_updates)
 
     def test_target_preview_refresh_debounce_coalesces_pending_jobs(self):
         window = self.make_window()
@@ -17248,21 +18182,36 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
                  mock.patch.object(self.studio.QTimer, 'singleShot', side_effect=lambda delay, cb: cb(), create=True):
                 window.select_target_path(False)
             self.assertEqual(asked_dirs, [str(current_file.parent)])
-        self.assertEqual(window.target_edit.text(), 'folder')
-        self.assertTrue(window._preview_dirty_marked)
+        self.assertEqual(window.target_edit.text(), str(current_file))
+        self.assertEqual(window.selected_output_dir, 'folder')
+        self.assertFalse(window._preview_dirty_marked)
         self.assertFalse(window._generic_preview_dirty_marked)
         self.assertEqual(window._refreshed, {'reset_page': True})
 
         with mock.patch.object(Path, 'exists', side_effect=AssertionError('target selection must not probe existing path')), \
              mock.patch.object(Path, 'is_file', side_effect=AssertionError('target selection must not stat file type')):
+            window.selected_output_dir = ''
             window.target_edit = _LineEditStub('C:/books/current.epub')
             asked_dirs = []
             def _fake_get_dir_no_stat(_parent, _title, start_dir):
                 asked_dirs.append(start_dir)
                 return ''
             with mock.patch.object(self.studio.QFileDialog, 'getExistingDirectory', side_effect=_fake_get_dir_no_stat, create=True):
-                window.select_target_path(False)
+                window.select_output_folder()
             self.assertEqual(asked_dirs, ['C:/books'])
+
+        window.selected_output_dir = 'C:/books/output'
+        window._completion_card_open_folder_target = 'C:/books/output'
+        reset_statuses = []
+        window.save_ui_state = lambda: setattr(window, '_saved_output_reset', True)
+        window._show_ui_status_message_unless_render_failure_visible = lambda text, timeout: reset_statuses.append((text, timeout))
+        window._update_top_status = lambda: setattr(window, '_top_status_updated_after_output_reset', True)
+        window.reset_output_folder()
+        self.assertEqual(window.selected_output_dir, '')
+        self.assertEqual(window._completion_card_open_folder_target, '')
+        self.assertTrue(window._saved_output_reset)
+        self.assertTrue(window._top_status_updated_after_output_reset)
+        self.assertEqual(reset_statuses, [('保存先: ソースファイルと同じフォルダ', 5000)])
 
         window.font_combo = _ComboStub([('old', 'old.ttf')], current_index=0)
         window._default_font_name = lambda: 'fallback.ttf'
@@ -17500,6 +18449,233 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('if guide_rect != rect:', source)
         self.assertIn('Qt.DashLine', source)
 
+    def test_page_number_setting_raises_visible_bottom_margin_when_needed(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(4)
+
+        changed = window._sync_page_number_bottom_margin_to_ui()
+
+        self.assertTrue(changed)
+        self.assertEqual(window.margin_b_spin.value(), 13)
+        self.assertEqual(window.margin_b_spin.blocked, [True, False])
+
+    def test_page_number_setting_does_not_lower_existing_larger_bottom_margin(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(20)
+
+        changed = window._sync_page_number_bottom_margin_to_ui()
+
+        self.assertFalse(changed)
+        self.assertEqual(window.margin_b_spin.value(), 20)
+
+    def test_page_number_setting_lowers_previous_auto_margin_when_size_shrinks(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(20)
+        window._page_number_bottom_margin_auto_state = {
+            'active': True,
+            'base_value': 4,
+            'auto_value': 20,
+        }
+
+        changed = window._sync_page_number_bottom_margin_to_ui()
+
+        self.assertTrue(changed)
+        self.assertEqual(window.margin_b_spin.value(), 13)
+        self.assertEqual(window._page_number_bottom_margin_auto_state['base_value'], 4)
+        self.assertEqual(window._page_number_bottom_margin_auto_state['auto_value'], 13)
+
+    def test_page_number_setting_preserves_user_margin_when_auto_requirement_shrinks(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(21)
+        window._page_number_bottom_margin_auto_state = {
+            'active': True,
+            'base_value': 20,
+            'auto_value': 21,
+        }
+
+        changed = window._sync_page_number_bottom_margin_to_ui()
+
+        self.assertTrue(changed)
+        self.assertEqual(window.margin_b_spin.value(), 20)
+        self.assertEqual(window._page_number_bottom_margin_auto_state['base_value'], 20)
+        self.assertEqual(window._page_number_bottom_margin_auto_state['auto_value'], 20)
+
+    def test_page_number_setting_does_not_lower_after_manual_margin_override(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(13)
+        window.margin_b_spin = _SpinStub(25)
+        window._page_number_bottom_margin_auto_state = {
+            'active': True,
+            'base_value': 4,
+            'auto_value': 20,
+        }
+
+        changed = window._sync_page_number_bottom_margin_to_ui()
+
+        self.assertFalse(changed)
+        self.assertEqual(window.margin_b_spin.value(), 25)
+        self.assertNotIn('_page_number_bottom_margin_auto_state', getattr(window, '__dict__', {}))
+
+    def test_page_number_off_restores_previous_auto_margin(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(False)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(13)
+        window._page_number_bottom_margin_auto_state = {
+            'active': True,
+            'base_value': 4,
+            'auto_value': 13,
+        }
+
+        changed = window._sync_page_number_bottom_margin_to_ui()
+
+        self.assertTrue(changed)
+        self.assertEqual(window.margin_b_spin.value(), 4)
+        self.assertEqual(window.margin_b_spin.blocked, [True, False])
+        self.assertNotIn('_page_number_bottom_margin_auto_state', getattr(window, '__dict__', {}))
+
+    def test_page_number_off_preserves_manual_margin_override(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(False)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(20)
+        window._page_number_bottom_margin_auto_state = {
+            'active': True,
+            'base_value': 4,
+            'auto_value': 13,
+        }
+
+        changed = window._sync_page_number_bottom_margin_to_ui()
+
+        self.assertFalse(changed)
+        self.assertEqual(window.margin_b_spin.value(), 20)
+        self.assertEqual(window.margin_b_spin.blocked, [])
+        self.assertNotIn('_page_number_bottom_margin_auto_state', getattr(window, '__dict__', {}))
+
+    def test_page_number_auto_margin_state_round_trips_through_saved_payload(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(13)
+        window._page_number_bottom_margin_auto_state = {
+            'active': True,
+            'base_value': 4,
+            'auto_value': 13,
+        }
+
+        payload = window._page_number_margin_auto_save_payload()
+
+        self.assertTrue(payload['page_number_margin_auto_active'])
+        restored = self.make_window()
+        restored.page_number_check = _CheckStub(True)
+        restored.page_number_font_size_spin = _SpinStub(12)
+        restored.margin_b_spin = _SpinStub(13)
+        restored._restore_page_number_bottom_margin_auto_state_from_payload(payload)
+        restored.page_number_check.setChecked(False)
+
+        changed = restored._sync_page_number_bottom_margin_to_ui()
+
+        self.assertTrue(changed)
+        self.assertEqual(restored.margin_b_spin.value(), 4)
+
+    def test_page_number_margin_restore_uses_explicit_toggle_false_signal(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(4)
+        window.margin_b_spin = _SpinStub(13)
+        window._page_number_bottom_margin_auto_state = {
+            'active': True,
+            'base_value': 4,
+            'auto_value': 13,
+        }
+        window._apply_viewer_display_runtime_state = lambda: None
+        window._schedule_live_preview_refresh = lambda **_kwargs: True
+        window._finalize_setting_change = lambda **_kwargs: None
+
+        window.on_page_number_setting_changed(False)
+
+        self.assertEqual(window.margin_b_spin.value(), 4)
+        self.assertNotIn('_page_number_bottom_margin_auto_state', getattr(window, '__dict__', {}))
+
+
+    def test_page_number_auto_margin_save_payload_clears_after_manual_override(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(20)
+        window._page_number_bottom_margin_auto_state = {
+            'active': True,
+            'base_value': 4,
+            'auto_value': 13,
+        }
+
+        payload = window._page_number_margin_auto_save_payload()
+
+        self.assertFalse(payload['page_number_margin_auto_active'])
+        self.assertEqual(payload['page_number_margin_auto_base_value'], 20)
+        self.assertEqual(payload['page_number_margin_auto_value'], 20)
+
+    def test_preview_page_limit_spin_allows_large_manual_preview_requests(self):
+        source = inspect.getsource(self.studio.MainWindow._section_display)
+        self.assertIn('self._spin(1, 9999, DEFAULT_PREVIEW_PAGE_LIMIT', source)
+
+    def test_preset_save_confirmation_text_lists_all_major_specs(self):
+        window = self.make_window()
+        preset = {
+            'profile': 'x4',
+            'width': 480,
+            'height': 800,
+            'output_format': 'xtch',
+            'font_file': '',
+            'font_size': 26,
+            'ruby_size': 12,
+            'ruby_hide': True,
+            'page_number_enabled': True,
+            'page_number_font_size': 12,
+            'line_spacing': 44,
+            'margin_t': 1,
+            'margin_b': 13,
+            'margin_l': 3,
+            'margin_r': 4,
+            'night_mode': False,
+            'dither': True,
+            'threshold': 128,
+            'kinsoku_mode': 'standard',
+            'tatechuyoko_digit_mode': '2',
+            'punctuation_position_mode': 'down_weak',
+            'ichi_position_mode': 'standard',
+            'halfwidth_digit_position_mode': 'up_weak',
+            'tatechuyoko_symbol_position_mode': 'down_strong',
+            'lower_closing_bracket_position_mode': 'standard',
+            'wave_dash_drawing_mode': 'rotate',
+            'wave_dash_position_mode': 'standard',
+        }
+
+        text = window._preset_save_confirmation_text(preset, 'プリセット1')
+
+        for token in ('[基本]', '[文字・組版]', '[画像処理]', '[禁則・補正]', 'ページ番号: ON', '余白: 上 1  /  下 13  /  左 3  /  右 4', '縦中横記号:', '波線描画:'):
+            self.assertIn(token, text)
+
+    def test_guide_margins_reflect_page_number_effective_bottom_margin(self):
+        window = self.make_window()
+        window.margin_t_spin = _SpinStub(1)
+        window.margin_b_spin = _SpinStub(4)
+        window.margin_r_spin = _SpinStub(5)
+        window.margin_l_spin = _SpinStub(6)
+        window.page_number_check = _CheckStub(True)
+        window.page_number_font_size_spin = _SpinStub(12)
+
+        self.assertEqual(window._current_guide_margins(), (1, 13, 5, 6))
+
     def test_font_view_guide_rect_uses_original_page_size_for_scaled_preview(self):
         window = self.make_window()
         window.margin_t_spin = _SpinStub(0)
@@ -17708,6 +18884,16 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('current_xtc_label_max_width', source)
         self.assertIn('setMaximumWidth', source)
 
+    def test_file_viewer_page_count_is_not_rendered_under_preview_panels(self):
+        import inspect
+
+        panel_source = inspect.getsource(self.studio.MainWindow._build_right_preview)
+        full_source = inspect.getsource(self.studio.MainWindow)
+        self.assertNotIn('font_view_page_indicator_label', panel_source)
+        self.assertNotIn('device_view_page_indicator_label', panel_source)
+        self.assertNotIn('viewerPageIndicatorLabel', full_source)
+        self.assertNotIn('_update_viewer_page_indicator_labels', full_source)
+
     def test_preview_zoom_controls_use_external_step_buttons_like_calibration(self):
         import inspect
 
@@ -17812,15 +18998,17 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_on_preview_zoom_changed_refreshes_font_view_only_in_normal_size_mode(self):
         window = self.make_window()
         calls = []
+        finalize_kwargs = []
         window.actual_size_check = _CheckStub(False)
         window._sync_preview_zoom_control_state = lambda: calls.append('sync-controls')
         window._sync_preview_size = lambda: calls.append('sync')
         window._refresh_font_preview_display_if_needed = lambda refresh_navigation=True: calls.append(('refresh', refresh_navigation))
-        window._finalize_setting_change = lambda *args, **kwargs: calls.append('finalize')
+        window._finalize_setting_change = lambda *args, **kwargs: (calls.append('finalize'), finalize_kwargs.append(dict(kwargs)))
 
         window.on_preview_zoom_changed(125)
 
         self.assertEqual(calls, ['sync-controls', 'sync', ('refresh', False), 'finalize'])
+        self.assertEqual(finalize_kwargs, [{'refresh_preview': False}])
 
     def test_on_preview_zoom_changed_refreshes_font_view_in_actual_size_mode(self):
         window = self.make_window()
@@ -17875,6 +19063,26 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         source = inspect.getsource(self.studio.MainWindow.on_actual_size_toggled)
         self.assertIn('_refresh_font_preview_display_if_needed', source)
         self.assertIn('_sync_preview_zoom_control_state', source)
+
+    def test_finalize_setting_change_keeps_viewer_preview_button_neutral(self):
+        window = self.make_window()
+        dirty_calls = []
+        saved_calls = []
+        status_messages = []
+        window.preview_update_btn = _ButtonStub()
+        window._is_file_viewer_mode_active = lambda: True
+        window.mark_preview_dirty = lambda: dirty_calls.append(True)
+        window.save_ui_state = lambda: saved_calls.append(True)
+        window._update_preview_status_label = lambda text: status_messages.append(str(text))
+
+        window._finalize_setting_change()
+
+        self.assertEqual(dirty_calls, [])
+        self.assertEqual(saved_calls, [True])
+        self.assertEqual(window.preview_update_btn.text_value, 'ファイル表示中')
+        self.assertFalse(window.preview_update_btn.enabled)
+        self.assertEqual(window.preview_update_btn.properties.get('previewState'), 'viewer')
+        self.assertIn('ファイルビューワーモード', status_messages[-1])
 
     def test_on_calibration_changed_refreshes_font_view_preview(self):
         import inspect
@@ -18278,19 +19486,16 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertNotIn("glyph_position_row.addWidget(self.ichi_position_combo)", font_source)
         self.assertIn("image_glyph_position_row = self._make_hbox_layout_from_plan(", image_source)
         self.assertIn("gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))", image_source)
-        self.assertIn("image_glyph_position_row.addWidget(self._dim_label('句読点'))", image_source)
-        self.assertIn("image_glyph_position_row.addWidget(self.punctuation_position_combo)", image_source)
-        self.assertIn("image_glyph_position_row.addWidget(self._dim_label('漢数字 一'))", image_source)
-        self.assertIn("image_glyph_position_row.addWidget(self.ichi_position_combo)", image_source)
-        self.assertIn("image_glyph_position_row.addWidget(self._dim_label('半角数字'))", image_source)
-        self.assertIn("image_glyph_position_row.addWidget(self.halfwidth_digit_position_combo)", image_source)
+        self.assertIn("self._add_glyph_position_control(", image_source)
+        self.assertIn("image_glyph_position_row,\n            '句読点',\n            self.punctuation_position_combo", image_source)
+        self.assertIn("image_glyph_position_row,\n            '漢数字 一',\n            self.ichi_position_combo", image_source)
+        self.assertIn("image_glyph_position_row,\n            '半角数字/記号',\n            self.halfwidth_digit_position_combo", image_source)
         first_row_source = image_source.split("lay.addLayout(image_glyph_position_row)", 1)[0]
         self.assertNotIn("image_glyph_position_row.addWidget(self._dim_label('下鍵括弧'))", first_row_source)
         self.assertIn("lay.addLayout(image_glyph_position_row)", image_source)
         self.assertIn("image_wave_dash_row = self._make_hbox_layout_from_plan(", image_source)
         self.assertIn("gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))", image_source)
-        self.assertIn("image_wave_dash_row.addWidget(self._dim_label('下鍵括弧'))", image_source)
-        self.assertIn("image_wave_dash_row.addWidget(self.lower_closing_bracket_position_combo)", image_source)
+        self.assertIn("image_wave_dash_row,\n            '下鍵括弧',\n            self.lower_closing_bracket_position_combo", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self._dim_label('波線描画'))", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self._dim_label('波線位置'))", image_source)
@@ -18510,8 +19715,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window.mark_preview_dirty()
 
         self.assertEqual(window.current_xtc_label.text(), '表示中: book.xtc')
-        self.assertEqual(window.preview_label.text(), 'プレビューを生成してください')
-        self.assertEqual(window.preview_status_label.text(), 'プレビューを生成してください')
+        self.assertEqual(window.preview_status_label.text(), 'ファイルビューワーモード: XTC/XTCHを直接表示中です')
 
     def test_mark_preview_dirty_restores_results_selection_when_runtime_preview_is_missing(self):
         window = self.make_window()
@@ -18534,7 +19738,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.current_xtc_label.text(), '表示中: book.xtc')
         self.assertEqual(window.results_list.current_row, 1)
         self.assertIs(window.results_list.current_item, items[1])
-        self.assertEqual(window.preview_status_label.text(), 'プレビューを生成してください')
+        self.assertEqual(window.preview_status_label.text(), 'ファイルビューワーモード: XTC/XTCHを直接表示中です')
 
     def test_mark_preview_dirty_clears_results_selection_when_runtime_preview_is_missing_without_loaded_path(self):
         window = self.make_window()
@@ -18603,7 +19807,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.results_list.current_row, 0)
         self.assertEqual(render_calls, [True])
         self.assertEqual(clear_calls, [])
-        self.assertEqual(window.preview_status_label.text(), 'プレビューを生成してください')
+        self.assertEqual(window.preview_status_label.text(), 'ファイルビューワーモード: XTC/XTCHを直接表示中です')
 
 
     def test_save_preset_syncs_summary_from_saved_definition(self):
@@ -18704,7 +19908,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_current_wave_dash_modes_normalize_combo_label_variants(self):
         window = self.make_window()
         window.wave_dash_drawing_combo = _ComboStub([('別描画方式', '別描画方式')], current_index=0)
-        window.wave_dash_position_combo = _ComboStub([('下補正 強', '下補正 強')], current_index=0)
+        window.wave_dash_position_combo = _ComboStub([('下補正強', '下補正強')], current_index=0)
 
         self.assertEqual(window.current_wave_dash_drawing_mode(), 'separate')
         self.assertEqual(window.current_wave_dash_position_mode(), 'down_strong')
@@ -18712,7 +19916,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_current_wave_dash_modes_fall_back_for_unknown_combo_data(self):
         window = self.make_window()
         window.wave_dash_drawing_combo = _ComboStub([('unknown', 'unknown')], current_index=0)
-        window.wave_dash_position_combo = _ComboStub([('上補正 強', '上補正 強')], current_index=0)
+        window.wave_dash_position_combo = _ComboStub([('上補正強', '上補正強')], current_index=0)
 
         self.assertEqual(window.current_wave_dash_drawing_mode(), 'rotate')
         self.assertEqual(window.current_wave_dash_position_mode(), 'standard')
@@ -19017,7 +20221,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window._refresh_font_preview_display_if_needed()
 
         self.assertEqual(window.current_xtc_label.text(), '表示中: book.xtc')
-        self.assertEqual(window.preview_status_label.text(), 'プレビューを生成してください')
+        self.assertEqual(window.preview_status_label.text(), 'ファイルビューワーモード: XTC/XTCHを直接表示中です')
 
     def test_refresh_font_preview_display_if_needed_restores_results_selection_when_runtime_preview_is_missing(self):
         window = self.make_window()
@@ -19040,7 +20244,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.current_xtc_label.text(), '表示中: book.xtc')
         self.assertEqual(window.results_list.current_row, 1)
         self.assertIs(window.results_list.current_item, items[1])
-        self.assertEqual(window.preview_status_label.text(), 'プレビューを生成してください')
+        self.assertEqual(window.preview_status_label.text(), 'ファイルビューワーモード: XTC/XTCHを直接表示中です')
 
     def test_apply_preset_refreshes_active_view_after_runtime_state(self):
         window = self.make_window()
@@ -20293,6 +21497,12 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window.update_conversion_progress(1, 2, '処理中')
 
         self.assertEqual(window.progress_label.text(), '処理中 (1/2, 50%)')
+
+    def test_sample_texts_include_tatechuyoko_punctuation_regression_text(self):
+        sample_path = Path(self.studio.__file__).resolve().parent / 'sample_texts' / 'tategaki_tatechuyoko_punctuation_test_text_v1.txt'
+
+        self.assertTrue(sample_path.exists())
+        self.assertIn('第４４章第88節　全角！？と半角!?でどう？？変わるだろう??', sample_path.read_text(encoding='utf-8'))
 
 if __name__ == '__main__':
     unittest.main()

@@ -57,6 +57,22 @@ class RubyHideModeRegressionTests(unittest.TestCase):
         self.assertNotEqual(standard_key, down_key)
 
 
+
+    def test_preview_cache_key_includes_halfwidth_alpha_position_mode(self):
+        base = {
+            'mode': 'text',
+            'target_path': '',
+            'font_file': self.font_value,
+            'font_size': 26,
+            'ruby_size': 12,
+            'width': 160,
+            'height': 220,
+        }
+        standard_key = core._preview_bundle_cache_key({**base, 'halfwidth_alpha_position_mode': 'standard'}, preview_sources=[])
+        down_key = core._preview_bundle_cache_key({**base, 'halfwidth_alpha_position_mode': 'down_strong'}, preview_sources=[])
+        self.assertNotEqual(standard_key, down_key)
+
+
     def test_preview_cache_key_includes_tatechuyoko_digit_mode(self):
         base = {
             'mode': 'text',

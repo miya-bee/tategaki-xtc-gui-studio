@@ -66,8 +66,10 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(plan['folder_button_tooltip'], '変換後のXTC / XTCH の保存先を選びます')
         self.assertEqual(plan['folder_batch_button_text'], 'フォルダ一括変換...')
         self.assertEqual(plan['folder_batch_button_width'], 152)
-        self.assertIn('上部3ボタンの使い分け', plan['top_buttons_help_tooltip'])
+        self.assertIn('上部ボタンの使い分け', plan['top_buttons_help_tooltip'])
         self.assertEqual(plan['top_buttons_help_title'], '上部ボタンの使い分け')
+        self.assertIn('保存先リセット', plan['top_buttons_help_text'])
+        self.assertIn('ソースファイルと同じフォルダへ戻します', plan['top_buttons_help_text'])
         self.assertEqual(plan['run_button_text'], '▶  変換実行')
         self.assertEqual(plan['settings_button_tooltip'], '表示設定')
 

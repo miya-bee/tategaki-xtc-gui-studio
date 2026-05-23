@@ -16,12 +16,22 @@ from tests.font_test_helper import resolve_test_font_path, resolve_test_font_spe
 
 
 class _FakeEpubItem:
-    def __init__(self, file_name, html):
+    def __init__(self, file_name, html, media_type='application/xhtml+xml'):
         self.file_name = file_name
+        self.media_type = media_type
         self._html = html
 
     def get_content(self):
         return self._html.encode('utf-8')
+
+
+class _FakeSpineBook:
+    def __init__(self, spine, items):
+        self.spine = spine
+        self._items = dict(items)
+
+    def get_item_with_id(self, item_id):
+        return self._items.get(item_id)
 
 
 class EpubRegressionTests(unittest.TestCase):
@@ -34,6 +44,72 @@ class EpubRegressionTests(unittest.TestCase):
 
     def _soup(self, html):
         return self.BeautifulSoup(html, 'html.parser')
+
+    def test_collect_epub_spine_documents_skips_explicit_linear_no(self):
+        main = _FakeEpubItem('text/main.xhtml', '<html><body>Main</body></html>')
+        aux = _FakeEpubItem('text/aux.xhtml', '<html><body>Aux</body></html>')
+        dict_aux = _FakeEpubItem('text/dict_aux.xhtml', '<html><body>DictAux</body></html>')
+        html_by_suffix = _FakeEpubItem('text/suffix.html', '<html><body>Suffix</body></html>', media_type='')
+        image = _FakeEpubItem('images/cover.png', '', media_type='image/png')
+        book = _FakeSpineBook(
+            [('main', 'yes'), ('aux', 'no'), ('dict_aux', {'linear': 'no'}), 'suffix', ('cover', 'yes')],
+            {'main': main, 'aux': aux, 'dict_aux': dict_aux, 'suffix': html_by_suffix, 'cover': image},
+        )
+
+        docs = core._collect_epub_spine_documents(book)
+
+        self.assertEqual(docs, [main, html_by_suffix])
+        self.assertTrue(core._epub_spine_entry_is_linear(('main', 'yes')))
+        self.assertFalse(core._epub_spine_entry_is_linear(('aux', 'no')))
+
+    def test_extract_epub_ruby_parts_does_not_leak_rtc_into_body(self):
+        soup = self._soup(
+            '<ruby>'
+            '<rb>振</rb><rb>仮</rb><rb>名</rb>'
+            '<rtc><rt>ふ</rt><rt>り</rt><rt>がな</rt></rtc>'
+            '</ruby>'
+        )
+
+        rb, rt = core._extract_epub_ruby_parts(soup.ruby)
+
+        self.assertEqual(rb, '振仮名')
+        self.assertEqual(rt, 'ふりがな')
+
+    def test_extract_epub_ruby_parts_handles_simple_ruby_and_rp(self):
+        soup = self._soup('<ruby>吾輩<rp>（</rp><rt>わがはい</rt><rp>）</rp></ruby>')
+
+        rb, rt = core._extract_epub_ruby_parts(soup.ruby)
+
+        self.assertEqual(rb, '吾輩')
+        self.assertEqual(rt, 'わがはい')
+
+    def test_epub_image_node_source_accepts_svg_href(self):
+        soup = self._soup('<svg><image href="../images/fig.png" /></svg>')
+
+        self.assertEqual(core._epub_image_node_source(soup.image), '../images/fig.png')
+
+
+    def test_data_uri_and_srcset_helpers(self):
+        import base64
+        payload = b'png-bytes'
+        uri = 'data:image/png;base64,' + base64.b64encode(payload).decode('ascii')
+        soup = self._soup('<img srcset="../images/a.png 1x, ../images/b.png 2x"/>')
+
+        self.assertEqual(core._first_epub_srcset_candidate(soup.img.get('srcset')), '../images/a.png')
+        self.assertEqual(core._decode_epub_data_image_uri(uri), payload)
+        self.assertEqual(core._resolve_epub_image_data('OPS/text/ch.xhtml', uri, {}, {}), ('data:image', payload))
+
+    def test_background_and_picture_image_sources(self):
+        soup = self._soup(
+            '<body>'
+            '<picture><source srcset="../images/hi.png 2x"><img src="../images/fallback.png"></picture>'
+            '<div class="cover"></div>'
+            '</body>'
+        )
+        css_rules = [{'selector': '.cover', 'declarations': {'background-image': 'url("../images/bg.png")'}}]
+
+        self.assertEqual(core._epub_picture_node_source(soup.picture), '../images/fallback.png')
+        self.assertEqual(core._epub_background_image_source(soup.div, css_rules), '../images/bg.png')
 
     def test_pagebreak_detection_covers_hr_class_and_style(self):
         soup = self._soup(

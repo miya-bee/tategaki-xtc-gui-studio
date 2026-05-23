@@ -36,10 +36,11 @@ class SharedPageEntryPipelineTests(unittest.TestCase):
             core._make_page_entry(img2, page_args=alt_args, label='挿絵ページ'),
         ]
         observed = []
+        original_page_image_to_xt_bytes = core.page_image_to_xt_bytes
 
         def fake_page_image_to_xt_bytes(image, width, height, page_args):
             observed.append((width, height, page_args.night_mode))
-            return b'page'
+            return original_page_image_to_xt_bytes(image, width, height, page_args)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             out_path = Path(tmpdir) / 'sample.xtc'
@@ -58,6 +59,18 @@ class SharedPageEntryPipelineTests(unittest.TestCase):
             self.assertEqual(first[2:], (320, 480))
             self.assertEqual(second[2:], (300, 460))
         self.assertEqual(observed, [(320, 480, True), (300, 460, False)])
+
+    def test_write_page_entries_to_xtc_self_verifies_before_publish(self):
+        args = core.ConversionArgs(width=16, height=16, output_format='xtc')
+        entry = core._make_page_entry(Image.new('L', (16, 16), 255), page_args=args, label='本文ページ')
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / 'sample.xtc'
+            out_path.write_bytes(b'OLD')
+            with mock.patch.object(core, 'page_image_to_xt_bytes', return_value=b'invalid-page-blob'):
+                with self.assertRaisesRegex(RuntimeError, '自己検証に失敗しました'):
+                    core._write_page_entries_to_xtc([entry], out_path, args, output_path=out_path)
+            self.assertEqual(out_path.read_bytes(), b'OLD')
 
     def test_render_text_blocks_to_xtc_uses_page_entry_renderer_directly(self):
         args = core.ConversionArgs(width=320, height=480, output_format='xtc')

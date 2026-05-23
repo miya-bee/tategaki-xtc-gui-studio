@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import tategakiXTC_gui_core as core
 from tategakiXTC_folder_batch_executor import execute_folder_batch_plan
 from tategakiXTC_folder_batch_plan import build_folder_batch_plan
 
@@ -137,6 +138,65 @@ class FolderBatchExecutorTests(unittest.TestCase):
             self.assertTrue((out / 'a.xtc').exists())
             self.assertTrue((out / 'b.xtc').exists())
             self.assertTrue(any('[WARN]' in line and 'progress target disappeared' in line for line in logs))
+
+    def test_log_callback_failure_does_not_abort_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / 'input'
+            out = Path(tmpdir) / 'out'
+            root.mkdir()
+            (root / 'a.txt').write_text('A', encoding='utf-8')
+            plan = build_folder_batch_plan(root, out)
+
+            def converter(src: Path, dst: Path, item: object) -> None:
+                dst.write_text('ok', encoding='utf-8')
+
+            def broken_log(_message: str) -> None:
+                raise RuntimeError('log target disappeared')
+
+            result = execute_folder_batch_plan(plan, converter, log_cb=broken_log)
+
+            self.assertEqual(result.success_count, 1)
+            self.assertEqual(result.failed_count, 0)
+            self.assertTrue((out / 'a.xtc').exists())
+
+    def test_runtime_error_with_cancel_word_is_not_treated_as_cancellation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / 'input'
+            out = Path(tmpdir) / 'out'
+            root.mkdir()
+            (root / 'a.txt').write_text('A', encoding='utf-8')
+            (root / 'b.txt').write_text('B', encoding='utf-8')
+            plan = build_folder_batch_plan(root, out)
+
+            def converter(src: Path, dst: Path, item: object) -> None:
+                if src.name == 'a.txt':
+                    raise RuntimeError('cancel marker appears in a normal error')
+                dst.write_text('ok', encoding='utf-8')
+
+            result = execute_folder_batch_plan(plan, converter)
+
+            self.assertFalse(result.stopped)
+            self.assertEqual(result.failed_count, 1)
+            self.assertEqual(result.success_count, 1)
+            self.assertTrue((out / 'b.xtc').exists())
+
+    def test_conversion_cancelled_exception_stops_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / 'input'
+            out = Path(tmpdir) / 'out'
+            root.mkdir()
+            (root / 'a.txt').write_text('A', encoding='utf-8')
+            (root / 'b.txt').write_text('B', encoding='utf-8')
+            plan = build_folder_batch_plan(root, out)
+
+            def converter(src: Path, dst: Path, item: object) -> None:
+                raise core.ConversionCancelled('stop')
+
+            result = execute_folder_batch_plan(plan, converter)
+
+            self.assertTrue(result.stopped)
+            self.assertEqual(result.cancelled_count, 1)
+            self.assertFalse((out / 'b.xtc').exists())
 
 
 

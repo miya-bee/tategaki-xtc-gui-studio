@@ -176,10 +176,10 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertEqual(logic.normalize_wave_dash_drawing_mode('グリフ回転方式'), 'rotate')
         self.assertEqual(logic.normalize_wave_dash_drawing_mode('separate drawing'), 'separate')
         self.assertEqual(logic.normalize_wave_dash_drawing_mode(None, 'unknown-mode'), 'rotate')
-        self.assertEqual(logic.normalize_wave_dash_position_mode('下補正 弱'), 'down_weak')
-        self.assertEqual(logic.normalize_wave_dash_position_mode('下補正 強'), 'down_strong')
-        self.assertEqual(logic.normalize_wave_dash_position_mode('上補正 強'), 'standard')
-        self.assertEqual(logic.normalize_wave_dash_position_mode(None, '下補正 強'), 'down_strong')
+        self.assertEqual(logic.normalize_wave_dash_position_mode('下補正弱'), 'down_weak')
+        self.assertEqual(logic.normalize_wave_dash_position_mode('下補正強'), 'down_strong')
+        self.assertEqual(logic.normalize_wave_dash_position_mode('上補正強'), 'standard')
+        self.assertEqual(logic.normalize_wave_dash_position_mode(None, '下補正強'), 'down_strong')
 
     def test_payload_optional_int_value_handles_legacy_strings_and_invalid_values(self):
         self.assertEqual(logic.payload_optional_int_value({'value': ' 42 '}, 'value'), 42)
@@ -610,7 +610,7 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
             'profile': 'x4',
             'output_format': 'xtc',
             'wave_dash_drawing_mode': '別描画方式',
-            'wave_dash_position_mode': '下補正 強',
+            'wave_dash_position_mode': '下補正強',
         }
         summary = logic.build_preset_summary_html(
             preset,
@@ -1366,10 +1366,18 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertEqual(fallback['button_text'], 'プレビュー更新')
 
     def test_build_preview_progress_context_state_uses_status_message_fallback(self):
-        self.assertEqual(
-            logic.build_preview_progress_context_state({'status_message': '進行中'})['status_message'],
-            '進行中',
-        )
+        state = logic.build_preview_progress_context_state({
+            'status_message': '進行中',
+            'progress_visible': True,
+            'progress_busy': False,
+            'progress_current': 12,
+            'progress_total': 10,
+        })
+        self.assertEqual(state['status_message'], '進行中')
+        self.assertTrue(state['progress_visible'])
+        self.assertFalse(state['progress_busy'])
+        self.assertEqual(state['progress_current'], 10)
+        self.assertEqual(state['progress_total'], 10)
         self.assertEqual(
             logic.build_preview_progress_context_state('bad-context')['status_message'],
             '',

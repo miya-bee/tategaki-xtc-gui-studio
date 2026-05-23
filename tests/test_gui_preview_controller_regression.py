@@ -15,6 +15,8 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'font_size': 28,
                 'ruby_size': 12,
                 'ruby_hide': True,
+                'page_number_enabled': True,
+                'page_number_font_size': 14,
                 'line_spacing': 44,
                 'margin_t': 10,
                 'margin_b': 12,
@@ -27,6 +29,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'punctuation_position_mode': 'down_weak',
                 'ichi_position_mode': 'up_weak',
                 'halfwidth_digit_position_mode': 'down_strong',
+                'halfwidth_alpha_position_mode': 'up_weak',
                 'tatechuyoko_digit_mode': '3文字',
                 'lower_closing_bracket_position_mode': 'up_strong',
                 'wave_dash_drawing_mode': 'separate',
@@ -48,10 +51,13 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['max_pages'], 1)
         self.assertEqual(payload['night_mode'], 'true')
         self.assertEqual(payload['ruby_hide'], 'true')
+        self.assertEqual(payload['page_number_enabled'], 'true')
+        self.assertEqual(payload['page_number_font_size'], 14)
         self.assertEqual(payload['dither'], 'false')
         self.assertEqual(payload['punctuation_position_mode'], 'down_weak')
         self.assertEqual(payload['ichi_position_mode'], 'up_weak')
         self.assertEqual(payload['halfwidth_digit_position_mode'], 'down_strong')
+        self.assertEqual(payload['halfwidth_alpha_position_mode'], 'up_weak')
         self.assertEqual(payload['tatechuyoko_digit_mode'], '3')
         self.assertEqual(payload['lower_closing_bracket_position_mode'], 'up_strong')
         self.assertEqual(payload['wave_dash_drawing_mode'], 'separate')
@@ -66,6 +72,8 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'font_size': 28,
                 'ruby_size': 12,
                 'ruby_hide': 'on',
+                'page_number_enabled': '1',
+                'page_number_font_size': '16',
                 'line_spacing': 44,
                 'margin_t': 10,
                 'margin_b': 12,
@@ -76,7 +84,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'night_mode': False,
                 'kinsoku_mode': 'standard',
                 'wave_dash_drawing_mode': '回転グリフ方式',
-                'wave_dash_position_mode': '下補正 強',
+                'wave_dash_position_mode': '下補正強',
                 'output_format': 'xtc',
                 'width': 528,
                 'height': 792,
@@ -162,6 +170,8 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
                 'font_size': 28,
                 'ruby_size': 12,
                 'ruby_hide': 'on',
+                'page_number_enabled': '1',
+                'page_number_font_size': '16',
                 'line_spacing': 44,
                 'margin_t': 10,
                 'margin_b': 12,
@@ -185,6 +195,8 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertEqual(payload['dither'], 'false')
         self.assertEqual(payload['night_mode'], 'false')
         self.assertEqual(payload['ruby_hide'], 'true')
+        self.assertEqual(payload['page_number_enabled'], 'true')
+        self.assertEqual(payload['page_number_font_size'], 16)
 
     def test_build_preview_request_plan_overrides_output_format_and_normalizes_limit(self):
         plan = preview_controller.build_preview_request_plan(
@@ -215,6 +227,18 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertFalse(context['button_enabled'])
         self.assertEqual(context['button_text'], '生成中…')
         self.assertEqual(context['status_message'], '先頭 8 ページまでプレビューを更新しています…')
+        self.assertTrue(context['progress_visible'])
+        self.assertTrue(context['progress_busy'])
+        self.assertEqual(context['progress_total'], 0)
+
+    def test_build_preview_pending_context_shows_busy_progress(self):
+        context = preview_controller.build_preview_pending_context(message='予約中')
+
+        self.assertEqual(context['status_message'], '予約中')
+        self.assertTrue(context['progress_visible'])
+        self.assertTrue(context['progress_busy'])
+        self.assertEqual(context['progress_current'], 0)
+        self.assertEqual(context['progress_total'], 0)
 
     def test_build_preview_progress_context_formats_status_message(self):
         context = preview_controller.build_preview_progress_context(
@@ -225,12 +249,17 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         )
 
         self.assertEqual(context['status_message'], '画像を生成中 (2/5)')
+        self.assertTrue(context['progress_visible'])
+        self.assertFalse(context['progress_busy'])
+        self.assertEqual(context['progress_current'], 2)
+        self.assertEqual(context['progress_total'], 5)
 
     def test_build_preview_finish_context_restores_button_state(self):
         context = preview_controller.build_preview_finish_context()
 
         self.assertTrue(context['button_enabled'])
         self.assertEqual(context['button_text'], 'プレビュー更新')
+        self.assertFalse(context['progress_visible'])
 
     def test_preview_page_cache_tokens_reuse_single_page_token_helper_for_duplicates(self):
         preview_controller._preview_page_cache_token_text.cache_clear()

@@ -76,7 +76,7 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertEqual(core._halfwidth_digit_extra_y_for_mode(24, 'up_strong'), -7)
 
 
-    def test_draw_char_tate_halfwidth_digit_modes_move_text_digits_but_not_ruby(self):
+    def test_draw_char_tate_halfwidth_digit_modes_move_text_digits_and_number_symbols_but_not_ruby(self):
         img = Image.new('L', (160, 120), 255)
         draw = core.create_image_draw(img)
 
@@ -96,6 +96,62 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertGreater(capture_y('down_strong'), standard_y)
         self.assertLess(capture_y('up_strong'), standard_y)
         self.assertEqual(capture_y('down_strong', ruby_mode=True), standard_y)
+
+        for symbol in ('/', '.', ',', ':', ';', '+', '-', '=', '%'):
+            captured = []
+            setattr(draw, '_tategaki_halfwidth_digit_position_mode', 'down_strong')
+
+            def capture_symbol(_draw, text, pos, _font, f_size, **kwargs):
+                captured.append((text, pos))
+
+            with mock.patch.object(core, 'draw_centered_glyph', side_effect=capture_symbol):
+                core.draw_char_tate(draw, symbol, (40, 10), self.font, 24)
+            self.assertEqual(captured[0][0], symbol)
+            self.assertGreater(captured[0][1][1], standard_y)
+
+        for symbol in ('!', '?', 'A'):
+            captured = []
+            setattr(draw, '_tategaki_halfwidth_digit_position_mode', 'down_strong')
+
+            def capture_non_number_symbol(_draw, text, pos, _font, f_size, **kwargs):
+                captured.append((text, pos))
+
+            with mock.patch.object(core, 'draw_centered_glyph', side_effect=capture_non_number_symbol):
+                core.draw_char_tate(draw, symbol, (40, 10), self.font, 24)
+            self.assertEqual(captured[0][1][1], 10)
+
+
+    def test_draw_char_tate_halfwidth_alpha_modes_move_ascii_letters_but_not_digits_or_ruby(self):
+        img = Image.new('L', (160, 120), 255)
+        draw = core.create_image_draw(img)
+
+        def capture_y(char: str, mode: str, *, ruby_mode: bool = False) -> int:
+            captured = []
+            setattr(draw, '_tategaki_halfwidth_alpha_position_mode', mode)
+
+            def capture_centered(_draw, text, pos, _font, f_size, **kwargs):
+                captured.append((text, pos))
+
+            with mock.patch.object(core, 'draw_centered_glyph', side_effect=capture_centered):
+                core.draw_char_tate(draw, char, (40, 10), self.font, 24, ruby_mode=ruby_mode)
+            self.assertEqual(len(captured), 1)
+            return captured[0][1][1]
+
+        standard_y = capture_y('A', 'standard')
+        self.assertGreater(capture_y('A', 'down_strong'), standard_y)
+        self.assertLess(capture_y('z', 'up_strong'), standard_y)
+        self.assertEqual(capture_y('A', 'down_strong', ruby_mode=True), standard_y)
+
+        captured = []
+        setattr(draw, '_tategaki_halfwidth_alpha_position_mode', 'down_strong')
+
+        def capture_digit(_draw, text, pos, _font, f_size, **kwargs):
+            captured.append((text, pos))
+
+        with mock.patch.object(core, 'draw_centered_glyph', side_effect=capture_digit):
+            core.draw_char_tate(draw, '5', (40, 10), self.font, 24)
+        self.assertEqual(captured[0][1][1], 10)
+
 
     def test_draw_char_tate_halfwidth_digit_modes_move_numeric_tatechuyoko_only(self):
         img = Image.new('L', (160, 120), 255)
@@ -197,9 +253,9 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertEqual(core._glyph_position_mode('補正'), 'down_strong')
         self.assertEqual(core._glyph_position_mode('マイナス補正'), 'up_strong')
         self.assertEqual(core._glyph_position_mode('上補正'), 'up_strong')
-        self.assertEqual(core._glyph_position_mode('上補正 弱'), 'up_weak')
+        self.assertEqual(core._glyph_position_mode('上補正弱'), 'up_weak')
         self.assertEqual(core._glyph_position_mode('下補正'), 'down_strong')
-        self.assertEqual(core._glyph_position_mode('下補正 弱'), 'down_weak')
+        self.assertEqual(core._glyph_position_mode('下補正弱'), 'down_weak')
         self.assertEqual(core._glyph_position_mode('unknown'), 'standard')
 
     def test_glyph_and_wave_mode_normalizers_handle_unhashable_values(self):
@@ -212,10 +268,10 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
             def __str__(self):
                 return self.text
 
-        self.assertEqual(core._glyph_position_mode(_UnhashableModeValue('上補正 強')), 'up_strong')
+        self.assertEqual(core._glyph_position_mode(_UnhashableModeValue('上補正強')), 'up_strong')
         self.assertEqual(core._wave_dash_drawing_mode(_UnhashableModeValue('別描画')), 'separate')
         self.assertEqual(core._wave_dash_position_mode(_UnhashableModeValue('下補正弱')), 'down_weak')
-        self.assertEqual(core._wave_dash_position_mode(_UnhashableModeValue('上補正 強')), 'standard')
+        self.assertEqual(core._wave_dash_position_mode(_UnhashableModeValue('上補正強')), 'standard')
 
     def test_wave_dash_drawing_mode_accepts_manual_ini_label_variants(self):
         self.assertEqual(core._wave_dash_drawing_mode('回転グリフ方式'), 'rotate')

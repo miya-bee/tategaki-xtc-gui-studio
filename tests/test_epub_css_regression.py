@@ -49,6 +49,23 @@ class EpubCssRegressionTests(unittest.TestCase):
         self.assertIn('.note', selectors)
         self.assertIn('.strongish', selectors)
 
+    def test_descendant_css_selectors_do_not_overapply_to_all_matching_tags(self):
+        book = _FakeBook([
+            _FakeCssItem('styles/main.css', '.note p { display: none; } body > p.lead { margin-left: 1em; }')
+        ])
+        css_rules = core.extract_epub_css_rules(book)
+        selectors = {rule['selector'] for rule in css_rules}
+        self.assertIn('.note p', selectors)
+        self.assertIn('body > p.lead', selectors)
+
+        soup = self._soup('<body><div class="note"><p>hidden</p></div><p>visible</p><p class="lead">lead</p></body>')
+        hidden_para, visible_para, lead_para = soup.find_all('p')
+
+        self.assertTrue(core.epub_should_skip_node(hidden_para, css_rules=css_rules))
+        self.assertFalse(core.epub_should_skip_node(visible_para, css_rules=css_rules))
+        self.assertFalse(core.epub_should_skip_node(lead_para, css_rules=css_rules))
+        self.assertEqual(core.epub_node_indent_profile(lead_para, css_rules=css_rules, font_size=24)['indent_chars'], 1)
+
     def test_css_rules_drive_skip_pagebreak_indent_and_bold(self):
         book = _FakeBook([
             _FakeCssItem('styles/main.css', '.hidden { display: none; } p.pb { page-break-before: always; } .note { margin-left: 1em; } .strongish { font-weight: 700; }')

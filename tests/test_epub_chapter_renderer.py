@@ -106,6 +106,62 @@ class EpubChapterRendererTests(unittest.TestCase):
         self.assertEqual(pages[0]['image'].getpixel((0, 0)), 96)
 
 
+
+    def test_render_epub_chapter_pages_streams_completed_entries_when_requested(self):
+        args = core.ConversionArgs(width=320, height=220, font_size=24, ruby_size=12, line_spacing=40, output_format='xtc')
+        font, ruby_font = self._load_fonts(args)
+        streamed = []
+
+        returned = core._render_epub_chapter_pages_from_html(
+            '<html><body><p>前半の本文です。</p><hr/><p>後半の本文です。</p></body></html>',
+            'text/chapter1.xhtml',
+            args,
+            font,
+            ruby_font,
+            {'classes': set(), 'ids': set(), 'tags': set()},
+            {},
+            {},
+            page_created_cb=streamed.append,
+            store_page_entries=False,
+        )
+
+        self.assertEqual(returned, [])
+        self.assertGreaterEqual(len(streamed), 2)
+        self.assertTrue(all(entry.get('image') is not None for entry in streamed))
+
+    def test_render_epub_chapter_pages_from_html_accepts_picture_and_background_images(self):
+        args = core.ConversionArgs(width=320, height=480, font_size=24, ruby_size=12, line_spacing=40, output_format='xtc')
+        font, ruby_font = self._load_fonts(args)
+        image = Image.new('L', (280, 280), 88)
+        buf = io.BytesIO()
+        image.save(buf, format='PNG')
+        image_bytes = buf.getvalue()
+        html = (
+            '<html><body>'
+            '<picture><source srcset="images/source.png 2x"><img src="images/pic.png"></picture>'
+            '<div class="bg"></div>'
+            '</body></html>'
+        )
+        css_rules = [{'selector': '.bg', 'declarations': {'background-image': 'url(images/bg.png)'}}]
+
+        pages = core._render_epub_chapter_pages_from_html(
+            html,
+            'text/chapter1.xhtml',
+            args,
+            font,
+            ruby_font,
+            {'classes': set(), 'ids': set(), 'tags': set()},
+            {
+                'text/images/pic.png': image_bytes,
+                'text/images/bg.png': image_bytes,
+            },
+            {'pic.png': [('text/images/pic.png', image_bytes)], 'bg.png': [('text/images/bg.png', image_bytes)]},
+            css_rules=css_rules,
+        )
+
+        self.assertEqual(len(pages), 2)
+        self.assertEqual([page['label'] for page in pages], ['挿絵ページ', '挿絵ページ'])
+
     def test_prepare_inline_epub_image_bytes_cache_reuses_processing(self):
         args = core.ConversionArgs(font_size=24)
         image = Image.new('RGB', (16, 12), (32, 64, 96))
@@ -436,6 +492,74 @@ class EpubChapterRendererTests(unittest.TestCase):
         effective_bottom = core._effective_vertical_layout_bottom_margin(args.margin_b, args.font_size)
         max_ruby_y = args.height - effective_bottom - args.ruby_size
         self.assertTrue(all(y <= max_ruby_y for _x, y in ruby_positions))
+
+    def test_render_epub_chapter_pages_from_html_skips_footnote_nav_and_backrefs(self):
+        args = core.ConversionArgs(width=320, height=480, font_size=24, ruby_size=12, line_spacing=40, output_format='xtc')
+        font, ruby_font = self._load_fonts(args)
+        html = (
+            '<html><body>'
+            '<p id="ref1">本文<a epub:type="noteref" href="#fn1">[1]</a>続き</p>'
+            '<aside epub:type="footnote" id="fn1"><p>脚注本文<a epub:type="backlink" href="#ref1">戻る</a></p></aside>'
+            '<nav epub:type="page-list"><ol><li>page nav</li></ol></nav>'
+            '<nav epub:type="toc"><ol><li>目次項目</li></ol></nav>'
+            '</body></html>'
+        )
+        captured = []
+        original_draw_runs = core._VerticalPageRenderer.draw_runs
+
+        def spy_draw_runs(self, runs, *spy_args, **spy_kwargs):
+            captured.append(''.join(str(run.get('text', '')) for run in runs))
+            return original_draw_runs(self, runs, *spy_args, **spy_kwargs)
+
+        try:
+            core._VerticalPageRenderer.draw_runs = spy_draw_runs
+            core._render_epub_chapter_pages_from_html(
+                html,
+                'text/chapter1.xhtml',
+                args,
+                font,
+                ruby_font,
+                {'classes': set(), 'ids': set(), 'tags': set()},
+                {},
+                {},
+            )
+        finally:
+            core._VerticalPageRenderer.draw_runs = original_draw_runs
+
+        flattened = ''.join(captured)
+        self.assertIn('本文', flattened)
+        self.assertIn('続き', flattened)
+        self.assertNotIn('[1]', flattened)
+        self.assertNotIn('脚注本文', flattened)
+        self.assertNotIn('戻る', flattened)
+        self.assertNotIn('page nav', flattened)
+        self.assertNotIn('目次項目', flattened)
+
+    def test_collect_epub_spine_documents_skips_auxiliary_nav_documents(self):
+        class FakeItem:
+            def __init__(self, file_name, content):
+                self.file_name = file_name
+                self.media_type = 'application/xhtml+xml'
+                self._content = content.encode('utf-8')
+
+            def get_content(self):
+                return self._content
+
+        class FakeBook:
+            spine = [('nav', 'yes'), ('chap1', 'yes')]
+
+            def __init__(self):
+                self._items = {
+                    'nav': FakeItem('OPS/nav.xhtml', '<html><body><nav epub:type="toc"><ol><li>目次</li></ol></nav></body></html>'),
+                    'chap1': FakeItem('OPS/text/chapter1.xhtml', '<html><body><p>本文</p></body></html>'),
+                }
+
+            def get_item_with_id(self, item_id):
+                return self._items.get(item_id)
+
+        docs = core._collect_epub_spine_documents(FakeBook())
+        self.assertEqual([doc.file_name for doc in docs], ['OPS/text/chapter1.xhtml'])
+
 
 
 if __name__ == '__main__':

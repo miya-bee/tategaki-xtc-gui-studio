@@ -73,6 +73,20 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
                     core.build_xtc([page_blob, page_blob], out_path, 4, 4, output_format='xtch')
             self.assertEqual(b'OLD', out_path.read_bytes())
 
+    def test_atomic_replace_preserves_original_exception_when_partial_cleanup_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / 'sample.xtc'
+
+            def writer(handle):
+                handle.write(b'partial')
+
+            def verifier(_path):
+                raise ValueError('verifier failed')
+
+            with mock.patch.object(Path, 'unlink', side_effect=RuntimeError('cleanup failed')):
+                with self.assertRaisesRegex(ValueError, 'verifier failed'):
+                    core._atomic_replace_xt_container(out_path, writer, verifier=verifier)
+
     def test_verify_xt_container_file_rejects_trailing_garbage_after_last_page(self):
         args = core.ConversionArgs(width=4, height=4, output_format='xtch')
         page_blob = core.page_image_to_xt_bytes(Image.new('L', (4, 4), 255), 4, 4, args)
