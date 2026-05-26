@@ -1,5 +1,7 @@
 # 縦書きXTC GUI Studio
 
+[English README](README_EN.md)
+
 **縦書きXTC GUI Studio** は、Xteink X3 / X4 向けに、青空文庫テキスト、EPUB、Markdown、画像などを、日本語縦書きの **XTC / XTCH** ファイルへ変換する Windows 向け Python GUI アプリです。
 
 ルビ、ページ番号、余白、行間、禁則処理、記号位置補正などを調整し、xteink の純正ファームウェアや XTC / XTCH 対応環境で読みやすい固定レイアウトの電子書籍データを作成できます。
