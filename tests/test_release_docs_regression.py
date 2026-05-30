@@ -7,7 +7,7 @@ import unittest
 class ReleaseDocsRegressionTests(unittest.TestCase):
     def test_readme_matches_current_left_pane_order(self) -> None:
         readme = Path('README.md').read_text(encoding='utf-8')
-        self.assertIn('Preset → Font → Image → Display', readme)
+        self.assertIn('Left Preset/Spec → Center Settings/Results → Right Preview', readme)
 
     def test_readme_mentions_current_conflict_menu_route(self) -> None:
         readme = Path('README.md').read_text(encoding='utf-8')
@@ -90,14 +90,17 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
 
 
     def test_current_public_release_docs_are_consolidated(self) -> None:
+        self.assertTrue(Path('RELEASE_NOTES_v1_4_0.md').exists())
+        self.assertTrue(Path('PUBLISH_CHECKLIST_v1_4_0.md').exists())
         self.assertTrue(Path('RELEASE_NOTES_v1_3_6.md').exists())
         self.assertTrue(Path('PUBLISH_CHECKLIST_v1_3_6.md').exists())
-        self.assertFalse(list(Path('.').glob('RELEASE_NOTES_v1_3_6_*.md')))
-        self.assertFalse(list(Path('.').glob('PUBLISH_CHECKLIST_v1_3_6_*.md')))
+        self.assertFalse(list(Path('.').glob('RELEASE_NOTES_v1_3_8*.md')))
+        self.assertFalse(list(Path('.').glob('PUBLISH_CHECKLIST_v1_3_8*.md')))
         readme = Path('README.md').read_text(encoding='utf-8')
+        self.assertIn('RELEASE_NOTES_v1_4_0.md` — v1.3.6 から v1.4.0 までの差分まとめ', readme)
         self.assertIn('RELEASE_NOTES_v1_3_6.md` — v1.3.5 から v1.3.6 までの差分まとめ', readme)
-        self.assertNotIn('RELEASE_NOTES_v1_3_6_42.md', readme)
-        self.assertNotIn('PUBLISH_CHECKLIST_v1_3_6_40.md', Path('RELEASE_CHECKLIST.md').read_text(encoding='utf-8'))
+        self.assertNotIn('RELEASE_NOTES_v1_3_8_40.md', readme)
+        self.assertNotIn('PUBLISH_CHECKLIST_v1_3_8_40.md', Path('RELEASE_CHECKLIST.md').read_text(encoding='utf-8'))
 
     def test_docs_treat_v1_1_0_as_next_after_v1_0_2(self) -> None:
         readme = Path('README.md').read_text(encoding='utf-8')
@@ -129,11 +132,11 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
         self.assertIn('v1.3.3.22: the previous 100%->200% smoothstep', studio)
         self.assertIn('end = 3.0', studio)
         self.assertIn('eased = t * t * t * (t * (t * 6.0 - 15.0) + 10.0)', studio)
-        self.assertIn('v1.3.3.21: use the same placement model as the font view', studio)
-        self.assertIn('_viewer_preview_leading_gap', studio)
+        self.assertIn('v1.3.8.5: in the 3-pane file-viewer flow, center the XTC', studio)
+        self.assertIn('_set_horizontal_scrollbar_to_center_later', studio)
         self.assertIn('set_preview_leading_gap', studio)
-        self.assertIn("getattr(Qt, 'AlignLeft', None)", studio)
-        self.assertIn('set_alignment(align_left | align_top)', studio)
+        self.assertIn("self._qt_constant('AlignHCenter'", studio)
+        self.assertIn('set_alignment(align_hcenter | align_top)', studio)
         self.assertNotIn('viewer_scroll.setAlignment(Qt.AlignCenter)', studio)
         self.assertIn('_resync_device_preview_layout_now_and_later', studio)
         self.assertIn('v1.3.3.23: when switching from font view to device view immediately', studio)

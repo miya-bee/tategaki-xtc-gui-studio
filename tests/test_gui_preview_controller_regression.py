@@ -345,6 +345,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
 
         self.assertEqual(state['pages'], ['ZmFrZQ==', 'bW9jaw=='])
         self.assertTrue(state['truncated'])
+        self.assertEqual(state['right_pane_source'], 'preview')
         self.assertEqual(state['device_view_source'], 'preview')
         self.assertEqual(state['last_applied_preview_payload'], payload)
         refresh_state = state['refresh_state']
@@ -413,6 +414,8 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertEqual(context['preview_page_cache_tokens'], context['device_preview_page_cache_tokens'])
         self.assertTrue(context['preview_pages_truncated'])
         self.assertTrue(context['device_preview_pages_truncated'])
+        self.assertEqual(context['right_pane_source'], 'preview')
+        self.assertEqual(context['right_pane_source'], 'preview')
         self.assertEqual(context['device_view_source'], 'preview')
         self.assertEqual(context['last_preview_requested_limit'], 10)
         self.assertEqual(context['last_applied_preview_payload'], payload)
@@ -500,6 +503,8 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
 
         self.assertEqual(context['preview_pages_b64'], ['AAA='])
         self.assertFalse(context['preview_pages_truncated'])
+        self.assertEqual(context['right_pane_source'], 'preview')
+        self.assertEqual(context['right_pane_source'], 'preview')
         self.assertEqual(context['device_view_source'], 'preview')
         self.assertEqual(context['last_preview_requested_limit'], 10)
         self.assertEqual(context['last_applied_preview_payload'], {'mode': 'text'})
@@ -521,6 +526,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertEqual(context['device_preview_page_cache_tokens'], [])
         self.assertFalse(context['preview_pages_truncated'])
         self.assertFalse(context['device_preview_pages_truncated'])
+        self.assertEqual(context['right_pane_source'], 'xtc')
         self.assertEqual(context['device_view_source'], 'xtc')
         self.assertEqual(context['current_preview_page_index'], 0)
         self.assertEqual(context['current_device_preview_page_index'], 0)
@@ -551,6 +557,7 @@ class GuiPreviewControllerRegressionTests(unittest.TestCase):
         self.assertTrue(context['device_preview_pages_truncated'])
         self.assertEqual(context['current_preview_page_index'], 1)
         self.assertEqual(context['current_device_preview_page_index'], 0)
+        self.assertEqual(context['right_pane_source'], 'xtc')
         self.assertEqual(context['device_view_source'], 'xtc')
         self.assertTrue(context['clear_device_page'])
         self.assertEqual(context['status_message'], 'プレビュー生成エラー: bad preview')

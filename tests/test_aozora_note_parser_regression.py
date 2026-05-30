@@ -140,6 +140,49 @@ class AozoraNoteParserRegressionTests(unittest.TestCase):
         runs = core._aozora_inline_to_runs('本文［＃未知注記］末尾')
         self.assertEqual(''.join(run['text'] for run in runs), '本文末尾')
 
+    def test_plain_text_leading_fullwidth_space_does_not_double_default_indent(self):
+        blocks = core._blocks_from_plain_text(
+            '本文\n'
+            '　行頭一字下げ\n'
+            '　　行頭二字下げ\n'
+            '［＃ここから3字下げ］\n'
+            '　注記配下'
+        )
+        paragraphs = [block for block in blocks if block.get('kind') == 'paragraph']
+        self.assertEqual(''.join(run['text'] for run in paragraphs[0]['runs']), '本文')
+        self.assertEqual(paragraphs[0]['indent_chars'], 1)
+        self.assertEqual(''.join(run['text'] for run in paragraphs[1]['runs']), '行頭一字下げ')
+        self.assertEqual(paragraphs[1]['indent_chars'], 1)
+        self.assertEqual(''.join(run['text'] for run in paragraphs[2]['runs']), '行頭二字下げ')
+        self.assertEqual(paragraphs[2]['indent_chars'], 2)
+        self.assertEqual(''.join(run['text'] for run in paragraphs[3]['runs']), '注記配下')
+        self.assertEqual(paragraphs[3]['indent_chars'], 3)
+
+    def test_plain_text_opening_bracket_lines_do_not_get_default_indent(self):
+        self.assertTrue(core._plain_text_line_starts_with_opening_bracket('「会話」'))
+        self.assertFalse(core._plain_text_line_starts_with_opening_bracket('本文'))
+        blocks = core._blocks_from_plain_text(
+            '「会話」\n'
+            '『会話』\n'
+            '【確認ページ】\n'
+            '本文\n'
+            '　「明示字下げ付き会話」'
+        )
+        paragraphs = [block for block in blocks if block.get('kind') == 'paragraph']
+        self.assertEqual([ ''.join(run['text'] for run in block['runs']) for block in paragraphs ], [
+            '「会話」', '『会話』', '【確認ページ】', '本文', '「明示字下げ付き会話」'
+        ])
+        self.assertFalse(paragraphs[0]['indent'])
+        self.assertEqual(paragraphs[0]['indent_chars'], 0)
+        self.assertFalse(paragraphs[1]['indent'])
+        self.assertEqual(paragraphs[1]['indent_chars'], 0)
+        self.assertFalse(paragraphs[2]['indent'])
+        self.assertEqual(paragraphs[2]['indent_chars'], 0)
+        self.assertTrue(paragraphs[3]['indent'])
+        self.assertEqual(paragraphs[3]['indent_chars'], 1)
+        self.assertTrue(paragraphs[4]['indent'])
+        self.assertEqual(paragraphs[4]['indent_chars'], 1)
+
     def test_blocks_from_plain_text_apply_indent_pagebreak_and_aozora_notes(self):
         blocks = core._blocks_from_plain_text(
             '［＃ここから2字下げ、折り返して1字下げ］\n'

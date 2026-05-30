@@ -97,6 +97,24 @@ class InputPipelineRegressionTests(unittest.TestCase):
         self.assertEqual(out_path.parent, other)
         self.assertTrue(out_path.name.startswith('_outside_'))
 
+    def test_get_output_path_for_target_accepts_image_inputs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            src = base / 'page.png'
+            src.write_bytes(b'not-a-real-image-needed-for-path-test')
+            out_path = core.get_output_path_for_target(src, 'xtch')
+        self.assertEqual(out_path, src.with_suffix('.xtch'))
+
+    def test_get_output_path_for_target_flattens_nested_image_batch_output(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            nested = base / 'nested' / 'pages'
+            nested.mkdir(parents=True)
+            src = nested / '001.webp'
+            src.write_bytes(b'not-a-real-image-needed-for-path-test')
+            out_path = core.get_output_path_for_target(src, 'xtc', output_root=base)
+        self.assertEqual(out_path, base / 'nested~~pages~~001.xtc')
+
     def test_iter_conversion_targets_skips_generated_output_files(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)

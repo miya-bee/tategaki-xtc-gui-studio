@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 import tategakiXTC_gui_core as core
 from tests.image_golden_cases import FONT_PATH
@@ -135,6 +135,69 @@ class RendererApiRegressionTests(TestCase):
         self.assertEqual(renderer.curr_x, start_x - args.line_spacing)
         self.assertEqual(renderer.curr_y, args.margin_t + expected_indent_step + (line_step * 2))
         self.assertTrue(renderer.has_drawn_on_page)
+
+
+    def test_draw_text_run_consumes_token_at_overindented_wrapped_column_top(self):
+        args = core.ConversionArgs(width=160, height=120, font_size=20, ruby_size=10, line_spacing=28, output_format='xtc')
+        renderer = self._load_renderer(args)
+        wrap_indent_chars = 6
+        wrap_indent_step = wrap_indent_chars * (args.font_size + 2)
+        renderer.curr_y = args.margin_t + wrap_indent_step
+        start_x = renderer.curr_x
+
+        renderer.draw_text_run('（', renderer.font, wrap_indent_chars=wrap_indent_chars)
+
+        self.assertEqual(renderer.curr_x, start_x - args.line_spacing)
+        expected_indent_step = renderer._clamp_indent_step_height(wrap_indent_step)
+        self.assertEqual(renderer.curr_y, args.margin_t + expected_indent_step + args.font_size + 2)
+        self.assertTrue(renderer.has_drawn_on_page)
+
+
+    def test_draw_text_run_overlarge_wrap_indent_keeps_glyph_visible(self):
+        args = core.ConversionArgs(width=160, height=120, font_size=20, ruby_size=10, line_spacing=28, output_format='xtc')
+        renderer = self._load_renderer(args)
+        renderer.advance_column(1, indent_chars=99)
+
+        renderer.draw_text_run('「大きな字下げでも見える', renderer.font, wrap_indent_chars=99)
+
+        white = Image.new('L', renderer.img.size, 255)
+        bbox = ImageChops.difference(renderer.img, white).getbbox()
+        self.assertIsNotNone(bbox)
+        assert bbox is not None
+        self.assertLess(bbox[1], int(args.height * 0.80))
+        self.assertLessEqual(renderer.curr_y, args.height + args.font_size + 2)
+        self.assertTrue(renderer.has_drawn_on_page)
+
+    def test_draw_text_run_overlarge_indent_starts_at_column_head_on_x4_page(self):
+        args = core.ConversionArgs(width=480, height=800, font_size=26, ruby_size=12, line_spacing=41, output_format='xtc')
+        renderer = self._load_renderer(args)
+        renderer.advance_column(1, indent_chars=99)
+
+        renderer.draw_text_run('「大きな折り返し字下げでも列頭付近から始める', renderer.font, wrap_indent_chars=99)
+
+        white = Image.new('L', renderer.img.size, 255)
+        bbox = ImageChops.difference(renderer.img, white).getbbox()
+        self.assertIsNotNone(bbox)
+        assert bbox is not None
+        self.assertLess(bbox[1], args.margin_t + (args.font_size + 2))
+        self.assertEqual(renderer._clamp_indent_step_height(99 * (args.font_size + 2)), 0)
+        self.assertTrue(renderer.has_drawn_on_page)
+
+    def test_overlarge_indent_is_ignored_on_tall_pages_too(self):
+        for height in (800, 1200, 2000, 4000):
+            with self.subTest(height=height):
+                args = core.ConversionArgs(width=480, height=height, font_size=26, ruby_size=12, line_spacing=41, output_format='xtc')
+                renderer = self._load_renderer(args)
+                renderer.advance_column(1, indent_chars=99)
+
+                renderer.draw_text_run('「大きな折り返し字下げでも列頭付近から始める', renderer.font, wrap_indent_chars=99)
+
+                white = Image.new('L', renderer.img.size, 255)
+                bbox = ImageChops.difference(renderer.img, white).getbbox()
+                self.assertIsNotNone(bbox)
+                assert bbox is not None
+                self.assertLess(bbox[1], args.margin_t + (args.font_size + 2))
+                self.assertEqual(renderer._clamp_indent_step_height(99 * (args.font_size + 2)), 0)
 
 
     def test_draw_text_run_reuses_remaining_slot_count_across_plain_tokens(self):

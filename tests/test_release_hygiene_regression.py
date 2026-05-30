@@ -112,7 +112,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
     def test_readme_matches_current_ui_paths(self):
         content = Path('README.md').read_text(encoding='utf-8')
-        self.assertIn('Preset → Font → Image → Display', content)
+        self.assertIn('Preset/Spec → Output → Composition → Position → Preview Update', content)
         self.assertNotIn('「その他オプション」を左ペインへ戻し', content)
         self.assertNotIn('同梱 ini も合わせて更新しました', content)
 
@@ -264,7 +264,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
             content = Path(relative).read_text(encoding='utf-8')
             self.assertIn('set "SCRIPT_DIR=%~dp0"', content)
             self.assertIn('pushd "%SCRIPT_DIR%" >nul 2>nul', content)
-            self.assertIn('Could not switch to the script folder.', content)
+            self.assertIn('Could not switch to the app folder', content)
             self.assertIn('popd', content)
 
 

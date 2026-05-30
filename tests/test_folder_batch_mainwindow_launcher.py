@@ -105,7 +105,7 @@ class FakeMainWindow:
         self.menu = FakeMenuBar()
         self.run_btn = FakeButton()
         self.folder_batch_btn = FakeButton()
-        self.folder_batch_action = FakeAction('フォルダ一括変換...')
+        self.folder_batch_action = FakeAction('フォルダ一括変換')
         self.stop_btn = FakeButton()
         self.busy_badge = FakeLabel()
         self.progress_label = FakeLabel()
@@ -209,7 +209,7 @@ class FolderBatchMainWindowLauncherTests(unittest.TestCase):
         mw = FakeMainWindow()
         action = install_folder_batch_menu_action_best_effort(mw)
         self.assertIsNotNone(action)
-        self.assertEqual(mw.menu.actions[0].title, 'フォルダ一括変換...')
+        self.assertEqual(mw.menu.actions[0].title, 'フォルダ一括変換')
         self.assertIsNotNone(mw.menu.actions[0].triggered.connected)
 
     def test_open_dialog_dry_run_can_be_tested_with_fake_dialog(self) -> None:

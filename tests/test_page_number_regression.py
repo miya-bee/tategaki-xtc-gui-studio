@@ -22,11 +22,12 @@ class PageNumberRegressionTests(unittest.TestCase):
         )
         self.assertEqual(args.margin_b, 13)
 
-    def test_conversion_args_rejects_page_number_font_size_30_or_larger(self) -> None:
-        with self.assertRaisesRegex(ValueError, '30 未満'):
-            core.ConversionArgs(page_number_font_size=30)
-        with self.assertRaisesRegex(ValueError, '30 未満'):
-            worker_logic.build_conversion_args({'page_number_enabled': True, 'page_number_font_size': 30})
+    def test_conversion_args_clamps_page_number_font_size_30_or_larger(self) -> None:
+        self.assertEqual(core.ConversionArgs(page_number_font_size=30).page_number_font_size, 29)
+        self.assertEqual(
+            worker_logic.build_conversion_args({'page_number_enabled': True, 'page_number_font_size': 99}).page_number_font_size,
+            29,
+        )
 
     def test_page_number_overlay_draws_bottom_right_ink(self) -> None:
         args = core.ConversionArgs(

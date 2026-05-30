@@ -26,7 +26,7 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
             return '\n'.join(app_markers) + '\n'
         batch_markers = rel.REQUIRED_BATCH_CONTENT_MARKERS.get(rel_path)
         if batch_markers:
-            return '@echo off\n' + '\n'.join(f'echo {marker}' for marker in batch_markers) + '\n'
+            return '@echo off\r\n' + '\r\n'.join(f'echo {marker}' for marker in batch_markers) + '\r\n'
         requirements_markers = rel.REQUIRED_REQUIREMENTS_CONTENT_MARKERS.get(rel_path)
         if requirements_markers:
             return '\n'.join(requirements_markers) + '\n'
@@ -813,6 +813,8 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
                 'untracked_regression_tests',
                 'untracked_golden_cases',
                 'required_file_list_issues',
+                'batch_file_line_endings',
+                'batch_file_pause_before_exit',
                 'required_file_content_issues',
                 'missing_assets',
             ],
@@ -3645,6 +3647,69 @@ class ReleaseBundleHygieneTests(unittest.TestCase):
                     rel.build_release_zip(root, out)
 
             self.assertFalse(out.exists())
+
+
+
+    def test_verify_release_zip_reports_lf_only_batch_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            zip_path = Path(td) / 'lf-bat.zip'
+            with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr('tategakiXTC_gui_studio.py', 'print("app")\n')
+                zf.writestr('run_gui.bat', '@echo off\necho bad\n')
+
+            issues = rel.verify_release_zip_batch_file_line_endings(zip_path)
+
+            self.assertEqual(issues, ['run_gui.bat (no CRLF line endings)'])
+
+
+    def test_verify_release_zip_reports_mixed_bare_lf_batch_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            zip_path = Path(td) / 'mixed-lf-bat.zip'
+            with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr('tategakiXTC_gui_studio.py', 'print("app")\n')
+                zf.writestr('run_gui.bat', b'@echo off\r\necho ok\necho bad\r\n')
+
+            issues = rel.verify_release_zip_batch_file_line_endings(zip_path)
+
+            self.assertEqual(issues, ['run_gui.bat (contains bare LF line endings)'])
+
+    def test_build_release_zip_normalizes_batch_files_to_crlf(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / 'project'
+            root.mkdir(parents=True, exist_ok=True)
+            (root / 'README.md').write_text('ok', encoding='utf-8')
+            (root / 'run_gui.bat').write_bytes(b'@echo off\necho ok\n')
+            out = root / 'dist' / 'release.zip'
+
+            rel.build_release_zip(root, out)
+
+            with zipfile.ZipFile(out) as zf:
+                data = zf.read('run_gui.bat')
+            self.assertIn(b'\r\n', data)
+            self.assertFalse(rel._has_bare_lf_bytes(data))
+            self.assertEqual(rel.verify_release_zip_batch_file_line_endings(out), [])
+
+    def test_verify_release_zip_reports_batch_exit_without_preceding_pause(self):
+        with tempfile.TemporaryDirectory() as td:
+            zip_path = Path(td) / 'no-pause-bat.zip'
+            with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr('run_gui.bat', '@echo off\r\necho bad\r\nexit /b 1\r\n')
+
+            issues = rel.verify_release_zip_batch_file_pause_before_exit(zip_path)
+
+            self.assertEqual(issues, ['run_gui.bat:3 exit /b without preceding pause'])
+
+    def test_verify_release_zip_accepts_pause_before_batch_exit(self):
+        with tempfile.TemporaryDirectory() as td:
+            zip_path = Path(td) / 'pause-bat.zip'
+            with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr('run_gui.bat', '@echo off\r\necho ok\r\npause\r\nexit /b 1\r\n')
+                zf.writestr('install_requirements.bat', '@echo off\r\npause\r\nexit /b 0\r\n')
+                zf.writestr('run_tests.bat', '@echo off\r\npause\r\nexit /b 0\r\n')
+
+            issues = rel.verify_release_zip_batch_file_pause_before_exit(zip_path)
+
+            self.assertEqual(issues, [])
 
 
 if __name__ == '__main__':

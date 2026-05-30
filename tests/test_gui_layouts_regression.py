@@ -60,11 +60,11 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         plan = gui_layouts.build_top_bar_plan(path_button_width='96')
         self.assertEqual(plan['bar_height'], 56)
         self.assertEqual(plan['path_button_width'], 96)
-        self.assertEqual(plan['file_button_text'], 'ファイルを開く...')
+        self.assertEqual(plan['file_button_text'], 'ファイルを開く')
         self.assertEqual(plan['file_button_tooltip'], '1つのファイルを開いて変換します')
-        self.assertEqual(plan['folder_button_text'], '保存先を選ぶ...')
+        self.assertEqual(plan['folder_button_text'], '保存先を選ぶ')
         self.assertEqual(plan['folder_button_tooltip'], '変換後のXTC / XTCH の保存先を選びます')
-        self.assertEqual(plan['folder_batch_button_text'], 'フォルダ一括変換...')
+        self.assertEqual(plan['folder_batch_button_text'], 'フォルダ一括変換')
         self.assertEqual(plan['folder_batch_button_width'], 152)
         self.assertIn('上部ボタンの使い分け', plan['top_buttons_help_tooltip'])
         self.assertEqual(plan['top_buttons_help_title'], '上部ボタンの使い分け')
@@ -77,10 +77,11 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         toggle_plan = gui_layouts.build_view_toggle_bar_plan()
         nav_plan = gui_layouts.build_nav_bar_plan()
         self.assertEqual(toggle_plan['font_view_text'], 'フォントビュー')
-        self.assertEqual(toggle_plan['device_view_text'], '実機ビュー')
-        self.assertIn('フォントビュー:', toggle_plan['help_text'])
-        self.assertIn('実機ビュー:', toggle_plan['help_text'])
-        self.assertEqual(toggle_plan['bar_height'], 88)
+        self.assertEqual(toggle_plan['right_pane_text'], '右ペイン')
+        self.assertEqual(toggle_plan['device_view_text'], '右ペイン')
+        self.assertIn('右ペイン:', toggle_plan['help_text'])
+        self.assertIn('XTC/XTCH', toggle_plan['help_text'])
+        self.assertEqual(toggle_plan['bar_height'], 76)
         self.assertEqual(toggle_plan['row_spacing'], 2)
         self.assertEqual(toggle_plan['display_toggle_spacing'], 10)
         self.assertEqual(toggle_plan['preview_zoom_spacing'], 8)
@@ -90,6 +91,7 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(toggle_plan['view_button_focus_policy'], 'no_focus')
         self.assertTrue(toggle_plan['view_button_checkable'])
         self.assertTrue(toggle_plan['font_view_checked_default'])
+        self.assertFalse(toggle_plan['right_pane_checked_default'])
         self.assertFalse(toggle_plan['device_view_checked_default'])
         self.assertEqual(toggle_plan['preview_zoom_down_text'], '−')
         self.assertEqual(toggle_plan['preview_zoom_button_object_name'], 'stepBtn')
@@ -99,13 +101,13 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(toggle_plan['preview_zoom_spin_suffix'], '%')
         self.assertEqual(toggle_plan['preview_zoom_label_text'], '表示倍率')
         self.assertEqual(toggle_plan['preview_zoom_actual_size_label_text'], '実寸補正')
-        self.assertIn('実機ビューの表示倍率', toggle_plan['preview_zoom_normal_tooltip'])
+        self.assertIn('右ペイン表示', toggle_plan['preview_zoom_normal_tooltip'])
         self.assertIn('補正倍率', toggle_plan['preview_zoom_actual_size_tooltip'])
         self.assertIn('実寸補正', toggle_plan['preview_zoom_tooltip'])
         self.assertEqual(nav_plan['current_xtc_label_text'], '表示中: なし')
         self.assertEqual(nav_plan['current_xtc_label_object_name'], 'hintLabel')
         self.assertEqual(nav_plan['current_xtc_label_min_width'], 0)
-        self.assertEqual(nav_plan['current_xtc_label_max_width'], 220)
+        self.assertEqual(nav_plan['current_xtc_label_max_width'], 120)
         self.assertEqual(nav_plan['nav_reverse_object_name'], 'navToggle')
         self.assertEqual(nav_plan['nav_reverse_focus_policy'], 'no_focus')
         self.assertEqual(nav_plan['page_input_minimum'], 0)
@@ -149,6 +151,7 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(plan['view_button_focus_policy'], 'no_focus')
         self.assertTrue(plan['view_button_checkable'])
         self.assertTrue(plan['font_view_checked_default'])
+        self.assertFalse(plan['right_pane_checked_default'])
         self.assertFalse(plan['device_view_checked_default'])
 
 
@@ -203,6 +206,7 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(plan['content_spacing'], 0)
         self.assertEqual(plan['external_scrollbar_object_name'], 'bottomPanelScrollBar')
         self.assertEqual(plan['external_scrollbar_single_step'], 20)
+        self.assertFalse(plan['external_scrollbar_enabled'])
         self.assertEqual(plan['status_strip_height'], 34)
         self.assertEqual(plan['bottom_separator_frame_shape'], 'hline')
         self.assertEqual(plan['bottom_separator_object_name'], 'bottomPanelSep')
@@ -257,11 +261,12 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         plan = gui_layouts.build_preset_section_plan(minimum_button_width='bad')
         self.assertEqual(plan['row_spacing'], 8)
         self.assertEqual(plan['button_min_width'], 104)
-        self.assertEqual(plan['apply_button_text'], 'プリセット読込')
-        self.assertEqual(plan['save_button_text'], 'プリセット保存')
+        self.assertEqual(plan['button_min_height'], 44)
+        self.assertEqual(plan['apply_button_text'], 'プリセット\n読み込み')
+        self.assertEqual(plan['save_button_text'], 'プリセット\n保存')
         self.assertEqual(plan['button_object_name'], 'smallBtn')
-        self.assertEqual(plan['combo_width'], 294)
-        self.assertEqual(plan['combo_max_width'], 294)
+        self.assertEqual(plan['combo_width'], 260)
+        self.assertEqual(plan['combo_max_width'], 260)
         self.assertEqual(plan['summary_text'], '')
         self.assertEqual(plan['summary_label_object_name'], 'presetSummaryLabel')
         self.assertTrue(plan['summary_label_word_wrap'])
@@ -302,6 +307,49 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(plan['margin_pair_spacing'], 16)
 
 
+
+    def test_build_center_settings_container_plan_aliases_left_defaults(self):
+        self.assertEqual(
+            gui_layouts.build_center_settings_container_plan(),
+            gui_layouts.build_left_settings_container_plan(),
+        )
+
+    def test_center_settings_layout_constants_keep_legacy_object_names_centralized(self):
+        plan = gui_layouts.build_center_settings_container_plan()
+
+        self.assertEqual(
+            plan['container_object_name'],
+            gui_layouts.CENTER_SETTINGS_LEGACY_CONTAINER_OBJECT_NAME,
+        )
+        self.assertEqual(
+            plan['bottom_separator_object_name'],
+            gui_layouts.CENTER_SETTINGS_LEGACY_BOTTOM_SEPARATOR_OBJECT_NAME,
+        )
+        self.assertEqual(
+            gui_layouts.build_center_settings_section_keys(),
+            gui_layouts.CENTER_SETTINGS_SECTION_KEYS,
+        )
+        self.assertEqual(
+            gui_layouts.build_center_settings_section_keys(include_behavior=True),
+            gui_layouts.CENTER_SETTINGS_SECTION_KEYS + (gui_layouts.CENTER_SETTINGS_BEHAVIOR_SECTION_KEY,),
+        )
+
+    def test_build_center_settings_section_keys_aliases_left_defaults(self):
+        self.assertEqual(
+            gui_layouts.build_center_settings_section_keys(),
+            gui_layouts.build_left_settings_section_keys(),
+        )
+        self.assertEqual(
+            gui_layouts.build_center_settings_section_keys(include_behavior=True),
+            gui_layouts.build_left_settings_section_keys(include_behavior=True),
+        )
+
+    def test_build_center_settings_section_layout_plan_aliases_left_defaults(self):
+        self.assertEqual(
+            gui_layouts.build_center_settings_section_layout_plan('position'),
+            gui_layouts.build_left_settings_section_layout_plan('position'),
+        )
+
     def test_build_left_settings_container_plan_exposes_left_pane_defaults(self):
         plan = gui_layouts.build_left_settings_container_plan()
         self.assertEqual(plan['container_object_name'], 'leftSettingsContainer')
@@ -311,15 +359,15 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(plan['splitter_handle_width'], 5)
         self.assertEqual(plan['splitter_top_stretch_factor'], 3)
         self.assertEqual(plan['splitter_bottom_stretch_factor'], 1)
-        self.assertTrue(plan['scroll_widget_resizable'])
+        self.assertFalse(plan['scroll_widget_resizable'])
         self.assertEqual(plan['scroll_frame_shape'], 'no_frame')
-        self.assertEqual(plan['scroll_horizontal_scroll_bar_policy'], 'as_needed')
-        self.assertEqual(plan['scroll_vertical_scroll_bar_policy'], 'as_needed')
-        self.assertEqual(plan['scroll_minimum_content_width'], 760)
+        self.assertEqual(plan['scroll_horizontal_scroll_bar_policy'], 'always_on')
+        self.assertEqual(plan['scroll_vertical_scroll_bar_policy'], 'always_on')
+        self.assertEqual(plan['scroll_minimum_content_width'], 640)
         self.assertEqual(plan['bottom_separator_frame_shape'], 'hline')
         self.assertEqual(plan['bottom_separator_object_name'], 'leftSettingsBottomSep')
         self.assertEqual(plan['bottom_separator_height'], 1)
-        self.assertEqual(plan['bottom_panel_min_height'], 92)
+        self.assertEqual(plan['bottom_panel_min_height'], 120)
 
     def test_build_left_settings_section_layout_plan_exposes_fileviewer_defaults(self):
         plan = gui_layouts.build_left_settings_section_layout_plan('fileviewer')
@@ -327,6 +375,17 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(plan['title'], 'ファイルビューワー')
         self.assertEqual(plan['contents_margins'], (8, 10, 8, 8))
         self.assertEqual(plan['spacing'], 6)
+
+
+    def test_build_results_tab_plan_exposes_inner_scroll_defaults(self):
+        plan = gui_layouts.build_results_tab_plan()
+        self.assertTrue(plan['summary_scroll_widget_resizable'])
+        self.assertEqual(plan['summary_scroll_frame_shape'], 'no_frame')
+        self.assertEqual(plan['summary_scroll_horizontal_scroll_bar_policy'], 'as_needed')
+        self.assertEqual(plan['summary_scroll_vertical_scroll_bar_policy'], 'always_on')
+        self.assertEqual(plan['results_list_vertical_scroll_bar_policy'], 'always_on')
+        self.assertEqual(plan['results_list_horizontal_scroll_bar_policy'], 'as_needed')
+        self.assertEqual(plan['results_list_selection_mode'], 'single_selection')
 
     def test_build_file_viewer_section_plan_owns_xtc_open_button_text(self):
         display_plan = gui_layouts.build_display_section_plan()
@@ -338,25 +397,26 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(file_viewer_plan['open_xtc_help_leading_spacing'], 8)
         self.assertTrue(file_viewer_plan['open_xtc_help_trailing_stretch'])
         self.assertIn('.xtc / .xtch', file_viewer_plan['open_xtc_help_text'])
-        self.assertIn('右ペインの実機ビュー', file_viewer_plan['open_xtc_help_text'])
+        self.assertIn('右ペイン', file_viewer_plan['open_xtc_help_text'])
+        self.assertNotIn('実機ビュー', file_viewer_plan['open_xtc_help_text'])
 
     def test_build_left_settings_section_keys_preserves_default_order(self):
         section_keys = gui_layouts.build_left_settings_section_keys()
-        self.assertEqual(section_keys, ('preset', 'font', 'image', 'display', 'fileviewer'))
+        self.assertEqual(section_keys, ('output', 'composition', 'position', 'preview_controls'))
 
     def test_build_left_settings_section_keys_optionally_appends_behavior(self):
         section_keys = gui_layouts.build_left_settings_section_keys(include_behavior=True)
-        self.assertEqual(section_keys, ('preset', 'font', 'image', 'display', 'fileviewer', 'behavior'))
+        self.assertEqual(section_keys, ('output', 'composition', 'position', 'preview_controls', 'behavior'))
 
 
     def test_build_left_settings_section_keys_normalizes_boolean_like_flag(self):
         self.assertEqual(
             gui_layouts.build_left_settings_section_keys(include_behavior='false'),
-            ('preset', 'font', 'image', 'display', 'fileviewer'),
+            ('output', 'composition', 'position', 'preview_controls'),
         )
         self.assertEqual(
             gui_layouts.build_left_settings_section_keys(include_behavior='1'),
-            ('preset', 'font', 'image', 'display', 'fileviewer', 'behavior'),
+            ('output', 'composition', 'position', 'preview_controls', 'behavior'),
         )
 
     def test_build_row_layout_plan_normalizes_boolean_like_add_stretch(self):

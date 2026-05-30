@@ -1,5 +1,6 @@
 import os
 import sys
+import unicodedata
 import tempfile
 import types
 import unittest
@@ -618,6 +619,59 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertEqual(result, '')
         self.assertTrue(any('コードブロック用フォントが見つかりませんでした' in msg for msg in cm.output))
 
+    def test_get_code_font_value_uses_cross_platform_monospace_candidates(self):
+        core.get_code_font_value.cache_clear()
+        menlo_path = Path('/System/Library/Fonts/Menlo.ttc')
+
+        def fake_exists(path_obj):
+            return path_obj == menlo_path
+
+        def fake_is_file(path_obj):
+            return path_obj == menlo_path
+
+        with mock.patch.object(Path, 'exists', fake_exists), \
+             mock.patch.object(Path, 'is_file', fake_is_file), \
+             mock.patch.object(Path, 'glob', return_value=[]), \
+             mock.patch.object(core.shutil, 'which', return_value=None), \
+             mock.patch.object(core, 'load_truetype_font', return_value=object()) as load_font:
+            result = core.get_code_font_value('primary.ttf')
+
+        self.assertEqual(result, str(menlo_path))
+        self.assertEqual(load_font.call_args[0][0], str(menlo_path))
+
+    def test_preferred_system_font_specs_accepts_macos_hiragino_normalized_path(self):
+        core.clear_font_entry_cache()
+        original_path = '/System/Library/Fonts/ヒラギノ角ゴ ProN W3.ttc'
+        nfd_path = Path(unicodedata.normalize('NFD', original_path))
+        real_exists = Path.exists
+        real_is_file = Path.is_file
+
+        def fake_exists(path_obj):
+            if path_obj == nfd_path:
+                return True
+            return real_exists(path_obj)
+
+        def fake_is_file(path_obj):
+            if path_obj == nfd_path:
+                return True
+            return real_is_file(path_obj)
+
+        with mock.patch.object(Path, 'exists', fake_exists), \
+             mock.patch.object(Path, 'is_file', fake_is_file), \
+             mock.patch.object(core.shutil, 'which', return_value=None):
+            specs = core._preferred_system_font_specs()
+
+        self.assertIn(core.build_font_spec(nfd_path, 0), specs)
+        core.clear_font_entry_cache()
+
+    def test_legacy_font_fallback_accepts_macos_font_names(self):
+        with mock.patch.object(core, '_pick_system_font_spec', return_value='fallback.ttf') as picker:
+            self.assertEqual(
+                core._legacy_font_fallback_spec('/old/mac/ヒラギノ明朝 ProN W3.ttc'),
+                'fallback.ttf',
+            )
+        picker.assert_called_once_with(prefer_bold=False, prefer_serif=True)
+
     def test_create_image_draw_and_get_draw_target_cover_attribute_paths(self):
         img = Image.new('L', (20, 20), 255)
         draw = core.create_image_draw(img)
@@ -827,8 +881,18 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
             core._remaining_vertical_slots_for_current_column(12, 10, 100, 10, 20, 2 * (20 + 2)),
             core._remaining_vertical_slots(12, 100, 10, 20),
         )
+        self.assertFalse(core._is_after_effective_column_top(54, 10, 44))
+        self.assertTrue(core._is_after_effective_column_top(55, 10, 44))
+        self.assertTrue(core._is_after_effective_column_top(11, 10, 0))
         self.assertTrue(core._would_start_forbidden_after_hang_pair(['あ', '、', '」'], 0))
         self.assertFalse(core._would_start_forbidden_after_hang_pair(['あ', '、'], 0))
+        for pair in (['、', '。'], ['。', '、'], ['、', '、'], ['。', '。']):
+            with self.subTest(two_token_pair=pair):
+                two_token_hints = core._build_vertical_layout_hints(pair)
+                self.assertEqual(two_token_hints['would_start_forbidden_after_hang_pair'], (False, False))
+        self.assertTrue(core._would_orphan_short_tail_after_break(['す', 'か', '？', '」', '、', '「'], 0))
+        self.assertFalse(core._would_orphan_short_tail_after_break(['終', 'わ', 'り', 'で', 'す', '」'], 3))
+        self.assertFalse(core._would_orphan_short_tail_after_break(['な', 'い', 'か', 'を'], 0))
 
     def test_choose_vertical_layout_action_covers_done_off_pair_and_recursive_advance(self):
         self.assertEqual(
@@ -840,12 +904,20 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
             'draw',
         )
         self.assertEqual(
-            core._choose_vertical_layout_action(['!', '?'], 0, 70, 10, 100, 10, 20, kinsoku_mode='standard'),
+            core._choose_vertical_layout_action(['!', '?'], 0, 45, 10, 100, 10, 20, kinsoku_mode='standard'),
             'advance',
         )
         self.assertEqual(
-            core._choose_vertical_layout_action(['A', '、', '」'], 0, 70, 10, 100, 10, 20, kinsoku_mode='standard'),
+            core._choose_vertical_layout_action(['A', '、', '」'], 0, 45, 10, 100, 10, 20, kinsoku_mode='standard'),
             'advance',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['す', 'か', '？', '」', '、', '「'], 0, 45, 10, 100, 10, 20, kinsoku_mode='standard'),
+            'advance',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['終', 'わ', 'り', 'で', 'す', '」'], 3, 45, 10, 100, 10, 20, kinsoku_mode='standard'),
+            'draw',
         )
         self.assertEqual(
             core._choose_vertical_layout_action(['（', '」', '。'], 0, 40, 10, 100, 10, 20, kinsoku_mode='standard'),
@@ -861,6 +933,7 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertEqual(hints['hanging_punctuation'][4], core._is_hanging_punctuation(tokens[4]))
         self.assertEqual(hints['continuous_pair_with_next'][6], core._is_continuous_punctuation_pair(tokens[6], tokens[7]))
         self.assertEqual(hints['would_start_forbidden_after_hang_pair'][3], core._would_start_forbidden_after_hang_pair(tokens, 3))
+        self.assertEqual(hints['would_orphan_short_tail_after_break'][3], core._would_orphan_short_tail_after_break(tokens, 3))
         self.assertEqual(
             list(hints['protected_group_len']),
             [core._protected_token_group_length(tokens, idx) for idx in range(len(tokens))],
@@ -869,8 +942,10 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
     def test_choose_vertical_layout_action_with_hints_matches_legacy_helper(self):
         cases = [
             (['）'], 10, 10, 100, 10, 20, 'off'),
-            (['!', '?'], 70, 10, 100, 10, 20, 'standard'),
-            (['A', '、', '」'], 70, 10, 100, 10, 20, 'standard'),
+            (['!', '?'], 45, 10, 100, 10, 20, 'standard'),
+            (['A', '、', '」'], 45, 10, 100, 10, 20, 'standard'),
+            (['、', '。'], 45, 10, 100, 10, 20, 'standard'),
+            (['す', 'か', '？', '」', '、', '「'], 45, 10, 100, 10, 20, 'standard'),
             (['（', '」', '。'], 40, 10, 100, 10, 20, 'standard'),
             (['（', '」', '。'], 10, 10, 100, 10, 20, 'simple'),
         ]
@@ -889,6 +964,50 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
                     action_cache={},
                 )
                 self.assertEqual(actual, expected)
+
+        pair_hints = core._build_vertical_layout_hints(['、', '。'])
+        pair_action = core._choose_vertical_layout_action_with_hints(
+            pair_hints,
+            0,
+            core._remaining_vertical_slots(45, 100, 10, 20),
+            True,
+            kinsoku_mode='standard',
+            action_cache={},
+        )
+        self.assertEqual(pair_action, 'hang_pair')
+
+    def test_wrap_indent_column_top_does_not_trigger_kinsoku_advance_loop(self):
+        margin_t = 0
+        font_size = 26
+        height = 800
+        margin_b = 0
+        wrap_indent_step = 28 * (font_size + 2)
+        curr_y = margin_t + wrap_indent_step
+
+        self.assertEqual(
+            core._remaining_vertical_slots(curr_y, height, margin_b, font_size),
+            0,
+        )
+        self.assertEqual(
+            core._remaining_vertical_slots_for_current_column(
+                curr_y, margin_t, height, margin_b, font_size, wrap_indent_step,
+            ),
+            1,
+        )
+        self.assertFalse(core._is_after_effective_column_top(curr_y, margin_t, wrap_indent_step))
+
+        for tokens in (['（'], ['あ', 'っ']):
+            with self.subTest(tokens=tokens):
+                hints = core._build_vertical_layout_hints(tokens)
+                action = core._choose_vertical_layout_action_with_hints(
+                    hints,
+                    0,
+                    1,
+                    core._is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
+                    kinsoku_mode='standard',
+                    action_cache={},
+                )
+                self.assertEqual(action, 'draw')
 
     def test_hanging_and_vertical_draw_helpers_render_pixels(self):
         img = Image.new('L', (120, 120), 255)

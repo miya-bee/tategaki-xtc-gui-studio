@@ -23,14 +23,19 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
 
     def test_left_pane_keeps_file_viewer_section_after_output_display_section(self):
         self.assertIn(
-            "section_keys = ('preset', 'font', 'image', 'display', 'fileviewer')",
+            "CENTER_SETTINGS_SECTION_KEYS: tuple[str, ...] = (\n"
+            "    'output',\n"
+            "    'composition',\n"
+            "    'position',\n"
+            "    'preview_controls',\n"
+            ")",
             LAYOUTS_SOURCE,
         )
         self.assertLess(
-            LAYOUTS_SOURCE.index("'display'"),
+            LAYOUTS_SOURCE.index("'preview_controls'"),
             LAYOUTS_SOURCE.index("'fileviewer'"),
         )
-        self.assertIn("'fileviewer': self._section_file_viewer", STUDIO_SOURCE)
+        self.assertIn("self.open_xtc_file", STUDIO_SOURCE)
 
     def test_file_viewer_section_keeps_xtc_xtch_open_button_and_help(self):
         source = _method_source(STUDIO_SOURCE, '_section_file_viewer')
@@ -42,7 +47,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
         self.assertIn("file_viewer_plan.get(", source)
         self.assertIn("'open_xtc_help_text'", source)
         self.assertIn("self.open_xtc_file", source)
-        self.assertIn("既存の .xtc / .xtch ファイルを右ペインの実機ビューへ読み込んで確認します。", source)
+        self.assertIn("既存の .xtc / .xtch ファイルを右ペインへ読み込んで確認します。", source)
 
     def test_preview_toolbar_keeps_actual_size_and_guides_help_layout(self):
         source = _method_source(STUDIO_SOURCE, '_add_preview_display_toggles_to_layout')
@@ -95,11 +100,11 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
         self.assertIn("'device_view_checked_default': False", LAYOUTS_SOURCE)
         self.assertIn("self._plan_int_tuple_value(toggle_plan, 'top_row_contents_margins', (0, 0, 0, 0), expected_length=4)", source)
         self.assertIn("self._plan_int_tuple_value(toggle_plan, 'bottom_row_contents_margins', (0, 0, 0, 0), expected_length=4)", source)
-        self.assertIn("toggle_plan.get('view_button_object_name', 'viewToggleBtn')", source)
-        self.assertIn("self._plan_bool_value(toggle_plan, 'view_button_checkable', True)", source)
-        self.assertIn("self._plan_bool_value(toggle_plan, 'font_view_checked_default', True)", source)
-        self.assertIn("self._plan_bool_value(toggle_plan, 'device_view_checked_default', False)", source)
-        self.assertIn("toggle_plan.get('view_button_focus_policy', 'no_focus')", source)
+        self.assertNotIn("toggle_plan.get('view_button_object_name', 'viewToggleBtn')", source)
+        self.assertNotIn("self._plan_bool_value(toggle_plan, 'view_button_checkable', True)", source)
+        self.assertNotIn("self._plan_bool_value(toggle_plan, 'font_view_checked_default', True)", source)
+        self.assertNotIn("self._plan_bool_value(toggle_plan, 'device_view_checked_default', False)", source)
+        self.assertNotIn("toggle_plan.get('view_button_focus_policy', 'no_focus')", source)
 
 
     def test_preview_zoom_width_and_spacing_contracts_are_owned_by_plan(self):
@@ -114,12 +119,12 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
         self.assertIn("'preview_zoom_spin_accelerated': True", LAYOUTS_SOURCE)
         self.assertIn("'preview_zoom_label_text': '表示倍率'", LAYOUTS_SOURCE)
         self.assertIn("'preview_zoom_actual_size_label_text': '実寸補正'", LAYOUTS_SOURCE)
-        self.assertIn("'preview_zoom_normal_tooltip': 'フォントビュー（実寸近似OFF）と実機ビューの表示倍率です。'", LAYOUTS_SOURCE)
+        self.assertIn("'preview_zoom_normal_tooltip': '右ペイン表示の表示倍率です。'", LAYOUTS_SOURCE)
         self.assertIn("'preview_zoom_actual_size_tooltip': '実寸近似ON: 実機サイズに合わせる補正倍率です。'", LAYOUTS_SOURCE)
 
         build_source = _method_source(STUDIO_SOURCE, '_build_view_toggle_bar')
         zoom_source = _method_source(STUDIO_SOURCE, '_add_preview_zoom_controls_to_layout')
-        self.assertIn("self._plan_int_value(toggle_plan, 'display_toggle_spacing', 10)", build_source)
+        self.assertNotIn("self._plan_int_value(toggle_plan, 'display_toggle_spacing', 10)", build_source)
         self.assertIn("self._plan_int_value(toggle_plan, 'preview_zoom_spacing', 8)", zoom_source)
         self.assertIn("toggle_plan.get('preview_zoom_down_text', '−')", zoom_source)
         self.assertIn("toggle_plan.get('preview_zoom_up_text', '+')", zoom_source)
@@ -144,8 +149,8 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
         source = _method_source(STUDIO_SOURCE, '_preview_view_help_text')
         self.assertIn('toggle_plan = gui_layouts.build_view_toggle_bar_plan()', source)
         self.assertIn("'help_text'", source)
-        self.assertIn("'help_text': 'フォントビュー:", LAYOUTS_SOURCE)
-        self.assertIn('実機ビュー: 変換後のXTCをページ送りしながら実機に近い形で確認します。', LAYOUTS_SOURCE)
+        self.assertIn("'help_text': '右ペイン:", LAYOUTS_SOURCE)
+        self.assertIn('XTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。', LAYOUTS_SOURCE)
 
     def test_navigation_widget_identity_is_owned_by_nav_bar_plan(self):
         source = _method_source(STUDIO_SOURCE, '_add_nav_controls_to_layout')

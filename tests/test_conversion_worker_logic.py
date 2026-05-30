@@ -103,6 +103,25 @@ class ConversionWorkerLogicTests(unittest.TestCase):
         self.assertEqual(calls[0][1], 'rename')
         self.assertEqual(Path(plan['final_path']).name, 'book.xtc')
 
+    def test_plan_output_path_for_image_target_does_not_skip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            src = root / 'cover.png'
+            src.write_bytes(b'not-a-real-image-needed-for-path-test')
+            args = worker_logic.build_conversion_args({'output_format': 'xtc'})
+
+            out_path, plan, warning = worker_logic.plan_output_path_for_target(
+                src,
+                args,
+                requested_name='',
+                supported_count=1,
+                conflict_strategy='rename',
+            )
+
+        self.assertEqual(out_path, root / 'cover.xtc')
+        self.assertIsNotNone(plan)
+        self.assertIsNone(warning)
+
     def test_plan_output_path_for_target_uses_custom_name_for_single_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

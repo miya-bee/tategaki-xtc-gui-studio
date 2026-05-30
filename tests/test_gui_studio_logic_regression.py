@@ -211,14 +211,14 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
             default_width=1600,
             default_height=1000,
             default_left_panel_width=620,
-            default_left_splitter_sizes=[760, 140],
+            default_left_splitter_sizes=[700, 160],
         )
         self.assertEqual(payload['geometry'], b'geom')
         self.assertEqual((payload['window_width'], payload['window_height']), (1600, 1000))
         self.assertTrue(payload['is_maximized'])
         self.assertEqual(payload['left_panel_width'], 620)
         self.assertEqual(payload['left_splitter_state'], b'split')
-        self.assertEqual(payload['left_splitter_sizes'], [760, 140])
+        self.assertEqual(payload['left_splitter_sizes'], [700, 160])
         self.assertFalse(payload['left_panel_visible'])
 
     def test_build_window_state_restore_payload_ignores_non_mapping_payload(self):
@@ -227,12 +227,12 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
             default_width=1600,
             default_height=1000,
             default_left_panel_width=620,
-            default_left_splitter_sizes=[760, 140],
+            default_left_splitter_sizes=[700, 160],
         )
         self.assertEqual((payload['window_width'], payload['window_height']), (1600, 1000))
         self.assertFalse(payload['is_maximized'])
         self.assertEqual(payload['left_panel_width'], 620)
-        self.assertEqual(payload['left_splitter_sizes'], [760, 140])
+        self.assertEqual(payload['left_splitter_sizes'], [700, 160])
         self.assertTrue(payload['left_panel_visible'])
 
     def test_build_window_state_save_payload_normalizes_sizes_and_optional_fields(self):
@@ -522,14 +522,22 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         )
         self.assertEqual((reset['preview_index'], reset['device_index']), (0, 0))
 
-    def test_build_preview_error_state_preserves_xtc_device_view(self):
-        keep_xtc = logic.build_preview_error_state(device_view_source='xtc', error='boom')
+    def test_build_right_pane_preview_error_state_preserves_xtc_surface(self):
+        keep_xtc = logic.build_right_pane_preview_error_state(right_pane_source='xtc', error='boom')
+        self.assertFalse(keep_xtc['clear_right_pane_page'])
         self.assertFalse(keep_xtc['clear_device_page'])
         self.assertEqual(keep_xtc['status_message'], 'プレビュー生成エラー: boom')
 
-        clear_preview = logic.build_preview_error_state(device_view_source='preview', error='boom')
+        clear_preview = logic.build_right_pane_preview_error_state(right_pane_source='preview', error='boom')
+        self.assertTrue(clear_preview['clear_right_pane_page'])
         self.assertTrue(clear_preview['clear_device_page'])
         self.assertEqual(clear_preview['device_index'], 0)
+
+    def test_legacy_preview_error_state_delegates_to_right_pane_alias(self):
+        self.assertEqual(
+            logic.build_preview_error_state(device_view_source='preview', error='boom'),
+            logic.build_right_pane_preview_error_state(right_pane_source='preview', error='boom'),
+        )
 
     def test_build_navigation_display_state_clamps_and_marks_truncation(self):
         state = logic.build_navigation_display_state(view_mode='font', total=3, current_index=9, truncated=True)
@@ -924,11 +932,36 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertIsNone(logic.normalize_preview_page_cache_tokens(['bad'], expected_len=1))
         self.assertIsNone(logic.normalize_preview_page_cache_tokens('12', expected_len=2))
 
-    def test_normalize_device_view_source_value_accepts_known_sources_only(self):
-        self.assertEqual(logic.normalize_device_view_source_value(' PREVIEW '), 'preview')
-        self.assertEqual(logic.normalize_device_view_source_value(b'xtc'), 'xtc')
-        self.assertEqual(logic.normalize_device_view_source_value('"preview"'), 'preview')
-        self.assertEqual(logic.normalize_device_view_source_value('unknown', default='preview'), 'preview')
+    def test_normalize_right_pane_source_value_accepts_known_sources_only(self):
+        self.assertEqual(logic.normalize_right_pane_source_value(' PREVIEW '), 'preview')
+        self.assertEqual(logic.normalize_right_pane_source_value(b'xtc'), 'xtc')
+        self.assertEqual(logic.normalize_right_pane_source_value('"preview"'), 'preview')
+        self.assertEqual(logic.normalize_right_pane_source_value('unknown', default='preview'), 'preview')
+
+
+    def test_legacy_device_view_source_helpers_delegate_to_right_pane_aliases(self):
+        self.assertEqual(
+            logic.normalize_device_view_source_value(' preview '),
+            logic.normalize_right_pane_source_value(' preview '),
+        )
+        self.assertEqual(
+            logic.resolve_effective_device_view_source('preview', has_preview_pages=True),
+            logic.resolve_effective_right_pane_source('preview', has_preview_pages=True),
+        )
+        self.assertEqual(
+            logic.build_device_navigation_payload(
+                view_mode='device',
+                total=2,
+                current_index=0,
+                is_preview=False,
+            ),
+            logic.build_right_pane_navigation_payload(
+                view_mode='device',
+                total=2,
+                current_index=0,
+                is_preview=False,
+            ),
+        )
 
     def test_build_navigation_target_state_clamps_and_reports_changes(self):
         state = logic.build_navigation_target_state(total=3, current_index=1, target_index=' 9 ')
@@ -991,8 +1024,8 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertEqual(state['total_label'], '/ 0')
         self.assertEqual(state['view_mode'], 'device')
 
-    def test_build_device_navigation_payload_preserves_current_page_and_view_activity(self):
-        state = logic.build_device_navigation_payload(
+    def test_build_right_pane_navigation_payload_preserves_current_page_and_view_activity(self):
+        state = logic.build_right_pane_navigation_payload(
             view_mode='font',
             total=5,
             current_index=2,
@@ -1008,8 +1041,8 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertEqual(state['total_label'], '/ 5+')
         self.assertEqual(state['view_mode'], 'device')
 
-    def test_build_device_navigation_payload_disables_truncation_for_loaded_xtc_source(self):
-        state = logic.build_device_navigation_payload(
+    def test_build_right_pane_navigation_payload_disables_truncation_for_loaded_xtc_source(self):
+        state = logic.build_right_pane_navigation_payload(
             view_mode='device',
             total='2',
             current_index='9',
@@ -1152,10 +1185,10 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
 
 
 
-    def test_build_preview_view_page_sync_state_syncs_between_preview_views(self):
-        font_state = logic.build_preview_view_page_sync_state(
+    def test_build_right_pane_preview_page_sync_state_syncs_between_preview_views(self):
+        font_state = logic.build_right_pane_preview_page_sync_state(
             mode='font',
-            effective_device_view_source='preview',
+            effective_right_pane_source='preview',
             preview_page_count=3,
             device_preview_page_count=0,
             current_preview_index=0,
@@ -1165,9 +1198,9 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertTrue(font_state['should_sync'])
         self.assertEqual(font_state['target_index'], 2)
 
-        device_state = logic.build_preview_view_page_sync_state(
+        device_state = logic.build_right_pane_preview_page_sync_state(
             mode='device',
-            effective_device_view_source='preview',
+            effective_right_pane_source='preview',
             preview_page_count=0,
             device_preview_page_count=4,
             current_preview_index='2',
@@ -1177,10 +1210,10 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertTrue(device_state['should_sync'])
         self.assertEqual(device_state['target_index'], 2)
 
-    def test_build_preview_view_page_sync_state_skips_non_preview_sources_and_empty_targets(self):
-        xtc_state = logic.build_preview_view_page_sync_state(
+    def test_build_right_pane_preview_page_sync_state_skips_non_preview_sources_and_empty_targets(self):
+        xtc_state = logic.build_right_pane_preview_page_sync_state(
             mode='device',
-            effective_device_view_source='xtc',
+            effective_right_pane_source='xtc',
             preview_page_count=3,
             device_preview_page_count=3,
             current_preview_index=1,
@@ -1189,9 +1222,9 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertFalse(xtc_state['should_sync'])
         self.assertEqual(xtc_state['target'], '')
 
-        empty_state = logic.build_preview_view_page_sync_state(
+        empty_state = logic.build_right_pane_preview_page_sync_state(
             mode='font',
-            effective_device_view_source='preview',
+            effective_right_pane_source='preview',
             preview_page_count=0,
             device_preview_page_count=3,
             current_preview_index=0,
@@ -1200,48 +1233,80 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertFalse(empty_state['should_sync'])
         self.assertEqual(empty_state['target'], 'font')
 
-    def test_resolve_effective_device_view_source_requires_preview_pages(self):
+    def test_resolve_effective_right_pane_source_requires_preview_pages(self):
         self.assertEqual(
-            logic.resolve_effective_device_view_source('preview', has_preview_pages=True),
+            logic.resolve_effective_right_pane_source('preview', has_preview_pages=True),
             'preview',
         )
         self.assertEqual(
-            logic.resolve_effective_device_view_source('preview', has_preview_pages=False),
+            logic.resolve_effective_right_pane_source('preview', has_preview_pages=False),
             'xtc',
         )
         self.assertEqual(
-            logic.resolve_effective_device_view_source('broken', has_preview_pages=True),
+            logic.resolve_effective_right_pane_source('broken', has_preview_pages=True),
             'xtc',
         )
 
-    def test_is_preview_display_active_matches_visible_view_source(self):
+    def test_is_right_pane_preview_display_active_matches_visible_view_source(self):
         self.assertTrue(
-            logic.is_preview_display_active(
+            logic.is_right_pane_preview_display_active(
                 'font',
                 has_font_preview_pages=True,
-                effective_device_view_source='xtc',
+                effective_right_pane_source='xtc',
             )
         )
         self.assertFalse(
-            logic.is_preview_display_active(
+            logic.is_right_pane_preview_display_active(
                 'font',
                 has_font_preview_pages=False,
-                effective_device_view_source='preview',
+                effective_right_pane_source='preview',
             )
         )
         self.assertTrue(
+            logic.is_right_pane_preview_display_active(
+                'device',
+                has_font_preview_pages=False,
+                effective_right_pane_source='preview',
+            )
+        )
+        self.assertFalse(
+            logic.is_right_pane_preview_display_active(
+                'device',
+                has_font_preview_pages=True,
+                effective_right_pane_source='xtc',
+            )
+        )
+
+    def test_legacy_preview_display_helpers_delegate_to_right_pane_aliases(self):
+        self.assertEqual(
             logic.is_preview_display_active(
                 'device',
                 has_font_preview_pages=False,
                 effective_device_view_source='preview',
-            )
-        )
-        self.assertFalse(
-            logic.is_preview_display_active(
+            ),
+            logic.is_right_pane_preview_display_active(
                 'device',
-                has_font_preview_pages=True,
-                effective_device_view_source='xtc',
-            )
+                has_font_preview_pages=False,
+                effective_right_pane_source='preview',
+            ),
+        )
+        self.assertEqual(
+            logic.build_preview_view_page_sync_state(
+                mode='device',
+                effective_device_view_source='preview',
+                preview_page_count=0,
+                device_preview_page_count=4,
+                current_preview_index=2,
+                current_device_preview_index=0,
+            ),
+            logic.build_right_pane_preview_page_sync_state(
+                mode='device',
+                effective_right_pane_source='preview',
+                preview_page_count=0,
+                device_preview_page_count=4,
+                current_preview_index=2,
+                current_device_preview_index=0,
+            ),
         )
 
     def test_build_preview_success_status_state_clamps_limit_and_truncated_message(self):

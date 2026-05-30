@@ -157,6 +157,7 @@ class GuiResultsControllerRegressionTests(unittest.TestCase):
             ['exports/other.xtc', 'exports/book.xtc'],
         )
 
+        self.assertEqual(context['right_pane_source'], 'xtc')
         self.assertEqual(context['device_view_source'], 'xtc')
         self.assertEqual(context['display_name'], 'book.xtc')
         self.assertEqual(context['log_message'], 'XTC/XTCH読込: exports/book.xtc')
@@ -167,6 +168,7 @@ class GuiResultsControllerRegressionTests(unittest.TestCase):
     def test_build_loaded_xtc_bytes_success_context_clears_selection_and_uses_safe_view_mode(self):
         context = results_controller.build_loaded_xtc_bytes_success_context(bytearray(' メモリ上のデータ '.encode('utf-8')))
 
+        self.assertEqual(context['right_pane_source'], 'xtc')
         self.assertEqual(context['device_view_source'], 'xtc')
         self.assertEqual(context['display_name'], 'メモリ上のデータ')
         self.assertEqual(context['selection_context'], {'matched_index': None, 'clear_selection': True})

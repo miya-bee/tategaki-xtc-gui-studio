@@ -16,7 +16,7 @@ class FolderBatchMainWindowIntegrationStaticTests(unittest.TestCase):
         source = read_project_file('tategakiXTC_gui_studio.py')
         self.assertIn('def _open_folder_batch_dialog(', source)
         self.assertIn('def _folder_batch_worker_settings(', source)
-        self.assertIn("'フォルダ一括変換...'", source)
+        self.assertIn("'フォルダ一括変換'", source)
         self.assertIn('self.folder_batch_btn = self._make_button_from_plan', source)
         self.assertIn('self._open_folder_batch_dialog,', source)
         self.assertIn("'_folder_batch_running'", source)

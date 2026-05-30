@@ -47,6 +47,9 @@ class TextInputHelperRegressionTests(unittest.TestCase):
         self.assertIsNone(core._try_decode_bytes(b'\xff', 'utf-8'))
         self.assertEqual(core._guess_utf16_without_bom('AB'.encode('utf-16-le')), 'utf-16-le')
         self.assertEqual(core._guess_utf16_without_bom('AB'.encode('utf-16-be')), 'utf-16-be')
+        self.assertEqual(core._guess_utf16_without_bom('これは日本語の本文です。'.encode('utf-16-le')), 'utf-16-le')
+        self.assertEqual(core._guess_utf16_without_bom('これは日本語の本文です。'.encode('utf-16-be')), 'utf-16-be')
+        self.assertIsNone(core._guess_utf16_without_bom('これは日本語の本文です。'.encode('cp932')))
         self.assertIsNone(core._guess_utf16_without_bom(b'abc'))
 
     def test_detect_text_with_charset_normalizer_import_error_and_detection(self):

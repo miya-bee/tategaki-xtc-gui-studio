@@ -7,8 +7,8 @@ import unittest
 class GuiImageSectionLayoutRegressionTest(unittest.TestCase):
     def test_ruby_hide_checkbox_uses_same_checkbox_plus_text_order_as_other_toggles(self) -> None:
         source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        start = source.index('    def _section_image(self):')
-        end = source.index('    def _section_behavior(self):')
+        start = source.index('    def _section_composition(self):')
+        end = source.index('    def _build_margin_rows(self):')
         section_source = source[start:end]
         self.assertIn("self.ruby_hide_check = QCheckBox(str(image_plan.get('ruby_hide_label', 'ルビ消し')))", section_source)
         self.assertNotIn("ruby_hide_label = QLabel", section_source)

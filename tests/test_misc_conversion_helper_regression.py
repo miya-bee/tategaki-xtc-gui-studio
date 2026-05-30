@@ -260,6 +260,19 @@ class MiscConversionHelperRegressionTests(unittest.TestCase):
         self.assertIsInstance(blob, (bytes, bytearray))
         self.assertEqual(mocked_prepare.call_count, 1)
 
+    def test_process_image_data_reraises_cancel_after_image_prepare(self):
+        args = self._args(width=4, height=4)
+        src = Image.new('L', (4, 4), 144)
+        buf = io.BytesIO()
+        src.save(buf, format='PNG')
+        cancel_states = iter([False, True])
+
+        def should_cancel():
+            return next(cancel_states)
+
+        with self.assertRaises(core.ConversionCancelled):
+            core.process_image_data(buf.getvalue(), args, should_cancel=should_cancel)
+
 
     def test_apply_preview_postprocess_reuses_prepared_preview_canvas(self):
         page = Image.new('L', (4, 4), 200)

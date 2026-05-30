@@ -5,10 +5,10 @@ import unittest
 
 
 class GuiRubyHideLayoutRegressionTest(unittest.TestCase):
-    def test_image_section_places_compact_ruby_hide_controls_in_first_row(self) -> None:
+    def test_composition_section_places_compact_ruby_hide_controls_in_first_row(self) -> None:
         source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        start = source.index('    def _section_image(self):')
-        end = source.index('    def _ensure_behavior_controls(self):')
+        start = source.index('    def _section_composition(self):')
+        end = source.index('    def _build_margin_rows(self):')
         image_source = source[start:end]
         self.assertNotIn('ruby_row = self._make_hbox_layout_from_plan()', image_source)
         self.assertIn("self.ruby_hide_check = QCheckBox(str(image_plan.get('ruby_hide_label', 'ルビ消し')))", image_source)

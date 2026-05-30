@@ -643,7 +643,7 @@ class SettingsControllerRegressionTests(unittest.TestCase):
 
         punctuation_index = _control_label_index('image_glyph_position_row', '句読点')
         ichi_index = _control_label_index('image_glyph_position_row', '漢数字 一')
-        lower_bracket_index = _control_label_index('image_wave_dash_row', '下鍵括弧')
+        lower_bracket_index = _control_label_index('image_tatechuyoko_symbol_row', '下鍵括弧')
         self.assertNotIn('image_lower_bracket_position_row', source)
         self.assertLess(punctuation_index, ichi_index)
         self.assertLess(ichi_index, lower_bracket_index)

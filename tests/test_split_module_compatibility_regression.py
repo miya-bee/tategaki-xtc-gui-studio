@@ -126,11 +126,11 @@ class SplitModuleCompatibilityRegressionTests(unittest.TestCase):
             pass
 
         window = WindowLike()
-        self.assertEqual(studio.MainWindow._normalized_main_view_mode(window, 'device'), 'device')
+        self.assertEqual(studio.MainWindow._normalized_main_view_mode(window, 'device'), 'font')
         self.assertEqual(studio.MainWindow._normalized_main_view_mode(window, 'bad'), 'font')
-        self.assertIn('フォントビュー', studio.MainWindow._preview_view_help_text(window))
-        self.assertEqual(studio.MainWindow._main_view_mode_status_text(window, 'font'), 'フォントビューに切り替えました。')
-        self.assertEqual(studio.MainWindow._main_view_mode_status_text(window, 'device'), '実機ビューに切り替えました。')
+        self.assertIn('右ペイン', studio.MainWindow._preview_view_help_text(window))
+        self.assertEqual(studio.MainWindow._main_view_mode_status_text(window, 'font'), '右ペイン表示に切り替えました。')
+        self.assertEqual(studio.MainWindow._main_view_mode_status_text(window, 'device'), '右ペイン表示に切り替えました。')
 
 
     def test_gui_studio_path_helper_wrappers_delegate_to_split_module(self):
