@@ -124,7 +124,7 @@ def build_running_results_summary() -> str:
 
 
 def build_start_log_message(output_format: str, target_count: int) -> str:
-    fmt = str(output_format).strip().lower() or 'xtc'
+    fmt = str(output_format).strip().lower() or 'xtch'
     if target_count <= 1:
         return f'変換を開始しました。({fmt})'
     return f'変換を開始しました。({fmt}, {target_count}件)'
@@ -531,7 +531,7 @@ def build_settings_ui_apply_payload(
     if 'output_format' in raw_payload:
         plan['output_format'] = normalize_choice_value(
             raw_payload.get('output_format'),
-            str(defaults.get('output_format') or 'xtc'),
+            str(defaults.get('output_format') or 'xtch'),
             allowed_output_formats,
         )
     if 'kinsoku_mode' in raw_payload:
@@ -1198,15 +1198,25 @@ def build_preview_refresh_state(
     }
 
 
-def build_preview_error_state(*, device_view_source: object, error: object) -> dict[str, Any]:
-    normalized_source = str(device_view_source or 'preview').strip().lower()
-    clear_device_page = normalized_source != 'xtc'
+def build_right_pane_preview_error_state(*, right_pane_source: object, error: object) -> dict[str, Any]:
+    """Return preview-error cleanup state for the current right-pane surface."""
+    normalized_source = normalize_right_pane_source_value(right_pane_source, default='preview')
+    clear_right_pane_page = normalized_source != 'xtc'
     return {
         'preview_index': 0,
         'device_index': 0,
-        'clear_device_page': clear_device_page,
+        'clear_device_page': clear_right_pane_page,
+        'clear_right_pane_page': clear_right_pane_page,
         'status_message': build_preview_status_message('error', error=error),
     }
+
+
+def build_preview_error_state(*, device_view_source: object, error: object) -> dict[str, Any]:
+    """Legacy wrapper for older device-view source terminology."""
+    return build_right_pane_preview_error_state(
+        right_pane_source=device_view_source,
+        error=error,
+    )
 
 
 def _clamp_navigation_index(total: int, current_index: int) -> tuple[int, int]:
@@ -1267,8 +1277,14 @@ def build_preview_page_cache_tokens_state(
     }
 
 
-def normalize_device_view_source_value(value: object, *, default: str = 'xtc') -> str:
-    """Normalize the source selector used by the device-view runtime."""
+def normalize_right_pane_source_value(value: object, *, default: str = 'xtc') -> str:
+    """Normalize the source selector used by the right-pane runtime.
+
+    The old device-view UI was retired in v1.3.8.10, but older context/INI
+    payloads can still carry the former selector values.  Keep this helper
+    focused on the current right-pane surface while preserving those legacy
+    inputs through the ``normalize_device_view_source_value`` wrapper below.
+    """
     if value is None:
         text = ''
     elif isinstance(value, os.PathLike):
@@ -1291,12 +1307,35 @@ def normalize_device_view_source_value(value: object, *, default: str = 'xtc') -
     return default
 
 
-def resolve_effective_device_view_source(source: object, *, has_preview_pages: object) -> str:
-    """Return the device-view source that can actually be displayed now."""
-    normalized = normalize_device_view_source_value(source, default='xtc')
+def normalize_device_view_source_value(value: object, *, default: str = 'xtc') -> str:
+    """Legacy wrapper for older device-view source terminology."""
+    return normalize_right_pane_source_value(value, default=default)
+
+
+def resolve_effective_right_pane_source(source: object, *, has_preview_pages: object) -> str:
+    """Return the right-pane source that can actually be displayed now."""
+    normalized = normalize_right_pane_source_value(source, default='xtc')
     if normalized == 'preview' and bool(has_preview_pages):
         return 'preview'
     return 'xtc'
+
+
+def resolve_effective_device_view_source(source: object, *, has_preview_pages: object) -> str:
+    """Legacy wrapper for older device-view source terminology."""
+    return resolve_effective_right_pane_source(source, has_preview_pages=has_preview_pages)
+
+
+def is_right_pane_preview_display_active(
+    view_mode: object,
+    *,
+    has_font_preview_pages: object,
+    effective_right_pane_source: object,
+) -> bool:
+    """Return whether the currently visible page source is a generated preview."""
+    normalized_mode = normalize_choice_value(view_mode, 'font', {'font', 'device'})
+    if normalized_mode == 'font':
+        return bool(has_font_preview_pages)
+    return normalize_right_pane_source_value(effective_right_pane_source, default='xtc') == 'preview'
 
 
 def is_preview_display_active(
@@ -1305,17 +1344,18 @@ def is_preview_display_active(
     has_font_preview_pages: object,
     effective_device_view_source: object,
 ) -> bool:
-    """Return whether the currently visible page source is a generated preview."""
-    normalized_mode = normalize_choice_value(view_mode, 'font', {'font', 'device'})
-    if normalized_mode == 'font':
-        return bool(has_font_preview_pages)
-    return normalize_device_view_source_value(effective_device_view_source, default='xtc') == 'preview'
+    """Legacy wrapper for older device-view source terminology."""
+    return is_right_pane_preview_display_active(
+        view_mode,
+        has_font_preview_pages=has_font_preview_pages,
+        effective_right_pane_source=effective_device_view_source,
+    )
 
 
-def build_preview_view_page_sync_state(
+def build_right_pane_preview_page_sync_state(
     *,
     mode: object,
-    effective_device_view_source: object,
+    effective_right_pane_source: object,
     preview_page_count: object,
     device_preview_page_count: object,
     current_preview_index: object,
@@ -1323,7 +1363,7 @@ def build_preview_view_page_sync_state(
 ) -> dict[str, Any]:
     """Return the page-index sync plan when switching between preview views."""
     normalized_mode = normalize_choice_value(mode, 'font', {'font', 'device'})
-    source = normalize_device_view_source_value(effective_device_view_source, default='xtc')
+    source = normalize_right_pane_source_value(effective_right_pane_source, default='xtc')
     if source != 'preview':
         return {
             'should_sync': False,
@@ -1355,6 +1395,27 @@ def build_preview_view_page_sync_state(
         'target': 'device',
         'target_index': normalize_navigation_index(total, current_preview_index),
     }
+
+
+
+def build_preview_view_page_sync_state(
+    *,
+    mode: object,
+    effective_device_view_source: object,
+    preview_page_count: object,
+    device_preview_page_count: object,
+    current_preview_index: object,
+    current_device_preview_index: object,
+) -> dict[str, Any]:
+    """Legacy wrapper for older device-view source terminology."""
+    return build_right_pane_preview_page_sync_state(
+        mode=mode,
+        effective_right_pane_source=effective_device_view_source,
+        preview_page_count=preview_page_count,
+        device_preview_page_count=device_preview_page_count,
+        current_preview_index=current_preview_index,
+        current_device_preview_index=current_device_preview_index,
+    )
 
 
 def build_navigation_target_state(
@@ -1468,7 +1529,7 @@ def build_navigation_display_state(
 
 
 
-def build_device_navigation_payload(
+def build_right_pane_navigation_payload(
     *,
     view_mode: object,
     total: object,
@@ -1477,6 +1538,12 @@ def build_device_navigation_payload(
     is_preview: object = False,
     truncated: object = False,
 ) -> dict[str, Any]:
+    """Build the navigation payload for the current right-pane page surface.
+
+    ``view_mode='device'`` remains the compatibility value used by older
+    call sites to mean that the right-pane XTC/XTCH/page surface is active.
+    The public user-facing device-view switch itself is no longer restored.
+    """
     total_pages = max(0, _config_int_value(total, 0))
     index = _config_int_value(current_index, 0)
     preview_source = bool(is_preview)
@@ -1491,6 +1558,26 @@ def build_device_navigation_payload(
     if current_page is not None:
         payload['current_page'] = max(0, _config_int_value(current_page, payload.get('current_page', 0)))
     return payload
+
+
+def build_device_navigation_payload(
+    *,
+    view_mode: object,
+    total: object,
+    current_index: object,
+    current_page: object | None = None,
+    is_preview: object = False,
+    truncated: object = False,
+) -> dict[str, Any]:
+    """Legacy wrapper for older device-view navigation terminology."""
+    return build_right_pane_navigation_payload(
+        view_mode=view_mode,
+        total=total,
+        current_index=current_index,
+        current_page=current_page,
+        is_preview=is_preview,
+        truncated=truncated,
+    )
 
 def build_navigation_apply_state(
     payload: Mapping[str, object],
@@ -1964,9 +2051,9 @@ def _build_preset_summary_lines(
     if kinsoku_mode not in kinsoku_mode_labels:
         kinsoku_mode = 'standard'
     kinsoku_text = kinsoku_mode_labels.get(kinsoku_mode, '標準')
-    out_fmt = str(preset.get('output_format', 'xtc')).strip().lower()
+    out_fmt = str(preset.get('output_format', 'xtch')).strip().lower()
     if out_fmt not in output_format_labels:
-        out_fmt = 'xtc'
+        out_fmt = 'xtch'
     preset_name = build_preset_display_name(preset)
     font_size = _config_int_value(preset.get('font_size'), 26)
     ruby_size = _config_int_value(preset.get('ruby_size'), 12)
@@ -1976,7 +2063,7 @@ def _build_preset_summary_lines(
     margin_r = _config_int_value(preset.get('margin_r'), 12)
     margin_l = _config_int_value(preset.get('margin_l'), 12)
     threshold = _config_int_value(preset.get('threshold'), 128)
-    out_fmt_text = output_format_labels.get(out_fmt, 'XTC')
+    out_fmt_text = output_format_labels.get(out_fmt, 'XTCH')
     tatechuyoko_mode = normalize_tatechuyoko_digit_mode(preset.get('tatechuyoko_digit_mode', '2'), '2')
     tatechuyoko_text = TATECHUYOKO_DIGIT_MODES.get(tatechuyoko_mode, '2文字')
     name_line = preset_name

@@ -224,6 +224,7 @@ REQUIRED_PROJECT_TOOLING_FILES = (
     'build_release_zip.py',
     'mypy.ini',
     '.coveragerc',
+    '.gitattributes',
 )
 REQUIRED_PROJECT_GUI_ASSET_FILES = (
     'ui_assets/spin_up.svg',
@@ -349,6 +350,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_image_golden_regression.py',
     'tests/test_input_pipeline_regression.py',
     'tests/test_layout_regression.py',
+    'tests/test_legacy_device_view_compatibility.py',
     'tests/test_margin_preview_regression.py',
     'tests/test_markdown_table_footnote_regression.py',
     'tests/test_misc_conversion_helper_regression.py',
@@ -374,6 +376,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_text_markdown_scope.py',
     'tests/test_type_annotations_regression.py',
     'tests/test_vertical_renderer_unification.py',
+    'tests/test_xtc_io_regression.py',
     'tests/test_xtc_viewer_finish_regression.py',
     'tests/test_xtc_viewer_hidpi_regression.py',
     'tests/test_xtch_output_and_aozora_draw_regression.py',
@@ -1162,6 +1165,80 @@ def verify_release_zip_integrity(zip_path: Path) -> list[str]:
         return [_display_archive_member_name(corrupt_member)]
     return []
 
+
+
+def _has_bare_lf_bytes(data: bytes) -> bool:
+    return re.search(rb'(?<!\r)\n', data) is not None
+
+
+def verify_release_zip_batch_file_line_endings(zip_path: Path) -> list[str]:
+    """Return .bat members that are not CRLF-only Windows batch files."""
+    zip_path = zip_path.resolve()
+    issues: list[str] = []
+    with zipfile.ZipFile(zip_path) as zf:
+        for info in zf.infolist():
+            member_name = info.filename
+            normalized = _normalized_archive_member_name(member_name)
+            if info.is_dir() or PurePosixPath(normalized).suffix.casefold() != '.bat':
+                continue
+            try:
+                data = zf.read(info)
+            except Exception as exc:
+                issues.append(f'{_display_archive_member_name(member_name)} (could not be read: {exc})')
+                continue
+            if b'\r\n' not in data:
+                issues.append(f'{_display_archive_member_name(member_name)} (no CRLF line endings)')
+            elif _has_bare_lf_bytes(data):
+                issues.append(f'{_display_archive_member_name(member_name)} (contains bare LF line endings)')
+    return issues
+
+
+_DOUBLE_CLICK_BATCH_FILES = frozenset({
+    'run_gui.bat',
+    'install_requirements.bat',
+    'run_tests.bat',
+})
+
+
+def _previous_nonempty_line(lines: list[str], index: int) -> str:
+    for previous in reversed(lines[:index]):
+        if previous.strip():
+            return previous
+    return ''
+
+
+def verify_release_zip_batch_file_pause_before_exit(zip_path: Path) -> list[str]:
+    """Return double-click .bat exits that can close without showing a message.
+
+    The public Windows launchers are commonly used by double-clicking from
+    Explorer.  Every explicit ``exit /b`` path should therefore be immediately
+    preceded by ``pause`` so failure/success messages remain visible instead
+    of flashing a console window and disappearing.
+    """
+    zip_path = zip_path.resolve()
+    issues: list[str] = []
+    with zipfile.ZipFile(zip_path) as zf:
+        for info in zf.infolist():
+            member_name = info.filename
+            normalized = _normalized_archive_member_name(member_name)
+            if info.is_dir() or PurePosixPath(normalized).name.casefold() not in _DOUBLE_CLICK_BATCH_FILES:
+                continue
+            try:
+                data = zf.read(info)
+            except Exception as exc:
+                issues.append(f'{_display_archive_member_name(member_name)} (could not be read: {exc})')
+                continue
+            text = data.decode('utf-8', errors='replace')
+            lines = text.splitlines()
+            for index, line in enumerate(lines):
+                if re.match(r'\s*exit\s+/b\b', line, re.IGNORECASE):
+                    previous = _previous_nonempty_line(lines, index)
+                    if not re.match(r'\s*pause\b', previous, re.IGNORECASE):
+                        issues.append(
+                            f'{_display_archive_member_name(member_name)}:{index + 1} '
+                            'exit /b without preceding pause'
+                        )
+    return issues
 
 def _zip_info_unix_mode(info: zipfile.ZipInfo) -> int:
     """Unix 系属性を持つ zip メンバーの mode を返す。未設定なら 0。"""
@@ -2520,6 +2597,18 @@ def _release_zip_verification_checks() -> tuple[ReleaseZipVerificationCheck, ...
             'Invalid required file list in release zip',
         ),
         (
+            'batch_file_line_endings',
+            verify_release_zip_batch_file_line_endings,
+            'release zip contained non-CRLF batch files',
+            'Non-CRLF batch files found in release zip',
+        ),
+        (
+            'batch_file_pause_before_exit',
+            verify_release_zip_batch_file_pause_before_exit,
+            'release zip contained double-click batch exits without pause',
+            'Double-click batch exits without pause found in release zip',
+        ),
+        (
             'required_file_content_issues',
             verify_release_zip_required_file_contents,
             'release zip invalid required file contents',
@@ -2609,6 +2698,30 @@ def _first_release_zip_build_error_message(
     return 'release zip verification failed'
 
 
+
+def _normalize_windows_batch_bytes(data: bytes) -> bytes:
+    """Return .bat payload with Windows CRLF line endings.
+
+    Windows cmd.exe can mis-parse LF-only batch files, especially around nested
+    parenthesized blocks.  Release archives therefore normalize all bundled .bat
+    files at packaging time in addition to keeping repository checkout rules in
+    .gitattributes.
+    """
+    text = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+    return text.replace(b'\n', b'\r\n')
+
+
+def _release_zip_payload_for_file(file_path: Path, archive_name: str) -> bytes | None:
+    """Return an optional normalized payload for archive members.
+
+    Returning None lets the caller use ZipFile.write().  Only Windows batch
+    launchers are rewritten so binary assets and text docs keep their on-disk
+    bytes unchanged.
+    """
+    if PurePosixPath(archive_name).suffix.casefold() == '.bat':
+        return _normalize_windows_batch_bytes(file_path.read_bytes())
+    return None
+
 def build_release_zip(root: Path, output_path: Path) -> Path:
     """開発用生成物を除外した release zip を作成する。"""
     root = _absolute_tree_root(root)
@@ -2630,7 +2743,11 @@ def build_release_zip(root: Path, output_path: Path) -> Path:
             archive_name = rel_path.as_posix()
             if not archive_member_should_be_included(archive_name, is_dir=False):
                 continue
-            zf.write(file_path, archive_name)
+            payload = _release_zip_payload_for_file(file_path, archive_name)
+            if payload is None:
+                zf.write(file_path, archive_name)
+            else:
+                zf.writestr(archive_name, payload)
 
     verification_issues = _run_release_zip_verification_checks(output_path)
     if verification_issues:
@@ -2726,7 +2843,11 @@ def build_source_only_zip(root: Path, output_path: Path) -> Path:
                 continue
             if not source_archive_member_should_be_included(archive_name, is_dir=False):
                 continue
-            zf.write(file_path, archive_name)
+            payload = _release_zip_payload_for_file(file_path, archive_name)
+            if payload is None:
+                zf.write(file_path, archive_name)
+            else:
+                zf.writestr(archive_name, payload)
 
     integrity_issues = verify_release_zip_integrity(output_path)
     if integrity_issues:

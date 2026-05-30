@@ -9,6 +9,7 @@ PySide6 ベースの縦書き XTC 変換ツール。
 
 import base64
 import math
+import re
 from collections import OrderedDict
 import logging
 import os
@@ -249,6 +250,17 @@ from tategakiXTC_gui_studio_constants import (
     DEFAULT_TOP_PATH_BUTTON_WIDTH,
     DEFAULT_LEFT_SPLITTER_TOP,
     DEFAULT_LEFT_SPLITTER_BOTTOM,
+    CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY,
+    CENTER_SETTINGS_LEGACY_SPLITTER_SIZES_KEY,
+    CENTER_SETTINGS_LEGACY_SPLITTER_TOP_KEY,
+    CENTER_SETTINGS_LEGACY_SPLITTER_BOTTOM_KEY,
+    PRESET_PANEL_WIDTH_KEY,
+    CENTER_SETTINGS_PANEL_WIDTH_KEY,
+    PREVIEW_PANEL_WIDTH_KEY,
+    MAIN_THREE_PANE_SPLITTER_STATE_KEY,
+    MAIN_THREE_PANE_SPLITTER_SIZES_KEY,
+    THREE_PANE_PANEL_WIDTH_KEYS,
+    THREE_PANE_SPLITTER_KEYS,
     DEFAULT_PREVIEW_PAGE_LIMIT,
     SETTINGS_SCHEMA_VERSION,
     DEFAULT_RENDER_SETTINGS,
@@ -334,6 +346,11 @@ class MainWindow(QMainWindow):
         _configure_app_logging()
         self.settings_store = QSettings(str(SETTINGS_FILE), QSettings.IniFormat)
         self._previous_shutdown_clean = self._settings_bool_value('last_shutdown_clean', True)
+        if not self._previous_shutdown_clean and not self._has_restorable_user_settings():
+            APP_LOGGER.warning(
+                '前回終了フラグだけが残っており復元対象のUI設定がないため、通常起動として扱います'
+            )
+            self._previous_shutdown_clean = True
         self._mark_shutdown_clean(False)
         self.preset_definitions = self._load_preset_definitions()
         self.setWindowTitle(APP_NAME)
@@ -623,6 +640,35 @@ class MainWindow(QMainWindow):
     def _settings_bool_value(self: MainWindow, key: str, default: bool) -> bool:
         return _settings_bool_value_from_store(self.settings_store, key, default)
 
+    def _has_restorable_user_settings(self: MainWindow) -> bool:
+        """Return True when the ini contains user-facing state worth restoring.
+
+        A crash or interrupted startup can leave only lifecycle metadata such as
+        ``last_shutdown_clean=false`` in a freshly created ini.  Treating that
+        bare marker as a full previous session forces the abnormal-shutdown
+        restore path even though there is nothing to restore.  Keep that path for
+        real saved settings, but allow a metadata-only ini to boot with normal
+        defaults.
+        """
+        keys_getter = getattr(self.settings_store, 'allKeys', None)
+        if not callable(keys_getter):
+            return True
+        try:
+            raw_keys = list(keys_getter())
+        except Exception:
+            return True
+        if not raw_keys:
+            return False
+        lifecycle_leaf_keys = {'last_shutdown_clean', 'settings_schema_version', 'last_app_version'}
+        for raw_key in raw_keys:
+            key = str(raw_key or '').strip().replace('\\', '/')
+            if not key:
+                continue
+            leaf = key.rsplit('/', 1)[-1]
+            if leaf not in lifecycle_leaf_keys:
+                return True
+        return False
+
     def _settings_str_value(self: MainWindow, key: str, default: str = '') -> str:
         return _settings_str_value_from_store(self.settings_store, key, default)
 
@@ -741,7 +787,29 @@ class MainWindow(QMainWindow):
         return _plan_token_value_from_payload(payload_obj, key, default)
 
     def _qt_constant(self: MainWindow, name: str, fallback: object = 0):
-        return getattr(Qt, name, fallback)
+        # PySide6 versions differ on whether enum values are exposed directly
+        # as Qt.ScrollBarAlwaysOn / Qt.AlignCenter or only under nested enum
+        # classes such as Qt.ScrollBarPolicy.ScrollBarAlwaysOn. Avoid falling
+        # back to 0, because that silently becomes ScrollBarAlwaysOff on real
+        # Windows/PySide6 builds.
+        candidates = (
+            Qt,
+            getattr(Qt, 'ScrollBarPolicy', None),
+            getattr(Qt, 'AlignmentFlag', None),
+            getattr(Qt, 'FocusPolicy', None),
+            getattr(Qt, 'Orientation', None),
+            getattr(Qt, 'KeyboardModifier', None),
+            getattr(Qt, 'TextFlag', None),
+            getattr(Qt, 'PenStyle', None),
+        )
+        for owner in candidates:
+            if owner is None:
+                continue
+            try:
+                return getattr(owner, name)
+            except Exception:
+                continue
+        return fallback
 
     def _plan_alignment_value(self: MainWindow, payload_obj: object, key: str, default: str):
         token = self._plan_token_value(payload_obj, key, default)
@@ -823,6 +891,30 @@ class MainWindow(QMainWindow):
             min_bottom=92,
         )
 
+    def _payload_three_pane_splitter_sizes_value(
+        self: MainWindow,
+        payload: Mapping[str, object],
+        key: str,
+        default: Sequence[int],
+    ) -> list[int]:
+        fallback = list(default[:3])
+        if len(fallback) < 3:
+            fallback = [300, 680, 560]
+        mins = [220, 360, 320]
+        raw = payload.get(key)
+        if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes, bytearray)):
+            return [max(mins[i], int(fallback[i])) for i in range(3)]
+        raw_list = list(raw)
+        if len(raw_list) < 3:
+            return [max(mins[i], int(fallback[i])) for i in range(3)]
+        result: list[int] = []
+        for i in range(3):
+            value = studio_logic.payload_optional_int_value({'value': raw_list[i]}, 'value')
+            if value is None:
+                value = int(fallback[i])
+            result.append(max(mins[i], int(value)))
+        return result
+
     def _window_state_restore_payload(self: MainWindow) -> dict[str, object]:
         default_size = self._default_window_size()
         default_width = int(default_size.width())
@@ -833,24 +925,44 @@ class MainWindow(QMainWindow):
             'window_height': self._settings_raw_value('window_height', default_height),
             'is_maximized': self._settings_raw_value('is_maximized', False),
             'left_panel_width': self._settings_raw_value('left_panel_width', DEFAULT_LEFT_PANEL_WIDTH),
-            'left_splitter_state': self._settings_raw_value('left_splitter_state', None),
-            'left_splitter_sizes': self._default_left_splitter_sizes(),
+            CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY: self._settings_raw_value(CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY, None),
+            CENTER_SETTINGS_LEGACY_SPLITTER_SIZES_KEY: self._default_left_splitter_sizes(),
             'left_panel_visible': self._settings_raw_value('left_panel_visible', True),
         }
-        return studio_logic.build_window_state_restore_payload(
+        payload = studio_logic.build_window_state_restore_payload(
             raw_payload,
             default_width=default_width,
             default_height=default_height,
             default_left_panel_width=DEFAULT_LEFT_PANEL_WIDTH,
             default_left_splitter_sizes=self._default_left_splitter_sizes(),
         )
+        raw_payload['preset_settings_splitter_state'] = self._settings_raw_value('preset_settings_splitter_state', None)
+        raw_payload['preset_settings_splitter_sizes'] = self._default_preset_settings_splitter_sizes()
+        payload['preset_settings_splitter_state'] = raw_payload.get('preset_settings_splitter_state')
+        payload['preset_settings_splitter_sizes'] = studio_logic.payload_splitter_sizes_value(
+            raw_payload,
+            'preset_settings_splitter_sizes',
+            self._default_preset_settings_splitter_sizes(),
+            min_top=240,
+            min_bottom=560,
+        )
+        three_pane_state_key, three_pane_sizes_key = THREE_PANE_SPLITTER_KEYS
+        raw_payload[three_pane_state_key] = self._settings_raw_value(three_pane_state_key, None)
+        raw_payload[three_pane_sizes_key] = self._default_three_pane_splitter_sizes()
+        payload[three_pane_state_key] = raw_payload.get(three_pane_state_key)
+        payload[three_pane_sizes_key] = self._payload_three_pane_splitter_sizes_value(
+            raw_payload,
+            three_pane_sizes_key,
+            self._default_three_pane_splitter_sizes(),
+        )
+        return payload
 
     def _settings_restore_payload(self: MainWindow) -> dict[str, object]:
         payload = settings_controller.build_settings_restore_payload(
             read_default_value=self._settings_default_value,
             default_font_name=self._default_font_name(),
             default_preview_page_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
-            allowed_view_modes={'font', 'device'},
+            allowed_view_modes={'font'},
             allowed_profiles=DEVICE_PROFILES,
             allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
             allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
@@ -977,7 +1089,7 @@ class MainWindow(QMainWindow):
             night_mode=self._safe_widget_checked('night_check'),
             open_folder=self._safe_widget_checked('open_folder_check'),
             output_conflict=self._safe_combo_data('output_conflict_combo', 'rename'),
-            output_format=self._safe_combo_data('output_format_combo', 'xtc'),
+            output_format=self._safe_combo_data('output_format_combo', 'xtch'),
             kinsoku_mode=self._safe_combo_data('kinsoku_mode_combo', 'standard'),
             tatechuyoko_digit_mode=self._safe_combo_data('tatechuyoko_digit_mode_combo', '2'),
             punctuation_position_mode=self._safe_combo_data('punctuation_position_combo', 'standard'),
@@ -993,7 +1105,7 @@ class MainWindow(QMainWindow):
         apply_plan = settings_controller.build_settings_ui_apply_plan(
             raw_payload=payload,
             defaults=apply_defaults,
-            allowed_view_modes={'font', 'device'},
+            allowed_view_modes={'font'},
             allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
             allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
             allowed_output_formats=OUTPUT_FORMAT_LABELS,
@@ -1213,25 +1325,127 @@ class MainWindow(QMainWindow):
             font_value = core.build_font_spec(*core.parse_font_spec(fallback))
         return font_value
 
+    def _available_window_rect(self: MainWindow) -> QRect | None:
+        screen_obj = None
+        try:
+            screen_getter = getattr(self, 'screen', None)
+            screen_obj = screen_getter() if callable(screen_getter) else None
+        except Exception:
+            screen_obj = None
+        if screen_obj is None:
+            try:
+                screen_obj = QApplication.primaryScreen()
+            except Exception:
+                screen_obj = None
+        available_getter = getattr(screen_obj, 'availableGeometry', None)
+        if not callable(available_getter):
+            return None
+        try:
+            available = available_getter()
+        except Exception:
+            return None
+        try:
+            if int(available.width()) <= 0 or int(available.height()) <= 0:
+                return None
+        except Exception:
+            return None
+        return available
+
+    def _clamp_window_size_to_available(self: MainWindow, width: int, height: int) -> QSize:
+        available = self._available_window_rect()
+        if available is None:
+            return QSize(int(width), int(height))
+        try:
+            # resize() takes the client size, while availableGeometry() is the
+            # desktop work area excluding the Windows taskbar.  Keep a small
+            # safety margin so a restored normal window does not slip under a
+            # permanently visible taskbar. Maximized windows are still handled
+            # by the window manager.
+            safe_width = max(1100, int(available.width()) - 24)
+            safe_height = max(760, int(available.height()) - 48)
+            return QSize(min(int(width), safe_width), min(int(height), safe_height))
+        except Exception:
+            return QSize(int(width), int(height))
+
+    def _ensure_window_inside_available_area(self: MainWindow) -> None:
+        available = self._available_window_rect()
+        if available is None:
+            return
+        try:
+            if self.isMaximized():
+                # QMainWindow::showMaximized normally respects the taskbar on
+                # Windows.  Do not fight the native maximized geometry unless
+                # the platform reports a clearly invalid frame.
+                frame = self.frameGeometry()
+                if available.contains(frame):
+                    return
+                # If a saved geometry or show() ordering leaves the frame below
+                # the work area, re-apply the native maximized state once.
+                self.showMaximized()
+                return
+            geom = self.geometry()
+            w = min(int(geom.width()), max(1100, int(available.width()) - 24))
+            h = min(int(geom.height()), max(760, int(available.height()) - 48))
+            x = max(int(available.left()), min(int(geom.x()), int(available.right()) - w + 1))
+            y = max(int(available.top()), min(int(geom.y()), int(available.bottom()) - h + 1))
+            if (x, y, w, h) != (int(geom.x()), int(geom.y()), int(geom.width()), int(geom.height())):
+                self.setGeometry(x, y, w, h)
+        except Exception:
+            return
+
     def _default_window_size(self: MainWindow) -> QSize:
         width = max(1100, self._settings_int_value('window_width', DEFAULT_WINDOW_WIDTH))
         height = max(760, self._settings_int_value('window_height', DEFAULT_WINDOW_HEIGHT))
-        return QSize(width, height)
+        return self._clamp_window_size_to_available(width, height)
 
-    def _default_left_splitter_sizes(self: MainWindow) -> list[int]:
-        top = max(280, self._settings_int_value('left_splitter_top', DEFAULT_LEFT_SPLITTER_TOP))
-        bottom = max(92, self._settings_int_value('left_splitter_bottom', DEFAULT_LEFT_SPLITTER_BOTTOM))
+    def _default_center_settings_splitter_sizes(self: MainWindow) -> list[int]:
+        """Return default top/bottom sizes for the center settings splitter.
 
-        has_saved_top = self._settings_contains_key('left_splitter_top')
-        has_saved_state = self._settings_contains_key('left_splitter_state')
+        The saved INI keys intentionally keep the older ``left_splitter_*``
+        names for compatibility with v1.3.6+ user settings.
+        """
+        top = max(280, self._settings_int_value(CENTER_SETTINGS_LEGACY_SPLITTER_TOP_KEY, DEFAULT_LEFT_SPLITTER_TOP))
+        bottom = max(92, self._settings_int_value(CENTER_SETTINGS_LEGACY_SPLITTER_BOTTOM_KEY, DEFAULT_LEFT_SPLITTER_BOTTOM))
+
+        has_saved_top = self._settings_contains_key(CENTER_SETTINGS_LEGACY_SPLITTER_TOP_KEY)
+        has_saved_state = self._settings_contains_key(CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY)
         if not has_saved_top and not has_saved_state:
-            content_height = self._left_settings_content_height_hint()
+            content_height = self._center_settings_content_height_hint()
             if content_height > 0:
                 top = max(280, content_height)
-                available_height = self._default_left_splitter_available_height()
+                available_height = self._default_center_settings_splitter_available_height()
                 if available_height > 0:
                     bottom = max(92, available_height - top)
         return [top, bottom]
+
+    def _default_left_splitter_sizes(self: MainWindow) -> list[int]:
+        """Legacy alias for center-settings splitter defaults."""
+        return self._default_center_settings_splitter_sizes()
+
+    def _default_preset_settings_splitter_sizes(self: MainWindow) -> list[int]:
+        # Legacy compatibility for v1.3.8.4-v1.3.8.8 nested splitter INI keys.
+        preset = max(220, self._settings_int_value(PRESET_PANEL_WIDTH_KEY, 300))
+        settings = max(360, self._settings_int_value(CENTER_SETTINGS_PANEL_WIDTH_KEY, 680))
+        return [preset, settings]
+
+    def _default_three_pane_splitter_sizes(self: MainWindow) -> list[int]:
+        preset_default, center_default = self._default_preset_settings_splitter_sizes()
+        preset = max(220, self._settings_int_value(PRESET_PANEL_WIDTH_KEY, preset_default))
+        center = max(360, self._settings_int_value(CENTER_SETTINGS_PANEL_WIDTH_KEY, center_default))
+        preview = max(320, self._settings_int_value(PREVIEW_PANEL_WIDTH_KEY, 560))
+
+        # If only the legacy v1.3.8.4-v1.3.8.8 combined width exists, reuse
+        # it as a soft hint for preset + center without pinning the right pane.
+        if (
+            not self._settings_contains_key(PRESET_PANEL_WIDTH_KEY)
+            and not self._settings_contains_key(CENTER_SETTINGS_PANEL_WIDTH_KEY)
+            and self._settings_contains_key('left_panel_width')
+        ):
+            legacy_total = self._settings_int_value('left_panel_width', preset + center)
+            if legacy_total > 0:
+                preset = min(max(220, preset), 360)
+                center = max(360, legacy_total - preset)
+        return [preset, center, preview]
 
     def showEvent(self: MainWindow, event: object) -> None:
         super().showEvent(event)
@@ -1243,8 +1457,14 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self._request_startup_preview_after_restore)
             QTimer.singleShot(0, self._startup_font_combo_scroll_reset)
             QTimer.singleShot(0, self._schedule_deferred_preview_size_sync)
+            QTimer.singleShot(0, self._ensure_window_inside_available_area)
+            # v1.3.8.15: avoid leaving a text caret in path/spin inputs
+            # immediately after startup.  This is intentionally startup-only;
+            # normal user clicks still focus and edit input widgets as before.
+            QTimer.singleShot(0, self._clear_startup_input_focus)
         else:
             QTimer.singleShot(0, self._sync_preview_size)
+            QTimer.singleShot(0, self._ensure_window_inside_available_area)
 
     def _startup_target_text(self: MainWindow) -> str:
         try:
@@ -1588,21 +1808,415 @@ class MainWindow(QMainWindow):
         self.right_arrow_shortcut = None
 
     def eventFilter(self: MainWindow, obj: object, event: object) -> bool:
-        # 実機ビューのページ送り：左右矢印キー対応
+        # v1.3.8.10: keep the center settings pane scrollable everywhere.
+        # ComboBox / SpinBox-like controls still must not change their value by
+        # wheel, so all wheel input inside the upper settings container is
+        # redirected to the surrounding QScrollArea instead.
+        if event.type() == QEvent.Wheel:
+            if self._is_open_combo_popup_wheel_target(obj):
+                return False
+            if self._should_suppress_center_settings_wheel_value_change(obj):
+                accept = getattr(event, 'accept', None)
+                if callable(accept):
+                    accept()
+                self._scroll_center_settings_from_wheel_event(event)
+                return True
+            if self._should_scroll_center_settings_from_wheel_event(obj):
+                accept = getattr(event, 'accept', None)
+                if callable(accept):
+                    accept()
+                self._scroll_center_settings_from_wheel_event(event)
+                return True
+
+        # 実機ビュー由来の内部ページ送り：左右矢印キー対応
         if event.type() == QEvent.ShortcutOverride:
             key = event.key()
-            if key in (Qt.Key_Left, Qt.Key_Right) and self._can_handle_device_view_arrow_key():
+            if key in (Qt.Key_Left, Qt.Key_Right) and self._can_handle_right_pane_arrow_key():
                 event.accept()
                 return True
         if event.type() == QEvent.KeyPress:
             key = event.key()
             if key in (Qt.Key_Left, Qt.Key_Right):
-                if self._handle_device_view_arrow_key(key):
+                if self._handle_right_pane_arrow_key(key):
                     event.accept()
                     return True
         return super().eventFilter(obj, event)
 
-    def _can_handle_device_view_arrow_key(self: MainWindow) -> bool:
+
+    def _combo_popup_is_visible(self: MainWindow, combo: object) -> bool:
+        if not isinstance(combo, QComboBox):
+            return False
+        view_getter = getattr(combo, 'view', None)
+        if not callable(view_getter):
+            return False
+        try:
+            view = view_getter()
+        except Exception:
+            return False
+        is_visible = getattr(view, 'isVisible', None)
+        if callable(is_visible):
+            try:
+                return bool(is_visible())
+            except Exception:
+                return False
+        return False
+
+    def _is_open_combo_popup_wheel_target(self: MainWindow, obj: object) -> bool:
+        """Allow wheel scrolling inside an opened combo-box popup list."""
+        if obj is None:
+            return False
+        widget = obj
+        visited_widget_ids: set[int] = set()
+        while widget is not None and id(widget) not in visited_widget_ids:
+            visited_widget_ids.add(id(widget))
+            if isinstance(widget, QComboBox) and self._combo_popup_is_visible(widget):
+                return True
+            class_names = {cls.__name__ for cls in type(widget).__mro__}
+            if class_names & {'QAbstractItemView', 'QListView', 'QTreeView', 'QTableView'}:
+                try:
+                    container = self._center_settings_container_widget()
+                    combos = container.findChildren(QComboBox) if container is not None else []
+                    for combo in combos:
+                        if self._combo_popup_is_visible(combo):
+                            view = combo.view()
+                            if widget is view or self._is_widget_descendant_of(widget, view):
+                                return True
+                except Exception:
+                    pass
+            parent_getter = getattr(widget, 'parentWidget', None)
+            if callable(parent_getter):
+                try:
+                    widget = parent_getter()
+                    continue
+                except Exception:
+                    return False
+            parent_getter = getattr(widget, 'parent', None)
+            widget = parent_getter() if callable(parent_getter) else None
+        return False
+
+    def _wheel_value_change_control_for_event_object(self: MainWindow, obj: object) -> object | None:
+        widget = obj
+        visited_widget_ids: set[int] = set()
+        while widget is not None and id(widget) not in visited_widget_ids:
+            visited_widget_ids.add(id(widget))
+            if isinstance(widget, (QComboBox, QSpinBox)):
+                return widget
+            class_names = {cls.__name__ for cls in type(widget).__mro__}
+            if 'QAbstractSpinBox' in class_names:
+                return widget
+            parent_getter = getattr(widget, 'parentWidget', None)
+            if callable(parent_getter):
+                try:
+                    widget = parent_getter()
+                    continue
+                except Exception:
+                    return None
+            parent_getter = getattr(widget, 'parent', None)
+            widget = parent_getter() if callable(parent_getter) else None
+        return None
+
+    def _should_suppress_center_settings_wheel_value_change(self: MainWindow, obj: object) -> bool:
+        """Return True when a center-pane wheel event must not edit a value.
+
+        ``left_settings_container`` is still supported by
+        _center_settings_container_widget() as a legacy alias, but the active
+        v1.3.8 three-pane code should go through this center-named helper.
+        """
+        control = self._wheel_value_change_control_for_event_object(obj)
+        if control is None:
+            return False
+        container = self._center_settings_container_widget()
+        if container is None:
+            return False
+        return self._is_widget_descendant_of(control, container)
+
+    def _should_suppress_left_settings_wheel_value_change(self: MainWindow, obj: object) -> bool:
+        """Compatibility wrapper for pre-v1.3.8 left-settings tests/helpers."""
+        return self._should_suppress_center_settings_wheel_value_change(obj)
+
+    def _should_scroll_center_settings_from_wheel_event(self: MainWindow, obj: object) -> bool:
+        """Return True when a wheel event should scroll the center settings pane.
+
+        Qt does not always bubble wheel events from child widgets back to the
+        QScrollArea on every Windows/PySide6 combination.  Installing this
+        narrow filter on the upper settings container keeps labels, whitespace,
+        checkboxes and buttons scrollable while value-changing controls are
+        still protected by _should_suppress_center_settings_wheel_value_change().
+        """
+        container = self._center_settings_container_widget()
+        scroll = self._center_settings_scroll_area()
+        if container is None or scroll is None or obj is None:
+            return False
+        if obj is scroll:
+            return True
+        try:
+            if obj is scroll.viewport():
+                return True
+        except Exception:
+            pass
+        if isinstance(obj, QScrollBar):
+            return False
+        return self._is_widget_descendant_of(obj, container)
+
+    def _should_scroll_left_settings_from_wheel_event(self: MainWindow, obj: object) -> bool:
+        """Compatibility wrapper for pre-v1.3.8 left-settings tests/helpers."""
+        return self._should_scroll_center_settings_from_wheel_event(obj)
+
+    def _install_center_settings_wheel_value_guards(self: MainWindow) -> None:
+        """Install wheel guards through the current three-pane naming."""
+        container = self._center_settings_container_widget()
+        if container is None:
+            return
+        candidates: list[object] = [container]
+        try:
+            candidates.extend(list(container.findChildren(QWidget)))
+        except Exception:
+            pass
+        scroll = self._center_settings_scroll_area()
+        if scroll is not None:
+            candidates.append(scroll)
+            try:
+                candidates.append(scroll.viewport())
+            except Exception:
+                pass
+        seen: set[int] = set()
+        for target in candidates:
+            if target is None or id(target) in seen:
+                continue
+            seen.add(id(target))
+            install = getattr(target, 'installEventFilter', None)
+            if callable(install):
+                try:
+                    install(self)
+                except Exception:
+                    pass
+
+    def _install_left_settings_wheel_value_guards(self: MainWindow) -> None:
+        """Compatibility wrapper for pre-v1.3.8 left-settings tests/helpers."""
+        self._install_center_settings_wheel_value_guards()
+
+    def _scroll_center_settings_from_wheel_event(self: MainWindow, event: object) -> None:
+        """Scroll the center settings pane from a wheel event."""
+        scroll = self._center_settings_scroll_area()
+        if scroll is None:
+            return
+        try:
+            delta = event.angleDelta()
+        except Exception:
+            delta = None
+        dy = 0
+        dx = 0
+        if delta is not None:
+            try:
+                dy = int(delta.y())
+                dx = int(delta.x())
+            except Exception:
+                dy = 0
+                dx = 0
+        horizontal_requested = False
+        try:
+            modifiers = event.modifiers()
+            horizontal_requested = bool(modifiers & Qt.ShiftModifier)
+        except Exception:
+            horizontal_requested = False
+        use_horizontal = horizontal_requested or abs(dx) > abs(dy)
+        units = dy if horizontal_requested and dy else (dx if use_horizontal else dy)
+        try:
+            target_bar = scroll.horizontalScrollBar() if use_horizontal else scroll.verticalScrollBar()
+        except Exception:
+            return
+        if target_bar is None or units == 0:
+            return
+        try:
+            step = int(target_bar.singleStep() or 20)
+            # Qt wheel deltas are normally 120 units per notch. Keep fractional
+            # devices responsive by falling back to one step for small deltas.
+            notches = units / 120.0
+            amount = int(round(notches * step * 3))
+            if amount == 0:
+                amount = step if units > 0 else -step
+            target_bar.setValue(int(target_bar.value()) - amount)
+        except Exception:
+            return
+
+    def _scroll_left_settings_from_wheel_event(self: MainWindow, event: object) -> None:
+        """Compatibility wrapper for pre-v1.3.8 left-settings tests/helpers."""
+        self._scroll_center_settings_from_wheel_event(event)
+
+    @staticmethod
+    def _is_widget_descendant_of(widget: object, ancestor: object) -> bool:
+        if widget is ancestor:
+            return True
+        parent_getter = getattr(widget, 'parentWidget', None)
+        while callable(parent_getter):
+            try:
+                widget = parent_getter()
+            except Exception:
+                return False
+            if widget is None:
+                return False
+            if widget is ancestor:
+                return True
+            parent_getter = getattr(widget, 'parentWidget', None)
+        return False
+
+    def _center_settings_container_widget(self: MainWindow) -> object | None:
+        """Return the v1.3.8 center settings container.
+
+        The legacy ``left_settings_*`` attributes remain as compatibility
+        aliases because many older tests and helpers still refer to the
+        pre-three-pane layout.  New v1.3.8 code should prefer this helper.
+        """
+        attrs = getattr(self, '__dict__', {})
+        return attrs.get('center_settings_container') or attrs.get('left_settings_container')
+
+    def _center_settings_scroll_area(self: MainWindow) -> object | None:
+        """Return the v1.3.8 center settings QScrollArea.
+
+        Keep ``left_settings_scroll`` as a legacy alias, but avoid spreading
+        the old two-pane name through new wheel/focus cleanup code.
+        """
+        attrs = getattr(self, '__dict__', {})
+        return attrs.get('center_settings_scroll') or attrs.get('left_settings_scroll')
+
+    def _set_center_settings_widget_aliases(self: MainWindow, *, container: object, scroll: object) -> None:
+        """Register center-settings widgets and legacy aliases in one place.
+
+        v1.3.8 turned the former left settings pane into the center pane.
+        Keeping the legacy attributes is deliberate for older tests, saved-state
+        helpers, and maintenance scripts; new code should resolve the widgets
+        through the center-named helpers above.
+        """
+        self.center_settings_container = container
+        self.center_settings_scroll = scroll
+        self.left_settings_container = container
+        self.left_settings_scroll = scroll
+
+    def _center_settings_splitter_widget(self: MainWindow) -> object | None:
+        """Return the v1.3.8 center settings splitter.
+
+        ``left_splitter`` remains as a compatibility alias because the INI keys
+        and many older tests still use the pre-three-pane name.
+        """
+        attrs = getattr(self, '__dict__', {})
+        return attrs.get('center_settings_splitter') or attrs.get('left_splitter')
+
+    def _set_center_settings_splitter_aliases(self: MainWindow, splitter: object) -> None:
+        """Register the center settings splitter and its legacy alias."""
+        self.center_settings_splitter = splitter
+        self.left_splitter = splitter
+
+    def _center_settings_splitter_state_value(self: MainWindow) -> object | None:
+        """Return the splitter state for the historical left_splitter_state key."""
+        splitter = self._center_settings_splitter_widget()
+        if splitter is None:
+            return None
+        try:
+            return splitter.saveState()
+        except Exception:
+            return None
+
+    def _center_settings_splitter_sizes_value(self: MainWindow) -> list[int]:
+        """Return current center-settings splitter sizes, if available."""
+        splitter = self._center_settings_splitter_widget()
+        if splitter is None:
+            return []
+        try:
+            return list(splitter.sizes())
+        except Exception:
+            return []
+
+    def _set_center_settings_splitter_sizes(self: MainWindow, sizes: Sequence[int]) -> None:
+        """Apply sizes to the center-settings splitter through the center alias."""
+        splitter = self._center_settings_splitter_widget()
+        if splitter is None:
+            return
+        try:
+            splitter.setSizes(list(sizes))
+        except Exception:
+            return
+
+    def _restore_center_settings_splitter_from_payload(
+        self: MainWindow,
+        *,
+        splitter_state: object | None,
+        splitter_sizes: Sequence[int],
+    ) -> None:
+        """Restore the center-settings splitter while keeping old INI keys."""
+        splitter = self._center_settings_splitter_widget()
+        if splitter is None:
+            return
+        splitter_restored = False
+        if splitter_state is not None:
+            try:
+                splitter_restored = bool(splitter.restoreState(splitter_state))
+            except Exception:
+                splitter_restored = False
+        if not splitter_restored:
+            self._set_center_settings_splitter_sizes(splitter_sizes)
+
+    def _clear_startup_input_focus(self: MainWindow) -> None:
+        """Move startup focus away from editable fields without changing normal editing."""
+        active_modal_getter = getattr(QApplication, 'activeModalWidget', None)
+        try:
+            active_modal = active_modal_getter() if callable(active_modal_getter) else None
+        except Exception:
+            active_modal = None
+        if active_modal is not None and active_modal is not self:
+            return
+
+        focus_widget_getter = getattr(QApplication, 'focusWidget', None)
+        try:
+            current_focus = focus_widget_getter() if callable(focus_widget_getter) else None
+        except Exception:
+            current_focus = None
+        if current_focus is None:
+            return
+        try:
+            if not self._is_widget_descendant_of(current_focus, self):
+                return
+        except Exception:
+            return
+
+        widget = current_focus
+        should_clear = False
+        visited_widget_ids: set[int] = set()
+        while widget is not None and id(widget) not in visited_widget_ids:
+            visited_widget_ids.add(id(widget))
+            if isinstance(widget, (QLineEdit, QSpinBox, QComboBox)):
+                should_clear = True
+                break
+            class_names = {cls.__name__ for cls in type(widget).__mro__}
+            if 'QAbstractSpinBox' in class_names:
+                should_clear = True
+                break
+            parent_getter = getattr(widget, 'parentWidget', None)
+            widget = parent_getter() if callable(parent_getter) else None
+        if not should_clear:
+            return
+
+        clear_focus = getattr(current_focus, 'clearFocus', None)
+        if callable(clear_focus):
+            try:
+                clear_focus()
+            except Exception:
+                pass
+
+        for candidate in (
+            getattr(self, 'preview_scroll', None),
+            getattr(self, 'viewer_scroll', None),
+            self,
+        ):
+            set_focus = getattr(candidate, 'setFocus', None)
+            if callable(set_focus):
+                try:
+                    set_focus(Qt.OtherFocusReason)
+                    break
+                except Exception:
+                    continue
+
+
+    def _can_handle_right_pane_arrow_key(self: MainWindow) -> bool:
         view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
         if view_mode == 'font':
             if self._is_file_viewer_mode_active():
@@ -1611,7 +2225,7 @@ class MainWindow(QMainWindow):
             elif not self._runtime_preview_pages():
                 return False
         elif view_mode == 'device':
-            if self._effective_device_view_source() == 'preview':
+            if self._effective_right_pane_source() == 'preview':
                 if not self._runtime_device_preview_pages():
                     return False
             elif self._xtc_page_count() <= 0:
@@ -1634,8 +2248,12 @@ class MainWindow(QMainWindow):
             widget = parent_getter() if callable(parent_getter) else None
         return True
 
-    def _handle_device_view_arrow_key(self: MainWindow, key: int) -> bool:
-        if not self._can_handle_device_view_arrow_key():
+    def _can_handle_device_view_arrow_key(self: MainWindow) -> bool:
+        """Legacy wrapper for older device-view key-handler terminology."""
+        return self._can_handle_right_pane_arrow_key()
+
+    def _handle_right_pane_arrow_key(self: MainWindow, key: int) -> bool:
+        if not self._can_handle_right_pane_arrow_key():
             return False
 
         if hasattr(self, 'viewer_widget'):
@@ -1645,6 +2263,10 @@ class MainWindow(QMainWindow):
         delta = -logical_delta if bool(getattr(self, 'nav_buttons_reversed', False)) else logical_delta
         self.change_page(delta)
         return True
+
+    def _handle_device_view_arrow_key(self: MainWindow, key: int) -> bool:
+        """Legacy wrapper for older device-view key-handler terminology."""
+        return self._handle_right_pane_arrow_key(key)
 
     def _apply_initial_sizes(self: MainWindow) -> None:
         if self._pending_left_panel_width is not None:
@@ -1657,9 +2279,22 @@ class MainWindow(QMainWindow):
             if left_panel_visible:
                 self._apply_left_panel_width(self._pending_left_panel_width)
                 self._pending_left_panel_width = None
-        if not self._settings_contains_key('left_splitter_state'):
-            self.left_splitter.setSizes(self._default_left_splitter_sizes())
+        if not self._settings_contains_key(CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY):
+            self._set_center_settings_splitter_sizes(self._default_center_settings_splitter_sizes())
+        if not self._settings_contains_key(MAIN_THREE_PANE_SPLITTER_STATE_KEY):
+            try:
+                self.main_splitter.setSizes(self._default_three_pane_splitter_sizes())
+            except Exception:
+                pass
         self._sync_preview_size()
+
+    def _on_main_three_pane_splitter_moved(self: MainWindow, *_args: object) -> None:
+        """Refresh width-sensitive preset summary sizing after pane resize."""
+        try:
+            self._update_preset_summary_label_layout(queue_retry=True)
+        except Exception:
+            pass
+
 
     # ── UI 構築 ────────────────────────────────────────────
 
@@ -1679,18 +2314,40 @@ class MainWindow(QMainWindow):
         sep.setObjectName('topSep')
         root.addWidget(sep)
 
-        self.left_panel = self._build_left_settings()
-        self.left_panel.setMinimumWidth(380)
+        self.preset_panel = self._build_preset_side_panel()
+        self.preset_panel.setObjectName('presetSidePanel')
+        self.preset_panel.setMinimumWidth(220)
+        self.preset_panel.setMaximumWidth(360)
+        # Keep the legacy attribute name for panel visibility actions, but do
+        # not wrap preset + center in a nested splitter. v1.3.8.9 uses one
+        # three-way splitter so the left/center and center/right handles feel
+        # independent.
+        self.left_panel = self.preset_panel
+
+        self.center_settings_panel = self._build_center_settings_panel()
+        self.center_settings_panel.setMinimumWidth(360)
 
         right = self._build_right_preview()
+        try:
+            right.setMinimumWidth(320)
+        except Exception:
+            pass
 
         self.main_splitter = QSplitter(Qt.Horizontal)
+        self.main_splitter.setObjectName('mainThreePaneSplitter')
         self.main_splitter.setChildrenCollapsible(False)
         self.main_splitter.setHandleWidth(6)
-        self.main_splitter.addWidget(self.left_panel)
+        self.main_splitter.addWidget(self.preset_panel)
+        self.main_splitter.addWidget(self.center_settings_panel)
         self.main_splitter.addWidget(right)
         self.main_splitter.setStretchFactor(0, 0)
         self.main_splitter.setStretchFactor(1, 1)
+        self.main_splitter.setStretchFactor(2, 2)
+        self.main_splitter.setSizes(self._default_three_pane_splitter_sizes())
+        try:
+            self.main_splitter.splitterMoved.connect(self._on_main_three_pane_splitter_moved)
+        except Exception:
+            pass
 
         root.addWidget(self.main_splitter, 1)
         self.main_view_mode = 'font'
@@ -1707,15 +2364,13 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(*self._plan_int_tuple_value(top_bar_plan, 'contents_margins', (16, 0, 12, 0), expected_length=4))
         lay.setSpacing(self._plan_int_value(top_bar_plan, 'spacing', 10))
 
-        title = QLabel(f'v{APP_VERSION}')
-        title.setObjectName('appVersionSubtle')
-        title.setToolTip(APP_NAME)
-        lay.addWidget(title)
-        lay.addWidget(self._v_sep())
+        # v1.3.8.5: remove the subtle version label from the top bar.
+        # Keep version information in dialogs/docs, but reserve this row for
+        # file controls now that the 3-pane UI needs more horizontal room.
 
         btn_file = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('file_button_text', 'ファイルを開く...'),
+                top_bar_plan.get('file_button_text', 'ファイルを開く'),
                 object_name='topBtn',
                 tooltip=top_bar_plan.get('file_button_tooltip', '1つのファイルを読み込みます'),
                 fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
@@ -1723,9 +2378,19 @@ class MainWindow(QMainWindow):
             lambda: self.select_target_path(True),
         )
 
+        btn_xtc_open = self._make_button_from_plan(
+            gui_layouts.build_button_widget_plan(
+                top_bar_plan.get('xtc_open_button_text', 'XTC/XTCHを開く'),
+                object_name='topBtn',
+                tooltip=top_bar_plan.get('xtc_open_button_tooltip', '既存の .xtc / .xtch ファイルを右ペインで確認します'),
+                fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
+            ),
+            self.open_xtc_file,
+        )
+
         btn_folder = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('folder_button_text', '保存先を選ぶ...'),
+                top_bar_plan.get('folder_button_text', '保存先を選ぶ'),
                 object_name='topBtn',
                 tooltip=top_bar_plan.get('folder_button_tooltip', '変換後のXTC保存先を選びます'),
                 fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
@@ -1745,7 +2410,7 @@ class MainWindow(QMainWindow):
 
         self.folder_batch_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('folder_batch_button_text', 'フォルダ一括変換...'),
+                top_bar_plan.get('folder_batch_button_text', 'フォルダ一括変換'),
                 object_name='topBtn',
                 tooltip=top_bar_plan.get('folder_batch_button_tooltip', 'フォルダ内のファイルをまとめて変換します'),
                 fixed_width=top_bar_plan.get('folder_batch_button_width', 168),
@@ -1754,6 +2419,7 @@ class MainWindow(QMainWindow):
         )
 
         lay.addWidget(btn_file)
+        lay.addWidget(btn_xtc_open)
         lay.addWidget(btn_folder)
         lay.addWidget(btn_output_reset)
         lay.addWidget(self.folder_batch_btn)
@@ -1845,15 +2511,43 @@ class MainWindow(QMainWindow):
         line.setFixedWidth(1)
         return line
 
-    # ── 左設定パネル ──────────────────────────────────────
+    # ── 左プリセットパネル ────────────────────────────────
 
-    def _build_left_settings(self):
-        container_plan = gui_layouts.build_left_settings_container_plan()
-        self.left_splitter = QSplitter(Qt.Vertical)
-        self.left_splitter.setChildrenCollapsible(
+    def _build_preset_side_panel(self):
+        preset_plan = gui_layouts.build_preset_side_panel_plan()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(self._plan_frame_shape_value(preset_plan, 'scroll_frame_shape', 'no_frame'))
+        scroll.setHorizontalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(preset_plan, 'scroll_horizontal_scroll_bar_policy', 'as_needed')
+        )
+        scroll.setVerticalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(preset_plan, 'scroll_vertical_scroll_bar_policy', 'as_needed')
+        )
+
+        container = QWidget()
+        container.setObjectName(str(preset_plan.get('container_object_name', 'presetSideContainer')))
+        container.setMinimumWidth(self._plan_int_value(preset_plan, 'minimum_content_width', 280))
+        lay = QVBoxLayout(container)
+        lay.setContentsMargins(*self._plan_int_tuple_value(preset_plan, 'contents_margins', (10, 9, 10, 9), expected_length=4))
+        lay.setSpacing(self._plan_int_value(preset_plan, 'spacing', 8))
+        lay.addWidget(self._section_preset())
+        lay.addStretch(1)
+        scroll.setWidget(container)
+        return scroll
+
+    # ── 中央設定パネル ────────────────────────────────────
+
+    def _build_center_settings_panel(self):
+        return self._build_center_settings()
+
+    def _build_center_settings(self):
+        container_plan = gui_layouts.build_center_settings_container_plan()
+        self._set_center_settings_splitter_aliases(QSplitter(Qt.Vertical))
+        self.center_settings_splitter.setChildrenCollapsible(
             self._plan_bool_value(container_plan, 'splitter_children_collapsible', False)
         )
-        self.left_splitter.setHandleWidth(self._plan_int_value(container_plan, 'splitter_handle_width', 5))
+        self.center_settings_splitter.setHandleWidth(self._plan_int_value(container_plan, 'splitter_handle_width', 5))
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(self._plan_bool_value(container_plan, 'scroll_widget_resizable', True))
@@ -1867,33 +2561,37 @@ class MainWindow(QMainWindow):
 
         container = QWidget()
         container.setObjectName(str(container_plan.get('container_object_name', 'leftSettingsContainer')))
-        container.setMinimumWidth(self._plan_int_value(container_plan, 'scroll_minimum_content_width', 760))
-        self.left_settings_container = container
-        self.left_settings_scroll = scroll
+        container.setMinimumWidth(self._plan_int_value(container_plan, 'scroll_minimum_content_width', 560))
+        self._set_center_settings_widget_aliases(container=container, scroll=scroll)
         lay = QVBoxLayout(container)
         lay.setContentsMargins(*self._plan_int_tuple_value(container_plan, 'contents_margins', (10, 9, 10, 9), expected_length=4))
         lay.setSpacing(self._plan_int_value(container_plan, 'spacing', 5))
         self._ensure_behavior_controls()
-        for section in self._left_settings_sections():
+        for section in self._center_settings_sections():
             lay.addWidget(section)
-        lay.addWidget(self._build_left_settings_bottom_separator(container_plan))
+        lay.addWidget(self._build_center_settings_bottom_separator(container_plan))
         scroll.setWidget(container)
+        self._install_center_settings_wheel_value_guards()
 
         self.bottom_panel = self._build_bottom_panel()
         self.bottom_panel.setMinimumHeight(self._plan_int_value(container_plan, 'bottom_panel_min_height', 92))
 
-        self.left_splitter.addWidget(scroll)
-        self.left_splitter.addWidget(self.bottom_panel)
-        self.left_splitter.setStretchFactor(
+        self.center_settings_splitter.addWidget(scroll)
+        self.center_settings_splitter.addWidget(self.bottom_panel)
+        self.center_settings_splitter.setStretchFactor(
             0, self._plan_int_value(container_plan, 'splitter_top_stretch_factor', 3)
         )
-        self.left_splitter.setStretchFactor(
+        self.center_settings_splitter.setStretchFactor(
             1, self._plan_int_value(container_plan, 'splitter_bottom_stretch_factor', 1)
         )
-        self.left_splitter.setSizes(self._default_left_splitter_sizes())
-        return self.left_splitter
+        self._set_center_settings_splitter_sizes(self._default_center_settings_splitter_sizes())
+        return self.center_settings_splitter
 
-    def _build_left_settings_bottom_separator(self: MainWindow, container_plan: Mapping[str, Any]) -> QFrame:
+    def _build_left_settings(self):
+        """Legacy alias for the v1.3.8 center settings pane builder."""
+        return self._build_center_settings()
+
+    def _build_center_settings_bottom_separator(self: MainWindow, container_plan: Mapping[str, Any]) -> QFrame:
         sep = QFrame()
         sep.setFrameShape(
             self._plan_frame_shape_value(container_plan, 'bottom_separator_frame_shape', 'hline')
@@ -1902,8 +2600,12 @@ class MainWindow(QMainWindow):
         sep.setFixedHeight(self._plan_int_value(container_plan, 'bottom_separator_height', 1))
         return sep
 
-    def _left_settings_content_height_hint(self: MainWindow) -> int:
-        container = getattr(self, 'left_settings_container', None)
+    def _build_left_settings_bottom_separator(self: MainWindow, container_plan: Mapping[str, Any]) -> QFrame:
+        """Legacy alias for the center settings bottom separator builder."""
+        return self._build_center_settings_bottom_separator(container_plan)
+
+    def _center_settings_content_height_hint(self: MainWindow) -> int:
+        container = self._center_settings_container_widget()
         if container is None:
             return 0
         try:
@@ -1912,8 +2614,12 @@ class MainWindow(QMainWindow):
             return 0
         return max(0, height)
 
-    def _default_left_splitter_available_height(self: MainWindow) -> int:
-        splitter = getattr(self, 'left_splitter', None)
+    def _left_settings_content_height_hint(self: MainWindow) -> int:
+        """Legacy alias for the center settings content height hint."""
+        return self._center_settings_content_height_hint()
+
+    def _default_center_settings_splitter_available_height(self: MainWindow) -> int:
+        splitter = self._center_settings_splitter_widget()
         if splitter is None:
             return 0
         try:
@@ -1921,24 +2627,40 @@ class MainWindow(QMainWindow):
         except Exception:
             return 0
 
-    def _left_settings_section_factories(self):
+    def _default_left_splitter_available_height(self: MainWindow) -> int:
+        """Legacy alias for center-settings splitter height lookup."""
+        return self._default_center_settings_splitter_available_height()
+
+    def _center_settings_section_factories(self):
         return {
             'preset': self._section_preset,
-            'font': self._section_font,
-            'image': self._section_image,
-            'display': self._section_display,
+            'output': self._section_output,
+            'composition': self._section_composition,
+            'position': self._section_position,
+            'preview_controls': self._section_preview_controls,
+            # Keep only active section keys here. Legacy factory aliases are
+            # intentionally not registered because these section factories are
+            # not idempotent and recreate widget attributes when called twice.
             'fileviewer': self._section_file_viewer,
             'behavior': self._section_behavior,
         }
 
-    def _left_settings_sections(self):
-        factories = self._left_settings_section_factories()
+    def _center_settings_sections(self):
+        factories = self._center_settings_section_factories()
         sections = []
-        for section_key in gui_layouts.build_left_settings_section_keys():
+        for section_key in gui_layouts.build_center_settings_section_keys():
             factory = factories.get(str(section_key).strip().lower())
             if factory is not None:
                 sections.append(factory())
         return sections
+
+    def _left_settings_section_factories(self):
+        """Legacy alias for the v1.3.8 center settings section factories."""
+        return self._center_settings_section_factories()
+
+    def _left_settings_sections(self):
+        """Legacy alias for the v1.3.8 center settings sections."""
+        return self._center_settings_sections()
 
     def _build_section_box_layout(
         self,
@@ -1948,7 +2670,7 @@ class MainWindow(QMainWindow):
         default_margins: tuple[int, int, int, int],
         default_spacing: int,
     ) -> tuple[QGroupBox, QVBoxLayout, dict[str, Any]]:
-        section_plan = gui_layouts.build_left_settings_section_layout_plan(section_key)
+        section_plan = gui_layouts.build_center_settings_section_layout_plan(section_key)
         return gui_widget_factory.make_section_box_layout(
             str(section_plan.get('title', fallback_title)),
             section_plan,
@@ -1956,14 +2678,71 @@ class MainWindow(QMainWindow):
             default_spacing=default_spacing,
         )
 
-    # ── 設定セクション：フォントと組版 ────────────────────
+    # ── 設定セクション：出力先 ──────────────────────────
 
-    def _section_font(self):
+    def _section_output(self):
         font_plan = gui_layouts.build_font_section_plan()
         display_plan = gui_layouts.build_display_section_plan()
         box, lay, _section_plan = self._build_section_box_layout(
-            'font',
-            '出力・フォント・組版',
+            'output',
+            '出力先',
+            default_margins=(8, 12, 8, 7),
+            default_spacing=6,
+        )
+
+        output_row = self._make_hbox_layout_from_plan(
+            gui_layouts.build_row_layout_plan(spacing=font_plan.get('output_profile_row_spacing', 6))
+        )
+        output_row.addWidget(self._dim_label('機種'))
+        self.profile_combo = QComboBox()
+        for label, key in tuple(display_plan.get('profile_items', ())):
+            self.profile_combo.addItem(str(label), key)
+        self.profile_combo.setMinimumWidth(self._plan_int_value(display_plan, 'profile_combo_min_width', 130))
+        self.profile_combo.currentIndexChanged.connect(self.on_profile_changed)
+        output_row.addWidget(self.profile_combo)
+        output_row.addWidget(self._help_icon_button('機種: 選ぶと解像度が自動設定されます。\nCustom: 手動で幅・高さを指定します。'))
+        output_row.addSpacing(12)
+
+        output_row.addWidget(self._dim_label('出力形式'))
+        self.output_format_combo = QComboBox()
+        for key, label in OUTPUT_FORMAT_LABELS.items():
+            self.output_format_combo.addItem(label, key)
+        self.output_format_combo.currentIndexChanged.connect(self._schedule_live_preview_refresh_from_signal)
+        self.output_format_combo.currentIndexChanged.connect(lambda _i, self=self: self.save_ui_state())
+        output_row.addWidget(self.output_format_combo)
+        output_row.addWidget(self._help_icon_button('XTC: 2 階調（白黒）で保存します。\nXTCH: 4 階調（白黒 4 段階）で保存します。\n使い分け: 通常の白黒表示なら XTC、階調を残したい画像寄りの用途では XTCH を選びます。'))
+        output_row.addStretch(1)
+        lay.addLayout(output_row)
+
+        row_custom = self._make_hbox_layout_from_plan()
+        self.width_spin = self._spin(240, 2000, 480)
+        self.height_spin = self._spin(240, 2000, 800)
+        self.custom_size_row = QWidget()
+        self.custom_size_row.setVisible(False)
+        cs_lay = QHBoxLayout(self.custom_size_row)
+        cs_lay.setContentsMargins(*tuple(display_plan.get('custom_size_row_margins', (0, 0, 0, 0))))
+        cs_lay.setSpacing(self._plan_int_value(display_plan, 'custom_size_row_spacing', 8))
+        cs_lay.addWidget(self._dim_label(str(display_plan.get('custom_width_label', '幅'))))
+        cs_lay.addWidget(self.width_spin)
+        cs_lay.addSpacing(self._plan_int_value(display_plan, 'custom_size_pair_spacing', 8))
+        cs_lay.addWidget(self._dim_label(str(display_plan.get('custom_height_label', '高さ'))))
+        cs_lay.addWidget(self.height_spin)
+        row_custom.addWidget(self.custom_size_row)
+        row_custom.addStretch(1)
+        lay.addLayout(row_custom)
+
+        self.width_spin.valueChanged.connect(self._on_custom_size_changed)
+        self.height_spin.valueChanged.connect(self._on_custom_size_changed)
+        return box
+
+    # ── 設定セクション：組版 ────────────────────────────
+
+    def _section_composition(self):
+        font_plan = gui_layouts.build_font_section_plan()
+        image_plan = gui_layouts.build_image_section_plan()
+        box, lay, _section_plan = self._build_section_box_layout(
+            'composition',
+            '組版',
             default_margins=(8, 12, 8, 7),
             default_spacing=6,
         )
@@ -1973,11 +2752,6 @@ class MainWindow(QMainWindow):
         self._populate_font_combo()
         self._apply_default_font_selection()
         self.font_combo.currentIndexChanged.connect(self.on_font_changed)
-        # v1.3.3.30: keep the font reference button closer to the font selector.
-        # The left pane top area can now scroll horizontally, but placing this
-        # button at the far right still made it feel detached in wide layouts.
-        # Give the selector roughly 2/3 of the row and leave flexible space on
-        # the right so the browse button sits nearer the center-left cluster.
         font_row.addWidget(self.font_combo, 2)
         browse_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
@@ -2005,47 +2779,62 @@ class MainWindow(QMainWindow):
         self.margin_l_spin = self._spin(0, 80, 12, compact=True, buttons=True)
         lay.addWidget(self._build_margin_rows())
 
-        format_kinsoku_row = self._make_hbox_layout_from_plan(
+        self._ensure_behavior_controls()
+        composition_row = self._make_hbox_layout_from_plan(
             gui_layouts.build_row_layout_plan(spacing=font_plan.get('format_kinsoku_row_spacing', 6))
         )
-        format_kinsoku_row.addWidget(self._dim_label('出力形式'))
-        self.output_format_combo = QComboBox()
-        for key, label in OUTPUT_FORMAT_LABELS.items():
-            self.output_format_combo.addItem(label, key)
-        self.output_format_combo.currentIndexChanged.connect(self._schedule_live_preview_refresh_from_signal)
-        self.output_format_combo.currentIndexChanged.connect(lambda _i, self=self: self.save_ui_state())
-        format_kinsoku_row.addWidget(self.output_format_combo)
-        format_kinsoku_row.addWidget(self._help_icon_button('XTC: 2 階調（白黒）で保存します。\nXTCH: 4 階調（白黒 4 段階）で保存します。\n使い分け: 通常の白黒表示なら XTC、階調を残したい画像寄りの用途では XTCH を選びます。'))
-        format_kinsoku_row.addSpacing(10)
-
-        # sweep366_layout_trial: 機種選択を試験的に「出力形式」と同じ左ペイン行へ移動する。
-        # 保存キーと既存ロジック互換のため、ウィジェット名 profile_combo は維持する。
-        format_kinsoku_row.addWidget(self._dim_label('機種'))
-        self.profile_combo = QComboBox()
-        for label, key in tuple(display_plan.get('profile_items', ())):
-            self.profile_combo.addItem(str(label), key)
-        self.profile_combo.setMinimumWidth(self._plan_int_value(display_plan, 'profile_combo_min_width', 130))
-        self.profile_combo.currentIndexChanged.connect(self.on_profile_changed)
-        format_kinsoku_row.addWidget(self.profile_combo)
-        format_kinsoku_row.addWidget(self._help_icon_button('機種: 選ぶと解像度が自動設定されます。\nCustom: 手動で幅・高さを指定します。'))
-        format_kinsoku_row.addSpacing(10)
-
-        self._ensure_behavior_controls()
-        format_kinsoku_row.addWidget(self._dim_label('禁則処理'))
-        format_kinsoku_row.addWidget(self.kinsoku_mode_combo)
-        format_kinsoku_row.addWidget(self._help_icon_button('オフ: 禁則処理を行わず機械的に流し込みます。\n簡易: 行頭禁則・行末禁則・句読点のぶら下げのみ行います。\n標準: 連続約物や閉じ括弧＋句読点のまとまりも含めて、現在の禁則処理を有効にします。'))
-        format_kinsoku_row.addStretch(1)
-        lay.addLayout(format_kinsoku_row)
-
-        tatechuyoko_row = self._make_hbox_layout_from_plan(
-            gui_layouts.build_row_layout_plan(spacing=font_plan.get('tatechuyoko_row_spacing', 6))
-        )
-        tatechuyoko_row.addWidget(self._dim_label('縦中横'))
+        composition_row.addWidget(self._dim_label('縦中横'))
         self.tatechuyoko_digit_mode_combo.setMaximumWidth(self._plan_int_value(font_plan, 'tatechuyoko_digit_mode_combo_width', 92))
-        tatechuyoko_row.addWidget(self.tatechuyoko_digit_mode_combo)
-        tatechuyoko_row.addWidget(self._help_icon_button('半角数字を1文字分に横組みする上限です。\n4文字: 4桁までを縦中横にします。\n3文字: 3桁までを縦中横にします。\n2文字: 2桁までを縦中横にします。\n無し: 半角数字を縦中横にしません。'))
-        tatechuyoko_row.addStretch(1)
-        lay.addLayout(tatechuyoko_row)
+        composition_row.addWidget(self.tatechuyoko_digit_mode_combo)
+        composition_row.addWidget(self._help_icon_button('半角数字を1文字分に横組みする上限です。\n4文字: 4桁までを縦中横にします。\n3文字: 3桁までを縦中横にします。\n2文字: 2桁までを縦中横にします。\n無し: 半角数字を縦中横にしません。'))
+        composition_row.addSpacing(12)
+        composition_row.addWidget(self._dim_label('禁則処理'))
+        composition_row.addWidget(self.kinsoku_mode_combo)
+        composition_row.addWidget(self._help_icon_button('オフ: 禁則処理を行わず機械的に流し込みます。\n簡易: 行頭禁則・行末禁則・句読点のぶら下げのみ行います。\n標準: 連続約物や閉じ括弧＋句読点のまとまりも含めて、現在の禁則処理を有効にします。'))
+        composition_row.addStretch(1)
+        lay.addLayout(composition_row)
+
+        page_row = self._make_hbox_layout_from_plan()
+        self.page_number_check = QCheckBox('ページ番号')
+        self.page_number_check.setChecked(False)
+        page_row.addWidget(self.page_number_check)
+        page_row.addSpacing(8)
+        page_row.addWidget(self._dim_label('サイズ'))
+        self.page_number_font_size_spin = self._spin(1, 29, 12, compact=True, buttons=True)
+        self.page_number_font_size_spin.setEnabled(False)
+        page_row.addWidget(self.page_number_font_size_spin)
+        page_row.addWidget(self._help_icon_button('ページ番号: チェックすると各ページ右下に「現在ページ/総ページ」を表示します。\nサイズ: 1〜29 の数値を指定します。30以上はエラーです。\nページ番号ON時は、下余白を「サイズ+1」以上に自動確保します。'))
+        page_row.addStretch(1)
+        self.page_number_check.toggled.connect(self.page_number_font_size_spin.setEnabled)
+        self.page_number_check.toggled.connect(self.on_page_number_setting_changed)
+        self.page_number_font_size_spin.valueChanged.connect(self.on_page_number_setting_changed)
+        lay.addLayout(page_row)
+
+        image_row = self._make_hbox_layout_from_plan()
+        self.ruby_hide_check = QCheckBox(str(image_plan.get('ruby_hide_label', 'ルビ消し')))
+        self.ruby_hide_check.setChecked(self._plan_bool_value(image_plan, 'ruby_hide_checked_default', False))
+        self.ruby_hide_check.toggled.connect(self.on_ruby_hide_toggled)
+        image_row.addWidget(self.ruby_hide_check)
+        image_row.addSpacing(self._plan_int_value(image_plan, 'night_mode_spacing', 16))
+        self.night_check = QCheckBox(str(image_plan.get('night_mode_text', '白黒反転')))
+        self.night_check.toggled.connect(self.on_night_toggled)
+        image_row.addWidget(self.night_check)
+        image_row.addSpacing(self._plan_int_value(image_plan, 'night_mode_spacing', 16))
+        self.dither_check = QCheckBox(str(image_plan.get('dither_text', 'ディザリング')))
+        self.dither_check.setChecked(self._plan_bool_value(image_plan, 'dither_checked_default', False))
+        self.dither_check.toggled.connect(self.on_dither_toggled)
+        image_row.addWidget(self.dither_check)
+        image_row.addSpacing(self._plan_int_value(image_plan, 'dither_spacing', 16))
+        image_row.addWidget(self._dim_label(str(image_plan.get('threshold_label', 'しきい値'))))
+        self.threshold_spin = self._spin(0, 255, 128, compact=True)
+        self.threshold_spin.setEnabled(self._plan_bool_value(image_plan, 'threshold_enabled', False))
+        self.threshold_spin.valueChanged.connect(self.on_threshold_changed)
+        image_row.addWidget(self.threshold_spin)
+        image_row.addSpacing(self._plan_int_value(image_plan, 'threshold_help_spacing', 6))
+        image_row.addWidget(self._help_icon_button(str(image_plan.get('help_text', 'ルビ消し: チェックした場合だけ、親文字は残したままルビを表示しない変換モードにします。\n白黒反転: 白と黒を入れ替えて出力します。プレビューにも反映されます。\nディザリング: 粒状感と引き換えに濃淡感を残します。\nしきい値: 白と黒の分かれ目を調整します。'))))
+        if self._plan_bool_value(image_plan, 'trailing_stretch', True):
+            image_row.addStretch(1)
+        lay.addLayout(image_row)
 
         self.profile_hint = QLabel(DEVICE_PROFILES['x4'].tagline)
         self.profile_hint.setObjectName('hintLabel')
@@ -2062,6 +2851,12 @@ class MainWindow(QMainWindow):
         ]:
             w.valueChanged.connect(self.on_margin_changed)
         return box
+
+    # Backward-compatible alias for older tests/probes. v1.3.8.6 splits
+    # the old combined section into 出力先 + 組版.
+    def _section_font(self):
+        """Legacy probe hook; section factories recreate widgets and are not idempotent."""
+        return self._section_composition()
 
     def _build_margin_rows(self):
         font_plan = gui_layouts.build_font_section_plan()
@@ -2095,21 +2890,14 @@ class MainWindow(QMainWindow):
         lay.addLayout(row)
         return w
 
-    # ── 設定セクション：プレビュー ────────────────────────
+    # ── プレビュー更新コントロール（セクション外） ────────────────
 
-    def _section_display(self):
+    def _section_preview_controls(self):
         display_plan = gui_layouts.build_display_section_plan()
-        box, lay, _section_plan = self._build_section_box_layout(
-            'display',
-            'プレビュー',
-            default_margins=(8, 14, 8, 8),
-            default_spacing=8,
-        )
 
-        # sweep363: 実寸近似/ガイドは右ペインの表示ツールバーへ集約する。
-        # sweep365: 実寸近似はビュー切替に近い表示状態として、
-        # フォントビュー/実機ビューと同系統のチェック可能ボタンにする。
-        # 保存キーと既存ロジック互換のため、ウィジェット名自体は維持する。
+        # sweep363/sweep365: 実寸近似/ガイドは右ペインの表示ツールバーへ集約する。
+        # v1.3.8.6: 中央ペインでは「プレビュー」セクションを廃止するが、
+        # 右ペインへ移す既存 widget と設定互換はここで生成する。
         preview_toggle_plan = gui_layouts.build_preview_display_toggle_plan()
         self.actual_size_check = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
@@ -2134,8 +2922,14 @@ class MainWindow(QMainWindow):
         self.guides_check.setChecked(self._plan_bool_value(preview_toggle_plan, 'guide_checked_default', True))
         self.guides_help_btn = self._help_icon_button(guide_help_text)
 
+        wrapper = QWidget()
+        wrapper.setObjectName('previewUpdateRowContainer')
+
         # 旧左ペインの実寸補正UIは、設定互換用に保持するが表示しない。
+        # v1.3.8.8: 親なしトップレベル widget にならないよう、返却する
+        # wrapper を親にして作る。UIには追加せず、設定値の互換だけ維持する。
         self.calib_label = self._dim_label(str(display_plan.get('calibration_label_text', '実寸補正')))
+        self.calib_label.setParent(wrapper)
         calibration_button_object_name = str(display_plan.get('calibration_button_object_name', 'stepBtn'))
         self.calib_down_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
@@ -2144,7 +2938,8 @@ class MainWindow(QMainWindow):
                 fixed_size=display_plan.get('calibration_button_size', (24, 24)),
             ),
         )
-        self.calib_spin = QSpinBox()
+        self.calib_down_btn.setParent(wrapper)
+        self.calib_spin = QSpinBox(wrapper)
         self.calib_spin.setRange(
             self._plan_int_value(display_plan, 'calibration_spin_minimum', 50),
             self._plan_int_value(display_plan, 'calibration_spin_maximum', 300),
@@ -2167,39 +2962,38 @@ class MainWindow(QMainWindow):
                 fixed_size=display_plan.get('calibration_button_size', (24, 24)),
             ),
         )
+        self.calib_up_btn.setParent(wrapper)
         self.calib_help_btn = self._help_icon_button(
             str(display_plan.get('calibration_help_text', '実寸補正は右ペインの倍率UIで調整します。'))
         )
+        self.calib_help_btn.setParent(wrapper)
         self._sync_legacy_calibration_control_state()
 
-        row3 = self._make_hbox_layout_from_plan()
-        self.width_spin = self._spin(240, 2000, 480)
-        self.height_spin = self._spin(240, 2000, 800)
-        self.custom_size_row = QWidget()
-        self.custom_size_row.setVisible(False)
-        cs_lay = QHBoxLayout(self.custom_size_row)
-        cs_lay.setContentsMargins(*tuple(display_plan.get('custom_size_row_margins', (0, 0, 0, 0))))
-        cs_lay.setSpacing(self._plan_int_value(display_plan, 'custom_size_row_spacing', 8))
-        cs_lay.addWidget(self._dim_label(str(display_plan.get('custom_width_label', '幅'))))
-        cs_lay.addWidget(self.width_spin)
-        cs_lay.addSpacing(self._plan_int_value(display_plan, 'custom_size_pair_spacing', 8))
-        cs_lay.addWidget(self._dim_label(str(display_plan.get('custom_height_label', '高さ'))))
-        cs_lay.addWidget(self.height_spin)
-        row3.addWidget(self.custom_size_row)
-        row3.addStretch(1)
-        lay.addLayout(row3)
+        self.guides_check.toggled.connect(self.on_guides_toggled)
+        self.calib_down_btn.clicked.connect(lambda: self.calib_spin.stepBy(-1))
+        self.calib_up_btn.clicked.connect(lambda: self.calib_spin.stepBy(1))
 
-        row4 = self._make_hbox_layout_from_plan()
-        row4.addWidget(self._dim_label(str(display_plan.get('preview_page_limit_label', '更新対象'))))
+        outer = QVBoxLayout(wrapper)
+        outer.setContentsMargins(0, 3, 0, 3)
+        outer.setSpacing(3)
+
+        sep_top = QFrame()
+        sep_top.setFrameShape(self._qframe_shape_constant('HLine', self._qframe_shape_constant('NoFrame', 0)))
+        sep_top.setObjectName('leftSettingsBottomSep')
+        sep_top.setFixedHeight(1)
+        outer.addWidget(sep_top)
+
+        row = self._make_hbox_layout_from_plan()
+        row.addWidget(self._dim_label(str(display_plan.get('preview_page_limit_label', '更新対象'))))
         self.preview_page_limit_spin = self._spin(1, 9999, DEFAULT_PREVIEW_PAGE_LIMIT, compact=True, buttons=True)
         self.preview_page_limit_spin.setProperty('miniSpinButtons', True)
         self.preview_page_limit_spin.setFixedWidth(self._plan_int_value(display_plan, 'preview_page_limit_width', 68))
         self.preview_page_limit_spin.valueChanged.connect(self._mark_preview_dirty_from_signal)
         self.preview_page_limit_spin.valueChanged.connect(lambda _v, self=self: self.save_ui_state())
-        row4.addWidget(self.preview_page_limit_spin)
+        row.addWidget(self.preview_page_limit_spin)
         page_limit_unit_label = QLabel(str(display_plan.get('preview_page_limit_unit_text', 'ページ')))
         page_limit_unit_label.setObjectName(str(display_plan.get('preview_page_limit_unit_object_name', 'dimLabel')))
-        row4.addWidget(page_limit_unit_label)
+        row.addWidget(page_limit_unit_label)
         self.preview_update_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
                 display_plan.get('preview_update_button_text', 'プレビュー更新'),
@@ -2207,7 +3001,7 @@ class MainWindow(QMainWindow):
             ),
             self.manual_refresh_preview,
         )
-        row4.addWidget(self.preview_update_btn)
+        row.addWidget(self.preview_update_btn)
         self.preview_refresh_btn = self.preview_update_btn
         self.preview_progress_bar = QProgressBar()
         self.preview_progress_bar.setObjectName(str(display_plan.get('preview_progress_object_name', 'previewProgressBar')))
@@ -2217,76 +3011,39 @@ class MainWindow(QMainWindow):
         self.preview_progress_bar.setValue(0)
         self.preview_progress_bar.setFormat(str(display_plan.get('preview_progress_idle_format', '')))
         self.preview_progress_bar.setVisible(False)
-        row4.addWidget(self.preview_progress_bar)
+        row.addWidget(self.preview_progress_bar)
         self.preview_status_label = QLabel(str(display_plan.get('preview_status_text', '')))
         self.preview_status_label.setObjectName(str(display_plan.get('preview_status_object_name', 'hintLabel')))
         self.preview_status_label.setMinimumWidth(self._plan_int_value(display_plan, 'preview_status_min_width', 220))
         self.preview_status_label.setMaximumWidth(self._plan_int_value(display_plan, 'preview_status_max_width', 260))
-        row4.addWidget(self.preview_status_label)
-        row4.addSpacing(self._plan_int_value(display_plan, 'preview_status_help_spacing', 4))
-        row4.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時: プレビューを自動生成します。\n設定変更後: 更新対象が20ページ以下なら自動更新します。21ページ以上では自動更新せず、「プレビュー更新が必要です」と表示し、［プレビュー更新］を押した時点で再生成します。\n更新対象: プレビュー上限を増やすほど確認範囲は広がりますが、読込・再描画・メモリ使用量は重くなります。最大9999ページまで指定できます。'))))
-        row4.addStretch(1)
-        lay.addLayout(row4)
+        row.addWidget(self.preview_status_label)
+        row.addSpacing(self._plan_int_value(display_plan, 'preview_status_help_spacing', 4))
+        row.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時: プレビューを自動生成します。\n設定変更後: 更新対象が20ページ以下なら自動更新します。21ページ以上では自動更新せず、「プレビュー更新が必要です」と表示し、［プレビュー更新］を押した時点で再生成します。\n更新対象: プレビュー上限を増やすほど確認範囲は広がりますが、読込・再描画・メモリ使用量は重くなります。最大9999ページまで指定できます。'))))
+        row.addStretch(1)
+        outer.addLayout(row)
 
-        self.guides_check.toggled.connect(self.on_guides_toggled)
-        self.calib_down_btn.clicked.connect(lambda: self.calib_spin.stepBy(-1))
-        self.calib_up_btn.clicked.connect(lambda: self.calib_spin.stepBy(1))
-        self.width_spin.valueChanged.connect(self._on_custom_size_changed)
-        self.height_spin.valueChanged.connect(self._on_custom_size_changed)
-        return box
+        sep_bottom = QFrame()
+        sep_bottom.setFrameShape(self._qframe_shape_constant('HLine', self._qframe_shape_constant('NoFrame', 0)))
+        sep_bottom.setObjectName('leftSettingsBottomSep')
+        sep_bottom.setFixedHeight(1)
+        outer.addWidget(sep_bottom)
+        return wrapper
 
-    # ── 設定セクション：画像処理 ──────────────────────────
+    # Backward-compatible alias for tests and older layout probes.
+    def _section_display(self):
+        """Legacy probe hook; section factories recreate widgets and are not idempotent."""
+        return self._section_preview_controls()
 
-    def _section_image(self):
+    # ── 設定セクション：位置補正 ──────────────────────────
+
+    def _section_position(self):
         image_plan = gui_layouts.build_image_section_plan()
         box, lay, _section_plan = self._build_section_box_layout(
-            'image',
-            '画像処理',
+            'position',
+            '位置補正',
             default_margins=(8, 12, 8, 7),
             default_spacing=5,
         )
-
-        row = self._make_hbox_layout_from_plan()
-        self.ruby_hide_check = QCheckBox(str(image_plan.get('ruby_hide_label', 'ルビ消し')))
-        self.ruby_hide_check.setChecked(self._plan_bool_value(image_plan, 'ruby_hide_checked_default', False))
-        self.ruby_hide_check.toggled.connect(self.on_ruby_hide_toggled)
-        row.addWidget(self.ruby_hide_check)
-        row.addSpacing(self._plan_int_value(image_plan, 'night_mode_spacing', 16))
-        self.night_check = QCheckBox(str(image_plan.get('night_mode_text', '白黒反転')))
-        self.night_check.toggled.connect(self.on_night_toggled)
-        row.addWidget(self.night_check)
-        row.addSpacing(self._plan_int_value(image_plan, 'night_mode_spacing', 16))
-        self.dither_check = QCheckBox(str(image_plan.get('dither_text', 'ディザリング')))
-        self.dither_check.setChecked(self._plan_bool_value(image_plan, 'dither_checked_default', False))
-        self.dither_check.toggled.connect(self.on_dither_toggled)
-        row.addWidget(self.dither_check)
-        row.addSpacing(self._plan_int_value(image_plan, 'dither_spacing', 16))
-        row.addWidget(self._dim_label(str(image_plan.get('threshold_label', 'しきい値'))))
-        self.threshold_spin = self._spin(0, 255, 128, compact=True)
-        self.threshold_spin.setEnabled(self._plan_bool_value(image_plan, 'threshold_enabled', False))
-        self.threshold_spin.valueChanged.connect(self.on_threshold_changed)
-        row.addWidget(self.threshold_spin)
-        row.addSpacing(self._plan_int_value(image_plan, 'threshold_help_spacing', 6))
-        row.addWidget(self._help_icon_button(str(image_plan.get('help_text', 'ルビ消し: チェックした場合だけ、親文字は残したままルビを表示しない変換モードにします。\n白黒反転: 白と黒を入れ替えて出力します。プレビューにも反映されます。\nディザリング: 粒状感と引き換えに濃淡感を残します。\nしきい値: 白と黒の分かれ目を調整します。'))))
-        if self._plan_bool_value(image_plan, 'trailing_stretch', True):
-            row.addStretch(1)
-        lay.addLayout(row)
-
-        page_row = self._make_hbox_layout_from_plan()
-        self.page_number_check = QCheckBox('ページ番号')
-        self.page_number_check.setChecked(False)
-        page_row.addWidget(self.page_number_check)
-        page_row.addSpacing(8)
-        page_row.addWidget(self._dim_label('サイズ'))
-        self.page_number_font_size_spin = self._spin(1, 29, 12, compact=True, buttons=True)
-        self.page_number_font_size_spin.setEnabled(False)
-        page_row.addWidget(self.page_number_font_size_spin)
-        page_row.addWidget(self._help_icon_button('ページ番号: チェックすると各ページ右下に「現在ページ/総ページ」を表示します。\nサイズ: 1〜29 の数値を指定します。30以上はエラーです。\nページ番号ON時は、下余白を「サイズ+1」以上に自動確保します。'))
-        page_row.addStretch(1)
-        self.page_number_check.toggled.connect(self.page_number_font_size_spin.setEnabled)
-        self.page_number_check.toggled.connect(self.on_page_number_setting_changed)
-        self.page_number_font_size_spin.valueChanged.connect(self.on_page_number_setting_changed)
-        lay.addLayout(page_row)
 
         self._ensure_behavior_controls()
         image_glyph_position_row = self._make_hbox_layout_from_plan(
@@ -2339,6 +3096,13 @@ class MainWindow(QMainWindow):
             self.tatechuyoko_symbol_position_combo,
             '対象: 縦中横で描画される記号ペア（！？/？？/！！/？！/!?/??/!!/?!）のみです。\n数字の縦中横には影響しません。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
         )
+        image_tatechuyoko_symbol_row.addSpacing(glyph_group_spacing)
+        self._add_glyph_position_control(
+            image_tatechuyoko_symbol_row,
+            '下鍵括弧',
+            self.lower_closing_bracket_position_combo,
+            '対象: 閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみです。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
+        )
         image_tatechuyoko_symbol_row.addStretch(1)
         lay.addLayout(image_tatechuyoko_symbol_row)
 
@@ -2348,13 +3112,6 @@ class MainWindow(QMainWindow):
         self.wave_dash_drawing_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_drawing_combo_width', 108))
         self.wave_dash_position_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_position_combo_width', 92))
         wave_dash_group_spacing = self._plan_int_value(image_plan, 'wave_dash_group_spacing', 8)
-        self._add_glyph_position_control(
-            image_wave_dash_row,
-            '下鍵括弧',
-            self.lower_closing_bracket_position_combo,
-            '対象: 閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみです。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
-        )
-        image_wave_dash_row.addSpacing(wave_dash_group_spacing)
         image_wave_dash_row.addWidget(self._dim_label('波線描画'))
         image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)
         image_wave_dash_row.addWidget(self._help_icon_button('対象: 波線系記号（～/〜/〰/~ など）の描画方式です。\n回転グリフ: フォントの質感を保って90度回転します。\n別描画: アプリ側で縦波線を描きます。\n自動フォールバック: 回転グリフに失敗した場合は別描画へ切り替えます。'))
@@ -2364,7 +3121,15 @@ class MainWindow(QMainWindow):
         image_wave_dash_row.addWidget(self._help_icon_button('対象: 波線系記号の縦位置だけを補正します。\n標準: これまでの位置です。\n下補正弱/強: 標準より下へ寄せます。'))
         image_wave_dash_row.addStretch(1)
         lay.addLayout(image_wave_dash_row)
+
         return box
+
+    # Backward-compatible alias for older tests/probes. v1.3.8.6 moved the
+    # image-processing toggles into _section_composition() and kept this slot
+    # for position correction only.
+    def _section_image(self):
+        """Legacy probe hook; section factories recreate widgets and are not idempotent."""
+        return self._section_position()
 
     # ── 設定セクション：プリセット ────────────────────────
 
@@ -2376,9 +3141,8 @@ class MainWindow(QMainWindow):
             default_margins=(8, 14, 8, 2),
             default_spacing=4,
         )
+        self.preset_section_box = box
 
-        row = self._make_hbox_layout_from_plan()
-        row.setSpacing(self._plan_int_value(preset_plan, 'row_spacing', self._plan_int_value(section_plan, 'row_spacing', 8)))
         self.preset_combo = QComboBox()
         for key, p in self.preset_definitions.items():
             self.preset_combo.addItem(p['button_text'], key)
@@ -2386,15 +3150,15 @@ class MainWindow(QMainWindow):
         preset_combo_width = self._plan_int_value(
             preset_plan,
             'combo_width',
-            self._plan_int_value(preset_plan, 'combo_max_width', 294),
+            self._plan_int_value(preset_plan, 'combo_max_width', 260),
         )
         self.preset_combo.setMinimumWidth(preset_combo_width)
         self.preset_combo.setMaximumWidth(self._plan_int_value(preset_plan, 'combo_max_width', preset_combo_width))
-        row.addWidget(self.preset_combo)
+        lay.addWidget(self.preset_combo)
 
         self.preset_apply_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                preset_plan.get('apply_button_text', 'プリセット読込'),
+                preset_plan.get('apply_button_text', 'プリセット\n読み込み'),
                 object_name=preset_plan.get('button_object_name', 'smallBtn'),
                 tooltip=preset_plan.get('apply_tooltip', '選択中のプリセットを現在の組版へ読み込みます'),
             ),
@@ -2403,11 +3167,20 @@ class MainWindow(QMainWindow):
 
         self.preset_save_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
-                preset_plan.get('save_button_text', 'プリセット保存'),
+                preset_plan.get('save_button_text', 'プリセット\n保存'),
                 object_name=preset_plan.get('button_object_name', 'smallBtn'),
                 tooltip=preset_plan.get('save_tooltip', '現在の組版設定をこのプリセットへ保存します'),
             ),
             self.save_selected_preset,
+        )
+
+        self.preset_rename_btn = self._make_button_from_plan(
+            gui_layouts.build_button_widget_plan(
+                preset_plan.get('rename_button_text', '名称変更'),
+                object_name=preset_plan.get('button_object_name', 'smallBtn'),
+                tooltip=preset_plan.get('rename_tooltip', '選択中のプリセットの表示名を変更します'),
+            ),
+            self.rename_selected_preset,
         )
 
         preset_button_plan = gui_layouts.build_uniform_button_row_plan(
@@ -2418,11 +3191,25 @@ class MainWindow(QMainWindow):
             minimum_width=self._plan_int_value(preset_plan, 'button_min_width', 104),
         )
         preset_button_width = self._plan_int_value(preset_button_plan, 'button_min_width', 104)
+        button_row = self._make_hbox_layout_from_plan()
+        button_row.setSpacing(self._plan_int_value(preset_plan, 'row_spacing', self._plan_int_value(section_plan, 'row_spacing', 8)))
+        preset_button_height = self._plan_int_value(preset_plan, 'button_min_height', 44)
         for button in (self.preset_apply_btn, self.preset_save_btn):
             button.setMinimumWidth(preset_button_width)
-            row.addWidget(button)
-        row.addStretch(1)
-        lay.addLayout(row)
+            if preset_button_height > 0:
+                button.setMinimumHeight(preset_button_height)
+            button_row.addWidget(button)
+        button_row.addStretch(1)
+        lay.addLayout(button_row)
+
+        rename_row = self._make_hbox_layout_from_plan()
+        rename_row.setSpacing(self._plan_int_value(preset_plan, 'row_spacing', self._plan_int_value(section_plan, 'row_spacing', 8)))
+        self.preset_rename_btn.setMinimumWidth(min(preset_combo_width, max(120, preset_button_width)))
+        if preset_button_height > 0:
+            self.preset_rename_btn.setMinimumHeight(max(32, preset_button_height - 8))
+        rename_row.addWidget(self.preset_rename_btn)
+        rename_row.addStretch(1)
+        lay.addLayout(rename_row)
 
         self.preset_summary_label = QLabel(str(preset_plan.get('summary_text', '')))
         self.preset_summary_label.setObjectName(str(preset_plan.get('summary_label_object_name', 'presetSummaryLabel')))
@@ -2552,7 +3339,7 @@ class MainWindow(QMainWindow):
         row.addWidget(self._help_icon_button(
             file_viewer_plan.get(
                 'open_xtc_help_text',
-                '既存の .xtc / .xtch ファイルを右ペインの実機ビューへ読み込んで確認します。',
+                '既存の .xtc / .xtch ファイルを右ペインへ読み込んで確認します。',
             )
         ))
         if self._plan_bool_value(file_viewer_plan, 'open_xtc_help_trailing_stretch', True):
@@ -2669,7 +3456,7 @@ class MainWindow(QMainWindow):
         toggle_plan = gui_layouts.build_view_toggle_bar_plan()
         bar = QFrame()
         bar.setObjectName(str(toggle_plan.get('object_name', 'viewToggleBar')))
-        bar.setFixedHeight(self._plan_int_value(toggle_plan, 'bar_height', 88))
+        bar.setFixedHeight(self._plan_int_value(toggle_plan, 'bar_height', 96))
         outer_lay = QVBoxLayout(bar)
         outer_lay.setContentsMargins(*self._plan_int_tuple_value(toggle_plan, 'contents_margins', (12, 4, 12, 4), expected_length=4))
         outer_lay.setSpacing(self._plan_int_value(toggle_plan, 'row_spacing', 2))
@@ -2678,34 +3465,13 @@ class MainWindow(QMainWindow):
         top_lay.setContentsMargins(*self._plan_int_tuple_value(toggle_plan, 'top_row_contents_margins', (0, 0, 0, 0), expected_length=4))
         top_lay.setSpacing(self._plan_int_value(toggle_plan, 'spacing', 6))
 
-        self.font_view_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                toggle_plan.get('font_view_text', 'フォントビュー'),
-                object_name=str(toggle_plan.get('view_button_object_name', 'viewToggleBtn')),
-                checkable=self._plan_bool_value(toggle_plan, 'view_button_checkable', True),
-                checked=self._plan_bool_value(toggle_plan, 'font_view_checked_default', True),
-                focus_policy=str(toggle_plan.get('view_button_focus_policy', 'no_focus')),
-            ),
-            lambda: self.set_main_view_mode('font'),
-        )
-
-        self.device_view_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                toggle_plan.get('device_view_text', '実機ビュー'),
-                object_name=str(toggle_plan.get('view_button_object_name', 'viewToggleBtn')),
-                checkable=self._plan_bool_value(toggle_plan, 'view_button_checkable', True),
-                checked=self._plan_bool_value(toggle_plan, 'device_view_checked_default', False),
-                focus_policy=str(toggle_plan.get('view_button_focus_policy', 'no_focus')),
-            ),
-            lambda: self.set_main_view_mode('device'),
-        )
-
-        top_lay.addWidget(self.font_view_btn)
-        top_lay.addWidget(self.device_view_btn)
-
+        # v1.3.8.10: remove the user-facing font/device mode switch.
+        # The right pane now has one normal preview surface; XTC/XTCH files opened
+        # via the top button are shown there as file-viewer content.  Keep these
+        # attributes absent rather than hidden buttons so legacy mode-switch code
+        # naturally becomes a no-op through getattr(..., None).
         self.view_help_btn = self._help_icon_button(self._preview_view_help_text())
         top_lay.addWidget(self.view_help_btn)
-        top_lay.addSpacing(self._plan_int_value(toggle_plan, 'display_toggle_spacing', 10))
         self._add_preview_display_toggles_to_layout(top_lay)
         top_lay.addStretch(1)
         outer_lay.addLayout(top_lay)
@@ -2936,6 +3702,106 @@ class MainWindow(QMainWindow):
         lines.append('詳細は左下の「変換結果」タブにも記録しています。')
         return '\n'.join(lines)
 
+    def _meaningful_open_folder_target_text(self: MainWindow, value: object) -> str:
+        if not isinstance(value, (str, bytes, bytearray, os.PathLike)):
+            return ''
+        target = worker_logic._normalized_path_text(value).strip()
+        if not target:
+            return ''
+        # ``'.'``, ``'./'``, ``'.\\'``, ``'./.'``, ``'foo/..'`` などは
+        # 正規化すると ``'.'`` になり、``os.startfile`` ではアプリのある
+        # 作業ディレクトリ（cwd）を開いてしまう。``'..'`` も親ディレクトリへ
+        # 落ちて意図しないフォルダを開くため、同じく拒否する。
+        try:
+            if worker_logic._is_windows_like_path(target):
+                normalized_for_check = ntpath.normpath(target)
+            else:
+                normalized_for_check = os.path.normpath(target)
+        except Exception:
+            normalized_for_check = target
+        if normalized_for_check in ('', '.', '..'):
+            return ''
+        return target
+
+    def _source_target_parent_text(self: MainWindow) -> str:
+        target_text = worker_logic.normalize_target_path_text(self._safe_line_edit_text('target_edit'))
+        if not target_text:
+            return ''
+        try:
+            if worker_logic._is_windows_like_path(target_text):
+                normalized = ntpath.normpath(target_text)
+                lower = normalized.lower()
+                if lower.endswith((
+                    '.epub', '.zip', '.rar', '.cbz', '.cbr',
+                    '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
+                    '.xtc', '.xtch',
+                )):
+                    parent = ntpath.dirname(normalized)
+                    return '' if parent in ('', '.') else parent
+                return '' if normalized in ('', '.') else normalized
+            path = Path(target_text)
+            if path.suffix.lower() in {
+                '.epub', '.zip', '.rar', '.cbz', '.cbr',
+                '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
+                '.xtc', '.xtch',
+            }:
+                parent_text = str(path.parent)
+                return '' if parent_text in ('', '.') else parent_text
+            return target_text
+        except Exception:
+            return ''
+
+    def _planned_open_folder_target_from_settings(self: MainWindow, cfg: Mapping[str, object] | None = None) -> str:
+        payload = cfg or {}
+        output_dir = self._meaningful_open_folder_target_text(payload.get('output_dir'))
+        target_text = worker_logic.normalize_target_path_text(payload.get('target'))
+        if output_dir and target_text:
+            try:
+                if worker_logic._is_windows_like_path(target_text):
+                    lower = ntpath.normpath(target_text).lower()
+                    if lower.endswith((
+                        '.epub', '.zip', '.rar', '.cbz', '.cbr',
+                        '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
+                        '.xtc', '.xtch',
+                    )):
+                        return output_dir
+                else:
+                    if Path(target_text).suffix.lower() in {
+                        '.epub', '.zip', '.rar', '.cbz', '.cbr',
+                        '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
+                        '.xtc', '.xtch',
+                    }:
+                        return output_dir
+            except Exception:
+                return output_dir
+        if output_dir:
+            # Preserve current folder-batch behavior: explicit output_dir is not
+            # used for folder input, but keeping it as a last-known manual target
+            # is safer than ever falling back to the app working directory.
+            return output_dir
+        return self._source_target_parent_text()
+
+    def _resolve_conversion_open_folder_target(
+        self: MainWindow,
+        converted_files: object,
+        result: Mapping[str, object] | None = None,
+    ) -> str:
+        paths = results_controller.coerce_result_path_list(converted_files)
+        payload = result or {}
+        for candidate in (
+            self.__dict__.get('_active_conversion_open_folder_target', ''),
+            payload.get('open_folder_target', ''),
+            self.__dict__.get('_last_conversion_open_folder_target', ''),
+            self.__dict__.get('selected_output_dir', ''),
+        ):
+            target = self._meaningful_open_folder_target_text(candidate)
+            if target:
+                return target
+        target = results_controller.resolve_manual_open_folder_target(paths, '')
+        if target:
+            return target
+        return self._source_target_parent_text()
+
     def _show_conversion_completion_card(
         self: MainWindow,
         converted_files: object,
@@ -2966,9 +3832,11 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
         try:
-            self._completion_card_open_folder_target = worker_logic._normalized_path_text(
-                result_payload.get('open_folder_target')
-            ).strip()
+            self._completion_card_open_folder_target = self._resolve_conversion_open_folder_target(
+                paths,
+                result_payload,
+            )
+            self._last_conversion_open_folder_target = self._completion_card_open_folder_target
         except Exception:
             self._completion_card_open_folder_target = ''
         open_target_available = bool(self._completion_card_open_folder_target or paths)
@@ -3023,7 +3891,7 @@ class MainWindow(QMainWindow):
         self.current_xtc_label = QLabel(str(nav_bar_plan.get('current_xtc_label_text', '表示中: なし')))
         self.current_xtc_label.setObjectName(str(nav_bar_plan.get('current_xtc_label_object_name', 'hintLabel')))
         self.current_xtc_label.setMinimumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_min_width', 0))
-        self.current_xtc_label.setMaximumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_max_width', 220))
+        self.current_xtc_label.setMaximumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_max_width', 120))
         lay.addWidget(self.current_xtc_label, current_label_stretch)
 
         self._ensure_nav_reverse_control(nav_bar_plan)
@@ -3182,15 +4050,18 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.bottom_tabs, 1)
 
         outer_lay.addWidget(content, 1)
-        self.bottom_panel_scrollbar = QScrollBar(Qt.Vertical)
-        self.bottom_panel_scrollbar.setObjectName(
-            str(bottom_panel_plan.get('external_scrollbar_object_name', 'bottomPanelScrollBar'))
-        )
-        self.bottom_panel_scrollbar.setSingleStep(
-            self._plan_int_value(bottom_panel_plan, 'external_scrollbar_single_step', 20)
-        )
-        self.bottom_panel_scrollbar.valueChanged.connect(self._apply_bottom_panel_external_scroll_value)
-        outer_lay.addWidget(self.bottom_panel_scrollbar, 0)
+        if self._plan_bool_value(bottom_panel_plan, 'external_scrollbar_enabled', False):
+            self.bottom_panel_scrollbar = QScrollBar(Qt.Vertical)
+            self.bottom_panel_scrollbar.setObjectName(
+                str(bottom_panel_plan.get('external_scrollbar_object_name', 'bottomPanelScrollBar'))
+            )
+            self.bottom_panel_scrollbar.setSingleStep(
+                self._plan_int_value(bottom_panel_plan, 'external_scrollbar_single_step', 20)
+            )
+            self.bottom_panel_scrollbar.valueChanged.connect(self._apply_bottom_panel_external_scroll_value)
+            outer_lay.addWidget(self.bottom_panel_scrollbar, 0)
+        else:
+            self.bottom_panel_scrollbar = None
         self._bind_bottom_panel_external_scrollbar()
         return panel
 
@@ -3207,7 +4078,21 @@ class MainWindow(QMainWindow):
             self._plan_alignment_value(results_tab_plan, 'summary_label_alignment', 'center')
         )
         self._set_results_summary_placeholder_state(True)
-        lay.addWidget(self.results_summary_label, 0)
+        self.results_summary_scroll = QScrollArea()
+        self.results_summary_scroll.setWidgetResizable(
+            self._plan_bool_value(results_tab_plan, 'summary_scroll_widget_resizable', True)
+        )
+        self.results_summary_scroll.setFrameShape(
+            self._plan_frame_shape_value(results_tab_plan, 'summary_scroll_frame_shape', 'no_frame')
+        )
+        self.results_summary_scroll.setHorizontalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(results_tab_plan, 'summary_scroll_horizontal_scroll_bar_policy', 'as_needed')
+        )
+        self.results_summary_scroll.setVerticalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(results_tab_plan, 'summary_scroll_vertical_scroll_bar_policy', 'as_needed')
+        )
+        self.results_summary_scroll.setWidget(self.results_summary_label)
+        lay.addWidget(self.results_summary_scroll, 0)
 
         self.results_action_row = QFrame()
         self.results_action_row.setObjectName('resultsActionRow')
@@ -3219,18 +4104,21 @@ class MainWindow(QMainWindow):
         self.open_results_folder_btn.setToolTip('選択中、または先頭の変換結果が保存されたフォルダを開きます。')
         self.open_results_folder_btn.clicked.connect(self.open_results_folder_from_results)
         results_action_lay.addWidget(self.open_results_folder_btn, 0)
-        self.open_selected_result_btn = QPushButton('実機ビューで確認')
+        self.open_selected_result_btn = QPushButton('右ペインで確認')
         self.open_selected_result_btn.setObjectName('resultsActionButton')
-        self.open_selected_result_btn.setToolTip('選択中、または先頭の変換結果を右側の実機ビューへ読み込みます。')
+        self.open_selected_result_btn.setToolTip('選択中、または先頭の変換結果を右ペインへ読み込みます。')
         self.open_selected_result_btn.clicked.connect(self.open_selected_result_from_results)
         results_action_lay.addWidget(self.open_selected_result_btn, 0)
         results_action_lay.addStretch(1)
         lay.addWidget(self.results_action_row, 0)
 
         self.results_list = QListWidget()
-        results_scroll_policy = self._qt_constant('ScrollBarAsNeeded', self._qt_constant('ScrollBarAlwaysOff', 0))
-        self.results_list.setVerticalScrollBarPolicy(results_scroll_policy)
-        self.results_list.setHorizontalScrollBarPolicy(results_scroll_policy)
+        self.results_list.setVerticalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(results_tab_plan, 'results_list_vertical_scroll_bar_policy', 'always_on')
+        )
+        self.results_list.setHorizontalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(results_tab_plan, 'results_list_horizontal_scroll_bar_policy', 'as_needed')
+        )
         self.results_list.setSelectionMode(
             self._plan_list_selection_mode_value(results_tab_plan, 'results_list_selection_mode', 'single_selection')
         )
@@ -3267,9 +4155,12 @@ class MainWindow(QMainWindow):
         lay.addLayout(top)
 
         self.log_edit = QTextEdit()
-        log_scroll_policy = self._qt_constant('ScrollBarAsNeeded', self._qt_constant('ScrollBarAlwaysOff', 0))
-        self.log_edit.setVerticalScrollBarPolicy(log_scroll_policy)
-        self.log_edit.setHorizontalScrollBarPolicy(log_scroll_policy)
+        self.log_edit.setVerticalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(log_tab_plan, 'log_edit_vertical_scroll_bar_policy', 'always_on')
+        )
+        self.log_edit.setHorizontalScrollBarPolicy(
+            self._plan_scroll_bar_policy_value(log_tab_plan, 'log_edit_horizontal_scroll_bar_policy', 'as_needed')
+        )
         log_edit_read_only = self._plan_bool_value(log_tab_plan, 'log_edit_read_only', True)
         self.log_edit.setReadOnly(log_edit_read_only)
         lay.addWidget(self.log_edit, 1)
@@ -3488,7 +4379,7 @@ class MainWindow(QMainWindow):
         title = QLabel('使い方')
         title.setObjectName('flowGuideTitle')
         title_row.addWidget(title)
-        title_row.addWidget(self._help_icon_button('1. ファイルを開く\n2. プリセットを選ぶ\n3. 必要なら微調整\n4. 変換実行\n5. 実機ビューで確認'))
+        title_row.addWidget(self._help_icon_button('1. ファイルを開く\n2. プリセットを選ぶ\n3. 必要なら微調整\n4. 変換実行\n5. 右ペインで確認'))
         title_row.addStretch(1)
         lay.addLayout(title_row)
         return box
@@ -4562,12 +5453,12 @@ class MainWindow(QMainWindow):
 
     def _sync_preview_view_page_index_for_mode(self: MainWindow, mode: object) -> None:
         normalized = self._normalized_main_view_mode(mode)
-        effective_source = self._effective_device_view_source()
+        effective_source = self._effective_right_pane_source()
         preview_pages = self._runtime_preview_pages() if normalized == 'font' else []
         device_pages = self._runtime_device_preview_pages() if normalized != 'font' else []
-        sync_state = studio_logic.build_preview_view_page_sync_state(
+        sync_state = studio_logic.build_right_pane_preview_page_sync_state(
             mode=normalized,
-            effective_device_view_source=effective_source,
+            effective_right_pane_source=effective_source,
             preview_page_count=len(preview_pages),
             device_preview_page_count=len(device_pages),
             current_preview_index=getattr(self, 'current_preview_page_index', 0),
@@ -4797,15 +5688,36 @@ class MainWindow(QMainWindow):
         )
 
     def _apply_left_panel_width(self: MainWindow, width: int) -> None:
-        """main_splitter の左パネル幅を確実にセットする。"""
+        """main_splitter の左プリセットペイン幅を確実にセットする。"""
         total = self.main_splitter.width()
         if total <= 0:
             QTimer.singleShot(50, lambda: self._apply_left_panel_width(width))
             return
         if width <= 0:
             return
-        left = max(380, min(width, total - 200))
-        self.main_splitter.setSizes([left, max(200, total - left)])
+        # Values above the preset pane's realistic maximum are legacy
+        # combined left+center widths from the old two/nested splitter layout.
+        # Keep accepting them for tests/INI compatibility, but apply only the
+        # preset-pane portion in the single three-way splitter.
+        if width > 500:
+            width = self._settings_int_value(PRESET_PANEL_WIDTH_KEY, 300)
+        current_sizes = list(self.main_splitter.sizes())
+        if len(current_sizes) < 3:
+            current_sizes = self._default_three_pane_splitter_sizes()
+        left_min = 220
+        center_min = 360
+        right_min = 320
+        left = max(left_min, min(width, max(left_min, total - center_min - right_min)))
+        remaining = max(center_min + right_min, total - left)
+        center = max(center_min, current_sizes[1] if len(current_sizes) >= 2 else 680)
+        right = max(right_min, current_sizes[2] if len(current_sizes) >= 3 else remaining - center)
+        scale_base = max(1, center + right)
+        center = max(center_min, int(round(remaining * center / scale_base)))
+        right = max(right_min, remaining - center)
+        if center + right > remaining:
+            center = max(center_min, remaining - right_min)
+            right = max(right_min, remaining - center)
+        self.main_splitter.setSizes([left, center, right])
 
     # ── プレビュー ─────────────────────────────────────────
 
@@ -5234,7 +6146,11 @@ class MainWindow(QMainWindow):
             payload = self._current_preview_payload()
         except Exception:
             payload = {}
-        target_text = str(payload.get('target', '') if isinstance(payload, Mapping) else '').strip()
+        target_text = ''
+        if isinstance(payload, Mapping):
+            # build_preview_payload() exposes the selected file as ``target_path``.
+            # Keep ``target`` as a compatibility fallback for older tests/helpers.
+            target_text = str(payload.get('target_path') or payload.get('target') or '').strip()
         if target_text:
             try:
                 return Path(target_text).exists()
@@ -5242,7 +6158,9 @@ class MainWindow(QMainWindow):
                 return False
         image_data_url = ''
         if isinstance(payload, Mapping):
-            image_data_url = str(payload.get('preview_image_data_url', '') or '').strip()
+            # Image-preview payloads use ``file_b64``; the previous
+            # ``preview_image_data_url`` key is accepted as a fallback only.
+            image_data_url = str(payload.get('file_b64') or payload.get('preview_image_data_url') or '').strip()
         return bool(image_data_url)
 
     def _has_active_preview_for_live_refresh(self: MainWindow) -> bool:
@@ -6424,28 +7342,36 @@ class MainWindow(QMainWindow):
     def _normalized_preview_page_cache_tokens(self: MainWindow, tokens: object, *, expected_len: int) -> list[int] | None:
         return studio_logic.normalize_preview_page_cache_tokens(tokens, expected_len=expected_len)
 
-    def _normalized_device_view_source_value(self: MainWindow, value: object, *, default: str = 'xtc') -> str:
-        return studio_logic.normalize_device_view_source_value(value, default=default)
+    def _normalized_right_pane_source_value(self: MainWindow, value: object, *, default: str = 'xtc') -> str:
+        return studio_logic.normalize_right_pane_source_value(value, default=default)
 
-    def _effective_device_view_source(self: MainWindow, value: object = None) -> str:
-        source = self._normalized_device_view_source_value(
+    def _normalized_device_view_source_value(self: MainWindow, value: object, *, default: str = 'xtc') -> str:
+        """Legacy wrapper for older device-view source terminology."""
+        return self._normalized_right_pane_source_value(value, default=default)
+
+    def _effective_right_pane_source(self: MainWindow, value: object = None) -> str:
+        source = self._normalized_right_pane_source_value(
             getattr(self, 'device_view_source', 'xtc') if value is None else value,
             default='xtc',
         )
         has_preview_pages = bool(self._runtime_device_preview_pages()) if source == 'preview' else False
-        return studio_logic.resolve_effective_device_view_source(
+        return studio_logic.resolve_effective_right_pane_source(
             source,
             has_preview_pages=has_preview_pages,
         )
 
+    def _effective_device_view_source(self: MainWindow, value: object = None) -> str:
+        """Legacy wrapper for older device-view source terminology."""
+        return self._effective_right_pane_source(value)
+
     def _is_preview_display_active(self: MainWindow) -> bool:
         mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
         has_font_preview_pages = bool(self._runtime_preview_pages()) if mode == 'font' else False
-        effective_device_view_source = self._effective_device_view_source() if mode != 'font' else 'xtc'
-        return studio_logic.is_preview_display_active(
+        effective_right_pane_source = self._effective_right_pane_source() if mode != 'font' else 'xtc'
+        return studio_logic.is_right_pane_preview_display_active(
             mode,
             has_font_preview_pages=has_font_preview_pages,
-            effective_device_view_source=effective_device_view_source,
+            effective_right_pane_source=effective_right_pane_source,
         )
 
     def _apply_preview_page_cache_tokens_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
@@ -6699,6 +7625,8 @@ class MainWindow(QMainWindow):
             pass
         self._set_current_xtc_display_name(self._preview_failure_display_name())
         restored_path = self._preview_failure_loaded_path()
+        raw_main_view_mode = str(getattr(self, 'main_view_mode', 'font') or 'font').strip().lower()
+        preserve_loaded_file_viewer = bool(restored_path and self._runtime_xtc_pages() and raw_main_view_mode != 'font')
         try:
             self.render_current_page(refresh_navigation=True)
         except Exception:
@@ -6708,7 +7636,12 @@ class MainWindow(QMainWindow):
                 self.update_navigation_ui()
         preview_pages = self._runtime_preview_pages()
         preview_error_message = str(context.get('error_message', 'プレビュー生成エラー'))
-        if preview_pages:
+        if preserve_loaded_file_viewer:
+            try:
+                self._render_current_xtc_page_in_font_view(refresh_navigation=False)
+            except Exception:
+                self._show_preview_message(preview_error_message)
+        elif preview_pages:
             try:
                 self.render_current_preview_page()
             except Exception:
@@ -6721,7 +7654,9 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            if self._is_preview_display_active():
+            if preserve_loaded_file_viewer:
+                self._sync_results_selection_for_loaded_path_with_fallback(restored_path)
+            elif self._is_preview_display_active():
                 self._clear_results_selection_with_fallback(
                     results_controller.build_results_clear_selection_context()
                 )
@@ -7197,6 +8132,33 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _set_horizontal_scrollbar_to_center_later(
+        self: MainWindow,
+        scroll_area: object,
+    ) -> None:
+        def _position() -> None:
+            try:
+                hbar_getter = getattr(scroll_area, 'horizontalScrollBar', None)
+                hbar = hbar_getter() if callable(hbar_getter) else None
+                if hbar is None:
+                    return
+                minimum_getter = getattr(hbar, 'minimum', None)
+                maximum_getter = getattr(hbar, 'maximum', None)
+                minimum_value = int(minimum_getter() if callable(minimum_getter) else 0)
+                maximum_value = int(maximum_getter() if callable(maximum_getter) else minimum_value)
+                target = minimum_value + max(0, maximum_value - minimum_value) // 2
+                set_value = getattr(hbar, 'setValue', None)
+                if callable(set_value):
+                    set_value(max(minimum_value, min(maximum_value, target)))
+            except Exception:
+                pass
+
+        _position()
+        try:
+            QTimer.singleShot(0, _position)
+        except Exception:
+            pass
+
     def _set_horizontal_scrollbar_to_minimum_later(
         self: MainWindow,
         scroll_area: object,
@@ -7313,15 +8275,14 @@ class MainWindow(QMainWindow):
         except Exception:
             APP_LOGGER.exception('実機ビューの表示倍率更新に失敗しました')
         try:
-            base_hint_getter = getattr(self.viewer_widget, 'baseSizeHint', None)
-            base_hint = base_hint_getter() if callable(base_hint_getter) else self.viewer_widget.sizeHint()
-            base_width = int(base_hint.width()) if hasattr(base_hint, 'width') else 0
-            leading_gap = self._viewer_preview_leading_gap(base_width)
+            # v1.3.8.5: keep XTC/XTCH file-viewer pages centered in the right
+            # pane. The font preview still uses a zoom-dependent left-bias,
+            # but the direct XTC viewer should not add a synthetic leading gap.
             set_gap = getattr(self.viewer_widget, 'set_preview_leading_gap', None)
             if callable(set_gap):
-                set_gap(leading_gap)
+                set_gap(0)
         except Exception:
-            APP_LOGGER.exception('実機ビューの左寄せ補間余白更新に失敗しました')
+            APP_LOGGER.exception('実機ビューの中央寄せ余白更新に失敗しました')
         hint = self.viewer_widget.sizeHint()
         w, h = studio_logic.build_viewer_minimum_size(hint)
         try:
@@ -7337,19 +8298,16 @@ class MainWindow(QMainWindow):
         try:
             viewer_scroll = getattr(self, 'viewer_scroll', None)
             if viewer_scroll is not None:
-                # v1.3.3.21: use the same placement model as the font view for
-                # device view and actual-size approximation: keep the scroll area
-                # left/top aligned at every zoom level, create the 100%-style
-                # centered look with preview_leading_gap, and ease the horizontal
-                # scrollbar toward the left as zoom increases.  Avoid switching
-                # QScrollArea alignment at 100% -> 110%, which caused a visible
-                # jump in the device/actual-size modes.
+                # v1.3.8.5: in the 3-pane file-viewer flow, center the XTC
+                # page horizontally in the right pane. When the page is wider
+                # than the viewport, place the horizontal scrollbar at the
+                # center instead of biasing it left.
                 set_alignment = getattr(viewer_scroll, 'setAlignment', None)
-                align_left = getattr(Qt, 'AlignLeft', None)
-                align_top = getattr(Qt, 'AlignTop', None)
-                if callable(set_alignment) and align_left is not None and align_top is not None:
-                    set_alignment(align_left | align_top)
-                self._set_horizontal_scrollbar_to_zoom_bias_later(viewer_scroll)
+                align_hcenter = self._qt_constant('AlignHCenter', self._qt_constant('AlignCenter', 0))
+                align_top = self._qt_constant('AlignTop', 0)
+                if callable(set_alignment):
+                    set_alignment(align_hcenter | align_top)
+                self._set_horizontal_scrollbar_to_center_later(viewer_scroll)
         except Exception:
             APP_LOGGER.exception('実機ビューのスクロール配置更新に失敗しました')
         try:
@@ -7463,7 +8421,7 @@ class MainWindow(QMainWindow):
             total = max(0, worker_logic._int_config_value(page_payload, 'total', 0))
             current_index = worker_logic._int_config_value(page_payload, 'current_index', 0)
             current_page = worker_logic._int_config_value(page_payload, 'current_page', 0)
-        return studio_logic.build_device_navigation_payload(
+        return studio_logic.build_right_pane_navigation_payload(
             view_mode=view_mode,
             total=total,
             current_index=current_index,
@@ -7887,7 +8845,7 @@ class MainWindow(QMainWindow):
     def current_output_format(self: MainWindow) -> str:
         combo = self.__dict__.get('output_format_combo')
         if combo is None:
-            return 'xtc'
+            return 'xtch'
         current_data = getattr(combo, 'currentData', None)
         raw_value = current_data() if callable(current_data) else None
         value = str(raw_value or '').strip().lower()
@@ -7898,7 +8856,7 @@ class MainWindow(QMainWindow):
         for key, label in OUTPUT_FORMAT_LABELS.items():
             if text_value in {str(key).strip().lower(), str(label).strip().lower()}:
                 return key
-        return 'xtc'
+        return 'xtch'
 
     def current_output_conflict_mode(self: MainWindow) -> str:
         if not hasattr(self, 'output_conflict_combo'):
@@ -7971,6 +8929,17 @@ class MainWindow(QMainWindow):
         key = self.selected_preset_key()
         if key:
             self.save_preset(key)
+
+    def rename_selected_preset(self: MainWindow) -> None:
+        self._flush_pending_ui_changes()
+        key = self.selected_preset_key()
+        if not key:
+            self._show_warning_dialog_with_status_fallback(
+                'プリセット名称変更',
+                '名称を変更するプリセットが選択されていません。',
+            )
+            return
+        self.rename_preset_display_name(key)
 
     def _flush_pending_ui_changes(self: MainWindow) -> None:
         focus_widget = getattr(QApplication, 'focusWidget', None)
@@ -8115,7 +9084,7 @@ class MainWindow(QMainWindow):
         fallback_lower_closing_bracket_position_mode: str = 'standard',
         fallback_wave_dash_drawing_mode: str = 'rotate',
         fallback_wave_dash_position_mode: str = 'standard',
-        fallback_output_format: str = 'xtc',
+        fallback_output_format: str = 'xtch',
     ) -> PresetDefinition:
         source = payload if isinstance(payload, dict) else {}
         fallback_payload = fallback if isinstance(fallback, dict) else {}
@@ -8234,6 +9203,17 @@ class MainWindow(QMainWindow):
 
         return normalized
 
+    def _preset_display_name_settings_key(self: MainWindow, key: str) -> str:
+        return f'{self._preset_settings_prefix(key)}/display_name'
+
+    def _default_preset_display_name(self: MainWindow, key: str) -> str:
+        default_payload = DEFAULT_PRESET_DEFINITIONS.get(key) or {}
+        return str(default_payload.get('button_text') or default_payload.get('name') or key or 'プリセット').strip()
+
+    def _normalize_preset_display_name(self: MainWindow, value: object, *, fallback: str) -> str:
+        text = str(value or '').strip()
+        return text or str(fallback or 'プリセット').strip() or 'プリセット'
+
     def _load_preset_definitions(self: MainWindow) -> PresetDefinitions:
         presets = deepcopy(DEFAULT_PRESET_DEFINITIONS)
         stored_font = self._normalize_font_setting_value(
@@ -8249,8 +9229,8 @@ class MainWindow(QMainWindow):
             KINSOKU_MODE_LABELS,
         )
         stored_output_format = self._normalize_choice_value(
-            worker_logic._str_config_value({'output_format': self._settings_default_value('output_format', 'xtc')}, 'output_format', 'xtc'),
-            'xtc',
+            worker_logic._str_config_value({'output_format': self._settings_default_value('output_format', 'xtch')}, 'output_format', 'xtch'),
+            'xtch',
             OUTPUT_FORMAT_LABELS,
         )
         for key in list(presets):
@@ -8261,6 +9241,15 @@ class MainWindow(QMainWindow):
                 if self._settings_contains_key(sk):
                     dv = preset.get(field)
                     preset[field] = self._settings_raw_value(sk, dv)
+            display_name_key = self._preset_display_name_settings_key(key)
+            if self._settings_contains_key(display_name_key):
+                default_display_name = self._default_preset_display_name(key)
+                display_name = self._normalize_preset_display_name(
+                    self._settings_raw_value(display_name_key, default_display_name),
+                    fallback=default_display_name,
+                )
+                preset['button_text'] = display_name
+                preset['name'] = display_name
             presets[key] = self._normalize_preset_payload(
                 preset,
                 fallback=DEFAULT_PRESET_DEFINITIONS.get(key),
@@ -8314,6 +9303,33 @@ class MainWindow(QMainWindow):
             summary_tag=summary_tag,
             include_name_line=include_name_line,
         )
+
+    def _preset_side_summary_text(self: MainWindow, summary: object) -> str:
+        """Return a taller, left-pane friendly preset specification summary."""
+        margin_pattern = re.compile(
+            r'^余白:\s*上\s*(?P<top>\S+)\s*下\s*(?P<bottom>\S+)\s*左\s*(?P<left>\S+)\s*右\s*(?P<right>\S+)\s*$'
+        )
+
+        def _append_summary_part(part: str) -> None:
+            margin_match = margin_pattern.match(part)
+            if margin_match:
+                lines.append(f'余白の上下: 上 {margin_match.group("top")} 下 {margin_match.group("bottom")}')
+                lines.append(f'余白の左右: 左 {margin_match.group("left")} 右 {margin_match.group("right")}')
+                return
+            lines.append(part)
+
+        lines: list[str] = []
+        for raw_line in str(summary or '').splitlines():
+            text = raw_line.strip()
+            if not text:
+                continue
+            parts = [part.strip() for part in text.split(' / ') if part.strip()]
+            if len(parts) > 1:
+                for part in parts:
+                    _append_summary_part(part)
+            else:
+                _append_summary_part(text)
+        return studio_logic.compact_multiline_label_text('\n'.join(lines))
 
     def _current_settings_summary_payload(self: MainWindow, key: str | None = None) -> PresetDefinition:
         selected_key = key or self.selected_preset_key()
@@ -8495,6 +9511,13 @@ class MainWindow(QMainWindow):
         update_geometry = getattr(label, 'updateGeometry', None)
         if callable(update_geometry):
             update_geometry()
+        section_box = getattr(self, 'preset_section_box', None)
+        if section_box is not None:
+            try:
+                section_box.setMinimumHeight(max(1, int(section_box.sizeHint().height()) + 14))
+                section_box.updateGeometry()
+            except Exception:
+                pass
         if queue_retry:
             self._queue_preset_summary_label_layout_retry()
 
@@ -8503,7 +9526,7 @@ class MainWindow(QMainWindow):
             return
         if not payload:
             return
-        summary = studio_logic.compact_multiline_label_text(
+        summary = self._preset_side_summary_text(
             self._preset_summary_plain_text(payload, summary_tag=summary_tag, include_name_line=False)
         )
         self.preset_summary_label.setText(summary)
@@ -8525,7 +9548,7 @@ class MainWindow(QMainWindow):
             self.preset_summary_label.setText('')
             self.preset_combo.setToolTip('')
             return
-        summary = studio_logic.compact_multiline_label_text(
+        summary = self._preset_side_summary_text(
             self._preset_summary_plain_text(preset, include_name_line=False)
         )
         self.preset_summary_label.setText(summary)
@@ -8788,7 +9811,7 @@ class MainWindow(QMainWindow):
     def _preset_save_confirmation_text(self: MainWindow, preset: Mapping[str, object], preset_name: str) -> str:
         profile_key = str(preset.get('profile', 'x4')).strip().lower() or 'x4'
         profile_text = profile_key.upper()
-        out_key = str(preset.get('output_format', 'xtc')).strip().lower() or 'xtc'
+        out_key = str(preset.get('output_format', 'xtch')).strip().lower() or 'xtch'
         out_text = OUTPUT_FORMAT_LABELS.get(out_key, out_key.upper())
         font_text = core.describe_font_value(str(preset.get('font_file') or '')) or str(preset.get('font_file') or '未指定')
         kinsoku_key = str(preset.get('kinsoku_mode', 'standard')).strip().lower() or 'standard'
@@ -8824,6 +9847,111 @@ class MainWindow(QMainWindow):
             f'  縦中横記号: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("tatechuyoko_symbol_position_mode"))}  /  下鍵括弧: {_label(CLOSING_BRACKET_POSITION_MODE_LABELS, preset.get("lower_closing_bracket_position_mode"))}',
             f'  波線描画: {_label(WAVE_DASH_DRAWING_MODE_LABELS, preset.get("wave_dash_drawing_mode"), "rotate")}  /  波線位置: {_label(WAVE_DASH_POSITION_MODE_LABELS, preset.get("wave_dash_position_mode"))}',
         ])
+
+    def _preset_rename_dialog_result(
+        self: MainWindow,
+        *,
+        current_name: str,
+        default_name: str,
+    ) -> tuple[str, str | None]:
+        dialog = QDialog(self)
+        dialog.setWindowTitle('プリセット名称変更')
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(8)
+
+        label = QLabel('現在選択中のプリセット表示名を変更します。')
+        layout.addWidget(label)
+
+        edit = QLineEdit(current_name)
+        edit.selectAll()
+        layout.addWidget(edit)
+
+        hint = QLabel(f'既定名: {default_name}')
+        hint.setObjectName('dimLabel')
+        layout.addWidget(hint)
+
+        row = QHBoxLayout()
+        reset_btn = QPushButton('既定名に戻す')
+        ok_btn = QPushButton('OK')
+        cancel_btn = QPushButton('キャンセル')
+        row.addWidget(reset_btn)
+        row.addStretch(1)
+        row.addWidget(ok_btn)
+        row.addWidget(cancel_btn)
+        layout.addLayout(row)
+
+        result: dict[str, str | None] = {'action': 'cancel', 'name': None}
+
+        def accept_name() -> None:
+            name = edit.text().strip()
+            if not name:
+                self._show_warning_dialog_with_status_fallback(
+                    'プリセット名称変更',
+                    'プリセット名を空欄にはできません。',
+                )
+                return
+            result['action'] = 'rename'
+            result['name'] = name
+            dialog.accept()
+
+        def reset_default() -> None:
+            result['action'] = 'reset'
+            result['name'] = None
+            dialog.accept()
+
+        ok_btn.clicked.connect(accept_name)
+        cancel_btn.clicked.connect(dialog.reject)
+        reset_btn.clicked.connect(reset_default)
+        edit.returnPressed.connect(accept_name)
+
+        exec_method = getattr(dialog, 'exec', None) or getattr(dialog, 'exec_', None)
+        accepted = exec_method() == getattr(QDialog, 'Accepted', 1) if callable(exec_method) else False
+        if not accepted:
+            return 'cancel', None
+        return str(result.get('action') or 'cancel'), result.get('name')
+
+    def rename_preset_display_name(self: MainWindow, key: str) -> None:
+        preset = self.preset_definitions.get(key)
+        if not preset:
+            self._show_warning_dialog_with_status_fallback(
+                'プリセット名称変更',
+                '名称を変更するプリセットが見つかりませんでした。',
+            )
+            return
+        default_name = self._default_preset_display_name(key)
+        current_name = self._normalize_preset_display_name(
+            preset.get('button_text') or preset.get('name'),
+            fallback=default_name,
+        )
+        action, new_name = self._preset_rename_dialog_result(
+            current_name=current_name,
+            default_name=default_name,
+        )
+        if action == 'cancel':
+            return
+
+        display_key = self._preset_display_name_settings_key(key)
+        if action == 'reset':
+            display_name = default_name
+            self.settings_store.remove(display_key)
+        else:
+            display_name = self._normalize_preset_display_name(new_name, fallback=default_name)
+            self.settings_store.setValue(display_key, display_name)
+
+        self.settings_store.sync()
+        updated = dict(preset)
+        updated['button_text'] = display_name
+        updated['name'] = display_name
+        self.preset_definitions[key] = updated
+        self._refresh_preset_ui()
+        self._set_combo_to_data(self.preset_combo, key)
+        self._sync_selected_preset_summary(key)
+        self.save_ui_state()
+        self._show_ui_status_message_unless_render_failure_visible(
+            f'プリセット名を「{display_name}」に変更しました。',
+            3500,
+        )
 
     def save_preset(self: MainWindow, key: str) -> None:
         p = self.preset_definitions.get(key)
@@ -8982,7 +10110,14 @@ class MainWindow(QMainWindow):
         # the next [保存先を開く] action biased toward an older folder if the next
         # conversion result did not provide a fresh explicit target.
         self._completion_card_open_folder_target = ''
+        self._last_conversion_open_folder_target = ''
+        self._active_conversion_open_folder_target = ''
         self.save_ui_state()
+        self._show_information_dialog_with_status_fallback(
+            '保存先リセット',
+            '保存先指定を解除しました。\n次回の単体変換は、ソースファイルと同じフォルダへ保存します。',
+            fallback_status_message='保存先指定を解除しました。次回の単体変換はソースファイルと同じフォルダへ保存します。',
+        )
         self._announce_selected_output_dir()
         try:
             self._update_top_status()
@@ -9000,6 +10135,8 @@ class MainWindow(QMainWindow):
             return
         normalized_path = worker_logic.normalize_target_path_text(path)
         self.selected_output_dir = normalized_path
+        self._last_conversion_open_folder_target = normalized_path
+        self._completion_card_open_folder_target = normalized_path
         self.save_ui_state()
         self._announce_selected_output_dir()
 
@@ -9316,14 +10453,24 @@ class MainWindow(QMainWindow):
             'window_width': int(normal_geom.width()),
             'window_height': int(normal_geom.height()),
             'is_maximized': bool(self.isMaximized()),
-            'left_splitter_state': self.left_splitter.saveState(),
+            # Keep the historical payload / INI key names, but resolve the
+            # v1.3.8 center-settings splitter through center-named helpers.
+            CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY: self._center_settings_splitter_state_value(),
             'left_panel_visible': self.left_panel.isVisible(),
         }
         if not self.isMaximized():
             raw_payload['geometry'] = self.saveGeometry()
         sizes = self.main_splitter.sizes()
         left_panel_width = 0
-        if sizes and sizes[0] > 0:
+        if len(sizes) >= 3:
+            preset_width, center_width, _preview_width = sizes[:3]
+            for key, width in zip(THREE_PANE_PANEL_WIDTH_KEYS, sizes[:3]):
+                if width > 0:
+                    raw_payload[key] = width
+            if preset_width > 0 or center_width > 0:
+                left_panel_width = max(0, preset_width) + max(0, center_width)
+            raw_payload[MAIN_THREE_PANE_SPLITTER_STATE_KEY] = self.main_splitter.saveState()
+        elif sizes and sizes[0] > 0:
             left_panel_width = sizes[0]
         elif not self.left_panel.isVisible():
             pending_width = getattr(self, '_pending_left_panel_width', None)
@@ -9331,11 +10478,19 @@ class MainWindow(QMainWindow):
                 left_panel_width = pending_width
         if left_panel_width > 0:
             raw_payload['left_panel_width'] = left_panel_width
-        left_splitter_sizes = self.left_splitter.sizes()
-        if len(left_splitter_sizes) >= 2:
-            raw_payload['left_splitter_top'] = left_splitter_sizes[0]
-            raw_payload['left_splitter_bottom'] = left_splitter_sizes[1]
-        return studio_logic.build_window_state_save_payload(raw_payload)
+        center_settings_splitter_sizes = self._center_settings_splitter_sizes_value()
+        if len(center_settings_splitter_sizes) >= 2:
+            raw_payload[CENTER_SETTINGS_LEGACY_SPLITTER_TOP_KEY] = center_settings_splitter_sizes[0]
+            raw_payload[CENTER_SETTINGS_LEGACY_SPLITTER_BOTTOM_KEY] = center_settings_splitter_sizes[1]
+        payload = studio_logic.build_window_state_save_payload(raw_payload)
+        if raw_payload.get(MAIN_THREE_PANE_SPLITTER_STATE_KEY) is not None:
+            payload[MAIN_THREE_PANE_SPLITTER_STATE_KEY] = raw_payload.get(MAIN_THREE_PANE_SPLITTER_STATE_KEY)
+        if raw_payload.get(PRESET_PANEL_WIDTH_KEY) is not None and raw_payload.get(CENTER_SETTINGS_PANEL_WIDTH_KEY) is not None:
+            payload[PRESET_PANEL_WIDTH_KEY] = raw_payload[PRESET_PANEL_WIDTH_KEY]
+            payload[CENTER_SETTINGS_PANEL_WIDTH_KEY] = raw_payload[CENTER_SETTINGS_PANEL_WIDTH_KEY]
+        if raw_payload.get(PREVIEW_PANEL_WIDTH_KEY) is not None:
+            payload[PREVIEW_PANEL_WIDTH_KEY] = raw_payload[PREVIEW_PANEL_WIDTH_KEY]
+        return payload
 
     def _settings_save_payload(self: MainWindow) -> dict[str, object]:
         ui_state = settings_controller.build_settings_save_ui_state(
@@ -9355,7 +10510,7 @@ class MainWindow(QMainWindow):
         payload = settings_controller.build_settings_save_payload(
             current_settings=self.current_settings_dict(),
             ui_state=ui_state,
-            allowed_view_modes={'font', 'device'},
+            allowed_view_modes={'font'},
             allowed_profiles=DEVICE_PROFILES,
             allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
             allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
@@ -10329,6 +11484,10 @@ class MainWindow(QMainWindow):
         if not self._check_conversion_dependencies(cfg):
             return
         self._prepare_conversion_ui_for_run(cfg)
+        try:
+            self._active_conversion_open_folder_target = self._planned_open_folder_target_from_settings(cfg)
+        except Exception:
+            self._active_conversion_open_folder_target = ''
 
         worker_thread = None
         worker = None
@@ -11089,6 +12248,13 @@ class MainWindow(QMainWindow):
                     pass
         stopped = worker_logic._bool_config_value(result, 'stopped', False)
         converted_files = results_controller.coerce_result_path_list(result.get('converted_files'))
+        try:
+            self._last_conversion_open_folder_target = self._resolve_conversion_open_folder_target(
+                converted_files,
+                result,
+            )
+        except Exception:
+            self._last_conversion_open_folder_target = ''
         postprocess_warnings = worker_logic.coerce_postprocess_warning_messages(
             result.get('postprocess_warnings')
         )
@@ -11533,9 +12699,15 @@ class MainWindow(QMainWindow):
         return worker_logic._normalized_path_text(self._results_item_path(item)).strip() if item is not None else ''
 
     def open_results_folder_from_results(self: MainWindow) -> None:
-        folder_override = worker_logic._normalized_path_text(
-            getattr(self, '_completion_card_open_folder_target', '')
-        ).strip()
+        folder_override = ''
+        for candidate in (
+            self.__dict__.get('_last_conversion_open_folder_target', ''),
+            self.__dict__.get('_completion_card_open_folder_target', ''),
+            self.__dict__.get('_active_conversion_open_folder_target', ''),
+        ):
+            folder_override = self._meaningful_open_folder_target_text(candidate)
+            if folder_override:
+                break
         if folder_override:
             if _open_path_in_file_manager(folder_override):
                 return
@@ -11553,7 +12725,14 @@ class MainWindow(QMainWindow):
                 folder = str(Path(path).parent)
         except Exception:
             folder = ''
-        target = folder or path
+        # _meaningful_open_folder_target_text と同じ基準でフォルダを
+        # 検証する。これにより ``'./'``/``'.\\'``/``'..'`` 等の相対
+        # 表記が ``os.startfile`` に届いてアプリのある cwd を開いて
+        # しまう不具合を、フォールバック経路でも防ぐ。
+        target = self._meaningful_open_folder_target_text(folder)
+        if not target:
+            self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先フォルダを特定できませんでした。\n{path}')
+            return
         if _open_path_in_file_manager(target):
             return
         self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先を開けませんでした。\n{target}')
@@ -11561,7 +12740,7 @@ class MainWindow(QMainWindow):
     def open_selected_result_from_results(self: MainWindow) -> None:
         item = self._resolved_results_item_for_loading() or self._result_item_at(0)
         if item is None:
-            self._show_result_load_dialog_with_status_fallback('information', '実機ビュー', '確認できる変換結果がありません。')
+            self._show_result_load_dialog_with_status_fallback('information', '右ペイン', '確認できる変換結果がありません。')
             return
         self.on_result_item_clicked(item)
 
@@ -11663,7 +12842,7 @@ class MainWindow(QMainWindow):
             pass
         self._show_result_load_dialog_with_status_fallback(
             'warning',
-            '実機ビュー',
+            '右ペイン',
             '選択した項目のファイルパスを取得できませんでした。',
         )
 
@@ -11979,7 +13158,7 @@ class MainWindow(QMainWindow):
                 self._sync_active_display_context_for_visible_page()
             except Exception:
                 pass
-            self._show_result_load_dialog_with_status_fallback('information', '実機ビュー', '表示する変換結果を選択してください。')
+            self._show_result_load_dialog_with_status_fallback('information', '右ペイン', '表示する変換結果を選択してください。')
             return
         effective_context = dict(context)
         effective_index = preferred_index
@@ -11994,7 +13173,7 @@ class MainWindow(QMainWindow):
                     self._sync_active_display_context_for_visible_page()
                 except Exception:
                     pass
-                self._show_result_load_dialog_with_status_fallback('warning', '実機ビュー', '選択した項目のファイルパスを取得できませんでした。')
+                self._show_result_load_dialog_with_status_fallback('warning', '右ペイン', '選択した項目のファイルパスを取得できませんでした。')
                 return
         path = effective_context.get('resolved_path')
         if not self._payload_bool_value(effective_context, 'has_path', False):
@@ -12002,7 +13181,7 @@ class MainWindow(QMainWindow):
                 self._sync_active_display_context_for_visible_page()
             except Exception:
                 pass
-            self._show_result_load_dialog_with_status_fallback('warning', '実機ビュー', '選択した項目のファイルパスを取得できませんでした。')
+            self._show_result_load_dialog_with_status_fallback('warning', '右ペイン', '選択した項目のファイルパスを取得できませんでした。')
             return
         self._apply_results_selection_context_with_fallback({'matched_index': effective_index, 'clear_selection': False})
         load_succeeded = self._load_xtc_from_path_with_result(path)
@@ -12363,20 +13542,23 @@ class MainWindow(QMainWindow):
         return True
 
     def _apply_loaded_xtc_view_mode(self: MainWindow, mode: object, *, safe: bool = False) -> None:
-        can_apply_full_view_mode = all(hasattr(self, name) for name in ('preview_stack', 'font_view_btn', 'device_view_btn'))
-        can_apply_full_view_mode = can_apply_full_view_mode and hasattr(QTimer, 'singleShot')
-        view_mode_state = studio_logic.build_loaded_xtc_view_mode_state(
-            mode,
-            safe=safe,
-            can_apply_full_view_mode=can_apply_full_view_mode,
-        )
-        if not view_mode_state.get('has_mode'):
+        # v1.3.8.10: the visible device-view switch was removed.  Legacy
+        # contexts/INI values may still request ``device``; pass the raw request
+        # through set_main_view_mode() so production code normalizes it to the
+        # remaining font/file-viewer surface, while tests and older adapters can
+        # still observe the compatibility input.
+        if mode is None:
             return
-        mode_text = str(view_mode_state.get('mode', '')).strip()
-        if view_mode_state.get('apply_full_view_mode'):
-            self.set_main_view_mode(mode_text)
+        requested_mode = str(mode or '').strip()
+        if not requested_mode:
             return
-        self.main_view_mode = mode_text
+        if safe:
+            self.main_view_mode = self._normalized_main_view_mode(requested_mode)
+            return
+        if hasattr(self, 'preview_stack'):
+            self.set_main_view_mode(requested_mode)
+            return
+        self.main_view_mode = self._normalized_main_view_mode(requested_mode)
 
     def _apply_loaded_xtc_ui_context(self: MainWindow, context: Mapping[str, object] | object) -> None:
         context = self._coerce_mapping_payload(context)
@@ -12618,22 +13800,24 @@ class MainWindow(QMainWindow):
             window_payload = dict(window_payload)
             window_payload['geometry'] = None
             window_payload['is_maximized'] = False
-            window_payload['left_splitter_state'] = None
+            window_payload[CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY] = None
+            window_payload['preset_settings_splitter_state'] = None
+            window_payload[MAIN_THREE_PANE_SPLITTER_STATE_KEY] = None
             APP_LOGGER.warning('前回終了が正常に完了していないため、ウィンドウ配置の復元をスキップしました')
         default_size = self._default_window_size()
         window_width = max(1100, self._payload_int_value(window_payload, 'window_width', int(default_size.width())))
         window_height = max(760, self._payload_int_value(window_payload, 'window_height', int(default_size.height())))
         is_maximized = self._payload_bool_value(window_payload, 'is_maximized', False)
         left_w = max(0, self._payload_int_value(window_payload, 'left_panel_width', DEFAULT_LEFT_PANEL_WIDTH))
-        # v1.3.3.46: 中央セパレーターの既定位置を 600px に固定する。
-        # 旧既定値 760px / 800px / 820px のまま保存されている環境では、新既定値 600px へ穏やかに寄せる。
-        if left_w in (760, 800, 820):
+        # v1.3.8.3: 3ペイン試作では左+中央の合計幅を使うため、
+        # v1.3.6 以前の2ペイン保存幅が残っている環境では新既定値へ寄せる。
+        if left_w < 940 or left_w in (760, 800, 820):
             left_w = DEFAULT_LEFT_PANEL_WIDTH
             window_payload = dict(window_payload)
             window_payload['left_panel_width'] = left_w
-        left_splitter_sizes = self._payload_splitter_sizes_value(
+        center_settings_splitter_sizes = self._payload_splitter_sizes_value(
             window_payload,
-            'left_splitter_sizes',
+            CENTER_SETTINGS_LEGACY_SPLITTER_SIZES_KEY,
             self._default_left_splitter_sizes(),
         )
         stored_left_vis = self._payload_bool_value(window_payload, 'left_panel_visible', True)
@@ -12647,19 +13831,43 @@ class MainWindow(QMainWindow):
             except Exception:
                 geometry_restored = False
         if not geometry_restored:
-            self.resize(window_width, window_height)
+            clamped_size = self._clamp_window_size_to_available(window_width, window_height)
+            self.resize(clamped_size.width(), clamped_size.height())
         if is_maximized:
             self.showMaximized()
 
-        splitter_restored = False
-        splitter_state = window_payload.get('left_splitter_state')
-        if splitter_state is not None:
+        self._restore_center_settings_splitter_from_payload(
+            splitter_state=window_payload.get(CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY),
+            splitter_sizes=center_settings_splitter_sizes,
+        )
+
+        three_pane_sizes = self._payload_three_pane_splitter_sizes_value(
+            window_payload,
+            MAIN_THREE_PANE_SPLITTER_SIZES_KEY,
+            self._default_three_pane_splitter_sizes(),
+        )
+        if len(three_pane_sizes) < 3:
+            legacy_preset_center = studio_logic.payload_splitter_sizes_value(
+                window_payload,
+                'preset_settings_splitter_sizes',
+                self._default_preset_settings_splitter_sizes(),
+                min_top=220,
+                min_bottom=360,
+            )
+            legacy_preview = max(320, self._settings_int_value(PREVIEW_PANEL_WIDTH_KEY, 560))
+            three_pane_sizes = [*legacy_preset_center[:2], legacy_preview]
+        three_pane_restored = False
+        three_pane_state = window_payload.get(MAIN_THREE_PANE_SPLITTER_STATE_KEY)
+        if three_pane_state is not None and hasattr(self, 'main_splitter'):
             try:
-                splitter_restored = bool(self.left_splitter.restoreState(splitter_state))
+                three_pane_restored = bool(self.main_splitter.restoreState(three_pane_state))
             except Exception:
-                splitter_restored = False
-        if not splitter_restored:
-            self.left_splitter.setSizes(left_splitter_sizes)
+                three_pane_restored = False
+        if not three_pane_restored and hasattr(self, 'main_splitter'):
+            try:
+                self.main_splitter.setSizes(three_pane_sizes)
+            except Exception:
+                pass
 
         restore_payload = self._settings_restore_payload()
         if not previous_shutdown_clean:
@@ -12720,17 +13928,16 @@ class MainWindow(QMainWindow):
             tv.setReadOnly(True)
             tv.setPlainText("""\
 【基本的な流れ】
-1. 上部の「ファイルを開く...」で変換対象を選び、「保存先を選ぶ...」で保存先を選びます。
-2. 複数ファイルをまとめて変換するときは「フォルダ一括変換...」を使います。
+1. 上部の「ファイルを開く」で変換対象を選び、「保存先を選ぶ」で保存先を選びます。
+2. 複数ファイルをまとめて変換するときは「フォルダ一括変換」を使います。
 3. 左側の設定を調整します。
 4. 必要に応じて上部の「プレビュー更新」で手動再描画します。
 5. 右側のフォントビューで文字の見え方を確認します。
 6. 「▶ 変換実行」を押すと .xtc / .xtch を保存します。
-7. 変換後は実機ビューで XTC を確認できます。
+7. 変換後は右ペインで XTC / XTCH を確認できます。
 
 【プレビュー】
-・フォントビュー: 設定中の文字の見え方を確認します。
-・実機ビュー: 変換後の XTC を X3/X4 の外形で確認します。
+・右ペイン: 設定中の文字の見え方を確認します。XTC/XTCHを開くと、同じ場所でページ送りしながら確認できます。
 ・ページ送りは右ペインの「前/次」ボタン、またはページ番号入力で行います。
 ・歯車メニューの「ページ送りキー反転」を ON にすると、前/次 ボタンの左右配置と動作感を入れ替えられます。
 
@@ -12745,7 +13952,7 @@ class MainWindow(QMainWindow):
 ・機種を選ぶと解像度が自動設定されます（Custom では手動指定）。
 
 【ファイルビューワー】
-・「XTC/XTCHを開く」から既存の .xtc / .xtch ファイルを右ペインの実機ビューへ読み込めます。
+・「XTC/XTCHを開く」から既存の .xtc / .xtch ファイルを右ペインへ読み込めます。
 
 【プリセット】
 ・コンボボックスで選択し「プリセット読込」で呼び出します。
@@ -12753,7 +13960,7 @@ class MainWindow(QMainWindow):
 ・プリセットには禁則処理モードも保存されます。
 
 【下部パネル】
-・「変換結果」タブでファイルをクリックすると実機ビューへ読み込みます。
+・「変換結果」タブでファイルをクリックすると右ペインへ読み込みます。
 ・「ログ」タブで変換の詳細を確認できます。
 
 【表示設定】

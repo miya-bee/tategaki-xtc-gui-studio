@@ -61,32 +61,40 @@ class XtcPage:
 # XTC パーサ
 # ─────────────────────────────────────────────────────────
 
-def parse_xtc_pages(data: bytes) -> list[XtcPage]:
-    if len(data) < 48 or data[:4] not in {b'XTC\x00', b'XTCH'}:
-        raise RuntimeError('XTC/XTCHファイルのヘッダが不正です。')
+def _candidate_xtc_page_entry_sizes(count: int, idx_off: int, data_off: int) -> list[int]:
+    """Return plausible XTC page-table strides, preferring the native 16 bytes.
 
-    container_mark = data[:4]
-    expected_blob_magic = b'XTH\x00' if container_mark == b'XTCH' else b'XTG\x00'
-    count = struct.unpack_from('<H', data, 6)[0]
-    idx_off = struct.unpack_from('<Q', data, 24)[0] or 48
-    data_off = struct.unpack_from('<Q', data, 32)[0]
-
-    if idx_off < 48 or idx_off > len(data):
-        raise RuntimeError('XTCページテーブルの開始位置が不正です。')
-
-    entry_size = 16
+    GUI Studio writes 16-byte page table entries.  Older defensive parsing tried to
+    infer the stride from ``data_off - idx_off``.  That is unsafe for non-standard
+    containers that keep a normal 16-byte table but add padding before the page
+    blobs: the padding can make the inferred stride look larger than 16 and shift
+    the second entry into padding.  Try the known-native stride first and only use
+    the inferred stride when it validates all pages.
+    """
+    candidates = [16]
     if count > 0 and data_off > idx_off:
         span = data_off - idx_off
         if span >= count * 16 and span % count == 0:
-            candidate = span // count
-            if candidate >= 16:
-                entry_size = candidate
+            inferred = span // count
+            if inferred >= 16 and inferred not in candidates:
+                candidates.append(inferred)
+    return candidates
 
+
+def _parse_xtc_pages_with_entry_size(
+    data: bytes,
+    *,
+    count: int,
+    idx_off: int,
+    data_off: int,
+    entry_size: int,
+    expected_blob_magic: bytes,
+) -> tuple[list[XtcPage], bool]:
     table_end = idx_off + count * entry_size
     if table_end > len(data):
         raise RuntimeError('XTCページテーブルが途中で切れています。')
 
-    min_data_offset = max(idx_off + count * entry_size, data_off or 0)
+    min_data_offset = max(table_end, data_off or 0)
     pages: list[XtcPage] = []
     prev_end = min_data_offset
     for i in range(count):
@@ -124,18 +132,59 @@ def parse_xtc_pages(data: bytes) -> list[XtcPage]:
                 )
         if invalid:
             if pages:
-                APP_LOGGER.warning(
-                    'XTC/XTCHページ索引またはページデータの不整合を検出したため、有効な先頭 %s / %s ページのみを読み込みます。停止ページ: %s offset=%s length=%s file_size=%s',
-                    len(pages), count, i + 1, page.offset, page.length, len(data)
-                )
-                break
+                return pages, False
             raise RuntimeError(f'XTCページ {i + 1} のオフセット、長さ、またはページデータが不正です。')
         pages.append(page)
         prev_end = end
 
     if not pages:
         raise RuntimeError('XTC/XTCH内に有効なページが見つかりませんでした。')
-    return pages
+    return pages, True
+
+
+def parse_xtc_pages(data: bytes) -> list[XtcPage]:
+    if len(data) < 48 or data[:4] not in {b'XTC\x00', b'XTCH'}:
+        raise RuntimeError('XTC/XTCHファイルのヘッダが不正です。')
+
+    container_mark = data[:4]
+    expected_blob_magic = b'XTH\x00' if container_mark == b'XTCH' else b'XTG\x00'
+    count = struct.unpack_from('<H', data, 6)[0]
+    idx_off = struct.unpack_from('<Q', data, 24)[0] or 48
+    data_off = struct.unpack_from('<Q', data, 32)[0]
+
+    if idx_off < 48 or idx_off > len(data):
+        raise RuntimeError('XTCページテーブルの開始位置が不正です。')
+
+    partial_pages: list[XtcPage] | None = None
+    first_error: RuntimeError | None = None
+    for entry_size in _candidate_xtc_page_entry_sizes(count, idx_off, data_off):
+        try:
+            pages, complete = _parse_xtc_pages_with_entry_size(
+                data,
+                count=count,
+                idx_off=idx_off,
+                data_off=data_off,
+                entry_size=entry_size,
+                expected_blob_magic=expected_blob_magic,
+            )
+        except RuntimeError as exc:
+            if first_error is None:
+                first_error = exc
+            continue
+        if complete:
+            return pages
+        if partial_pages is None:
+            partial_pages = pages
+
+    if partial_pages:
+        APP_LOGGER.warning(
+            'XTC/XTCHページ索引またはページデータの不整合を検出したため、有効な先頭 %s / %s ページのみを読み込みます。',
+            len(partial_pages), count
+        )
+        return partial_pages
+    if first_error is not None:
+        raise first_error
+    raise RuntimeError('XTC/XTCH内に有効なページが見つかりませんでした。')
 
 
 def _pil_image_to_qimage(img: Image.Image) -> QImage:

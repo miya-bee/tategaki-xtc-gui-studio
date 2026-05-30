@@ -1978,6 +1978,7 @@ def _protected_token_group_length(tokens: Sequence[str], start_idx: int) -> int:
 
 @lru_cache(maxsize=512)
 def _build_single_token_vertical_layout_hints(token: str) -> VerticalLayoutHints:
+    _refresh_core_globals()
     line_head_forbidden = _is_line_head_forbidden(token)
     line_end_forbidden = _is_line_end_forbidden(token)
     hanging_punctuation = _is_hanging_punctuation(token)
@@ -1988,11 +1989,13 @@ def _build_single_token_vertical_layout_hints(token: str) -> VerticalLayoutHints
         'continuous_pair_with_next': (False,),
         'protected_group_len': (1,),
         'would_start_forbidden_after_hang_pair': (False,),
+        'would_orphan_short_tail_after_break': (False,),
     }
 
 
 @lru_cache(maxsize=512)
 def _build_two_token_vertical_layout_hints(first_token: str, second_token: str) -> VerticalLayoutHints:
+    _refresh_core_globals()
     token_pair = (first_token, second_token)
     first_line_head_forbidden = _is_line_head_forbidden(first_token)
     second_line_head_forbidden = _is_line_head_forbidden(second_token)
@@ -2001,7 +2004,9 @@ def _build_two_token_vertical_layout_hints(first_token: str, second_token: str) 
     first_hanging_punctuation = _is_hanging_punctuation(first_token)
     second_hanging_punctuation = _is_hanging_punctuation(second_token)
     continuous_pair = _is_continuous_punctuation_pair(first_token, second_token)
-    first_would_start_forbidden_after_hang_pair = first_hanging_punctuation and second_line_head_forbidden
+    # A 2-token run has no token at idx + 2, so hanging a pair at idx 0
+    # cannot make the *next* line start with a forbidden token.  Keep this
+    # shortcut aligned with _would_start_forbidden_after_hang_pair().
     return {
         'line_head_forbidden': (first_line_head_forbidden, second_line_head_forbidden),
         'line_end_forbidden': (first_line_end_forbidden, second_line_end_forbidden),
@@ -2011,8 +2016,9 @@ def _build_two_token_vertical_layout_hints(first_token: str, second_token: str) 
             _protected_token_group_length(token_pair, 0),
             _protected_token_group_length(token_pair, 1),
         ),
-        'would_start_forbidden_after_hang_pair': (
-            first_would_start_forbidden_after_hang_pair,
+        'would_start_forbidden_after_hang_pair': (False, False),
+        'would_orphan_short_tail_after_break': (
+            _would_orphan_short_tail_after_break(token_pair, 0),
             False,
         ),
     }
@@ -2020,6 +2026,7 @@ def _build_two_token_vertical_layout_hints(first_token: str, second_token: str) 
 
 @lru_cache(maxsize=512)
 def _build_three_token_vertical_layout_hints(first_token: str, second_token: str, third_token: str) -> VerticalLayoutHints:
+    _refresh_core_globals()
     token_triplet = (first_token, second_token, third_token)
     first_line_head_forbidden = _is_line_head_forbidden(first_token)
     second_line_head_forbidden = _is_line_head_forbidden(second_token)
@@ -2047,11 +2054,17 @@ def _build_three_token_vertical_layout_hints(first_token: str, second_token: str
             False,
             False,
         ),
+        'would_orphan_short_tail_after_break': (
+            _would_orphan_short_tail_after_break(token_triplet, 0),
+            _would_orphan_short_tail_after_break(token_triplet, 1),
+            False,
+        ),
     }
 
 
 @lru_cache(maxsize=512)
 def _build_four_token_vertical_layout_hints(first_token: str, second_token: str, third_token: str, fourth_token: str) -> VerticalLayoutHints:
+    _refresh_core_globals()
     token_quad = (first_token, second_token, third_token, fourth_token)
     first_line_head_forbidden = _is_line_head_forbidden(first_token)
     second_line_head_forbidden = _is_line_head_forbidden(second_token)
@@ -2105,6 +2118,12 @@ def _build_four_token_vertical_layout_hints(first_token: str, second_token: str,
             False,
             False,
         ),
+        'would_orphan_short_tail_after_break': (
+            _would_orphan_short_tail_after_break(token_quad, 0),
+            _would_orphan_short_tail_after_break(token_quad, 1),
+            _would_orphan_short_tail_after_break(token_quad, 2),
+            False,
+        ),
     }
 
 
@@ -2122,6 +2141,7 @@ def _build_vertical_layout_hints_cached(tokens: tuple[str, ...]) -> VerticalLayo
             'continuous_pair_with_next': empty_bools,
             'protected_group_len': empty_ints,
             'would_start_forbidden_after_hang_pair': empty_bools,
+            'would_orphan_short_tail_after_break': empty_bools,
         }
     if token_count == 1:
         return _build_single_token_vertical_layout_hints(tokens[0])
@@ -2137,6 +2157,7 @@ def _build_vertical_layout_hints_cached(tokens: tuple[str, ...]) -> VerticalLayo
     hanging_punctuation = [False] * token_count
     continuous_pair_with_next = [False] * token_count
     would_start_forbidden_after_hang_pair = [False] * token_count
+    would_orphan_short_tail_after_break = [False] * token_count
 
     for idx, token in enumerate(tokens):
         line_head_forbidden[idx] = _is_line_head_forbidden(token)
@@ -2148,6 +2169,9 @@ def _build_vertical_layout_hints_cached(tokens: tuple[str, ...]) -> VerticalLayo
 
     for idx in range(token_count - 2):
         would_start_forbidden_after_hang_pair[idx] = line_head_forbidden[idx + 2]
+
+    for idx in range(token_count - 1):
+        would_orphan_short_tail_after_break[idx] = _would_orphan_short_tail_after_break(tokens, idx)
 
     same_run_len = [0] * token_count
     continuous_run_len = [0] * token_count
@@ -2201,6 +2225,7 @@ def _build_vertical_layout_hints_cached(tokens: tuple[str, ...]) -> VerticalLayo
         'continuous_pair_with_next': tuple(continuous_pair_with_next),
         'protected_group_len': tuple(protected_group_len),
         'would_start_forbidden_after_hang_pair': tuple(would_start_forbidden_after_hang_pair),
+        'would_orphan_short_tail_after_break': tuple(would_orphan_short_tail_after_break),
     }
 
 
@@ -2231,6 +2256,8 @@ def _choose_vertical_layout_action_with_hints(hints: VerticalLayoutHints, idx: i
             result = 'advance'
         elif slots_left == 1 and current_not_top and idx + 1 < token_count:
             if mode == 'standard' and hints['continuous_pair_with_next'][idx]:
+                result = 'advance'
+            elif mode == 'standard' and hints['would_orphan_short_tail_after_break'][idx]:
                 result = 'advance'
             elif hints['hanging_punctuation'][idx + 1] and not line_end_forbidden:
                 if mode == 'standard' and hints['would_start_forbidden_after_hang_pair'][idx]:
@@ -2292,6 +2319,18 @@ def _remaining_vertical_slots(curr_y: int, height: int, margin_b: int, font_size
     return 1 + (limit - curr_y) // (font_size + 2)
 
 
+def _is_after_effective_column_top(curr_y: int, margin_t: int, wrap_indent_step: int = 0) -> bool:
+    """Return True only after the actual top of the current wrapped column.
+
+    Continuation indentation moves the first drawable cell in a wrapped column
+    below ``margin_t``.  Kinsoku decisions must treat that indented start as
+    the column top; otherwise an over-large wrap indent can be misclassified as
+    "not top", repeatedly advance, and never consume the pending token.
+    """
+    column_top = int(margin_t or 0) + max(0, int(wrap_indent_step or 0))
+    return int(curr_y or 0) > column_top
+
+
 def _remaining_vertical_slots_for_current_column(
     curr_y: int,
     margin_t: int,
@@ -2324,6 +2363,54 @@ def _would_start_forbidden_after_hang_pair(tokens: Sequence[str], idx: int) -> b
     return _is_line_head_forbidden(next_token)
 
 
+def _is_single_body_token_for_short_tail_guard(token: str) -> bool:
+    if not token or len(token) != 1:
+        return False
+    if token.isspace():
+        return False
+    if _is_line_head_forbidden(token) or _is_line_end_forbidden(token):
+        return False
+    return True
+
+
+def _would_orphan_short_tail_after_break(tokens: Sequence[str], idx: int) -> bool:
+    """Return True if breaking after idx would orphan a compact punctuation tail.
+
+    Standard line-head kinsoku prevents punctuation itself from starting a new
+    column.  However, short dialogue endings such as ``か？」`` could still be
+    pushed to the next column as one body character plus punctuation/brackets.
+    Treat that as an undesirable short tail and pull one more body character
+    along with it.  A plain one-character body plus closing bracket such as
+    ``す」`` remains acceptable, so ``終わりです」`` can split as
+    ``終わりで`` / ``す」`` instead of over-pulling ``です」``.
+    """
+    next_idx = idx + 1
+    tail_idx = idx + 2
+    if tail_idx >= len(tokens):
+        return False
+    if not _is_single_body_token_for_short_tail_guard(tokens[next_idx]):
+        return False
+    if not _is_line_head_forbidden(tokens[tail_idx]):
+        return False
+    # Keep the guard focused on compact punctuation/bracket tails.  A long run of
+    # forbidden marks is already handled by the protected-group logic.  Do not
+    # treat a closing-bracket-only tail (e.g. ``す」``) as an orphan; that split is
+    # preferable to moving the preceding body character and making the previous
+    # column short.
+    forbidden_count = 0
+    has_tail_punctuation = False
+    scan_idx = tail_idx
+    while scan_idx < len(tokens) and _is_line_head_forbidden(tokens[scan_idx]):
+        token = tokens[scan_idx]
+        if token in DOUBLE_PUNCT_TOKENS or (len(token) == 1 and token in TAIL_PUNCTUATION_CHARS):
+            has_tail_punctuation = True
+        forbidden_count += 1
+        if forbidden_count > 4:
+            return False
+        scan_idx += 1
+    return forbidden_count > 0 and has_tail_punctuation
+
+
 def _choose_vertical_layout_action(tokens: Sequence[str], idx: int, curr_y: int, margin_t: int, height: int, margin_b: int, font_size: int, kinsoku_mode: str = 'standard') -> str:
     if idx >= len(tokens):
         return 'done'
@@ -2345,6 +2432,8 @@ def _choose_vertical_layout_action(tokens: Sequence[str], idx: int, curr_y: int,
     if slots_left == 1 and curr_y > margin_t and idx + 1 < len(tokens):
         next_token = tokens[idx + 1]
         if mode == 'standard' and _is_continuous_punctuation_pair(token, next_token):
+            return 'advance'
+        if mode == 'standard' and _would_orphan_short_tail_after_break(tokens, idx):
             return 'advance'
         if _is_hanging_punctuation(next_token) and not _is_line_end_forbidden(token):
             if mode == 'standard' and _would_start_forbidden_after_hang_pair(tokens, idx):
@@ -4357,6 +4446,43 @@ class _VerticalPageRenderer:
     def _indent_step_height(self: _VerticalPageRenderer, indent_chars: int) -> int:
         return max(0, int(indent_chars or 0)) * (self.args.font_size + 2)
 
+    def _max_visible_indent_step_height(self: _VerticalPageRenderer) -> int:
+        """Return the largest ordinary indent step before it becomes unsafe.
+
+        Aozora indentation notes can request very large values such as 99 characters.
+        Applying that value literally can place the wrapped-column top below the
+        page.  Compressing such a pathological value into the middle or lower half of
+        the page also gives an unnatural preview because the paragraph appears to
+        start far away from the column head.  Treat over-large final pixel steps as an
+        invalid layout request and ignore them, while preserving ordinary indentation
+        values that still leave roughly half of the vertical slots as readable body.
+        """
+        font_size = max(1, int(self.args.font_size or 1))
+        line_step = font_size + 2
+        top_y = int(self.args.margin_t or 0)
+        total_slots = _remaining_vertical_slots(
+            top_y,
+            int(self.args.height or 0),
+            int(self.args.margin_b or 0),
+            font_size,
+        )
+        if total_slots <= 1:
+            return 0
+        min_tail_slots = max(1, total_slots - max(1, total_slots // 2))
+        max_indent_cells = max(0, total_slots - min_tail_slots)
+        return max_indent_cells * line_step
+
+    def _clamp_indent_step_height(self: _VerticalPageRenderer, indent_step_height: int) -> int:
+        indent_step_height = max(0, int(indent_step_height or 0))
+        if indent_step_height <= 0:
+            return 0
+        max_visible_indent = self._max_visible_indent_step_height()
+        if max_visible_indent <= 0:
+            return 0
+        if indent_step_height > max_visible_indent:
+            return 0
+        return indent_step_height
+
     def _advance_column_with_indent_step(self: _VerticalPageRenderer, indent_step_height: int = 0) -> None:
         """Move to the next column using a precomputed continuation indent.
 
@@ -4365,11 +4491,12 @@ class _VerticalPageRenderer:
                 units into pixels.
         """
         _raise_if_cancelled(self.should_cancel)
-        self.curr_y = self.args.margin_t + max(0, int(indent_step_height or 0))
+        indent_step_height = self._clamp_indent_step_height(indent_step_height)
+        self.curr_y = self.args.margin_t + indent_step_height
         self.curr_x -= self.args.line_spacing
         if self.curr_x < self.args.margin_l:
             self.flush_current_page()
-            self.curr_y = self.args.margin_t + max(0, int(indent_step_height or 0))
+            self.curr_y = self.args.margin_t + indent_step_height
 
     def advance_column(self: _VerticalPageRenderer, count: int = 1, indent_chars: int = 0) -> None:
         """Move rendering to the next vertical column one or more times.
@@ -4424,7 +4551,7 @@ class _VerticalPageRenderer:
         if continuation_indent_chars is None:
             continuation_indent_chars = indent_chars
         continuation_indent_chars = max(0, int(continuation_indent_chars or 0))
-        self.curr_y += self._indent_step_height(indent_chars)
+        self.curr_y += self._clamp_indent_step_height(self._indent_step_height(indent_chars))
         self.ensure_room(self.args.font_size, continuation_indent_chars=continuation_indent_chars)
 
     def get_page_image_draw(self: _VerticalPageRenderer, page_index: int) -> tuple[Image.Image, ImageDraw.ImageDraw]:
@@ -4489,7 +4616,7 @@ class _VerticalPageRenderer:
                 layout_hints,
                 idx,
                 slots_left,
-                curr_y > margin_t,
+                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
@@ -4593,7 +4720,7 @@ class _VerticalPageRenderer:
                 layout_hints,
                 idx,
                 slots_left,
-                curr_y > margin_t,
+                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
@@ -4700,7 +4827,7 @@ class _VerticalPageRenderer:
                 layout_hints,
                 idx,
                 slots_left,
-                curr_y > margin_t,
+                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
@@ -4809,7 +4936,7 @@ class _VerticalPageRenderer:
                 layout_hints,
                 idx,
                 slots_left,
-                curr_y > margin_t,
+                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
@@ -4955,7 +5082,7 @@ class _VerticalPageRenderer:
                 layout_hints,
                 idx,
                 slots_left,
-                curr_y > margin_t,
+                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
@@ -5097,7 +5224,7 @@ class _VerticalPageRenderer:
                 layout_hints,
                 idx,
                 slots_left,
-                curr_y > margin_t,
+                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
@@ -5243,7 +5370,7 @@ class _VerticalPageRenderer:
                 layout_hints,
                 idx,
                 slots_left,
-                curr_y > margin_t,
+                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
@@ -5391,7 +5518,7 @@ class _VerticalPageRenderer:
                 layout_hints,
                 idx,
                 slots_left,
-                curr_y > margin_t,
+                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
@@ -5483,7 +5610,7 @@ class _VerticalPageRenderer:
         _refresh_core_globals()
         _raise_if_cancelled(self.should_cancel)
         wrap_indent_chars = max(0, int(wrap_indent_chars or 0))
-        wrap_indent_step = self._indent_step_height(wrap_indent_chars)
+        wrap_indent_step = self._clamp_indent_step_height(self._indent_step_height(wrap_indent_chars))
         build_single_hints = _build_single_token_vertical_layout_hints
         tokenize_vertical_text = _tokenize_vertical_text_cached
         tatechuyoko_digit_mode = _normalize_tatechuyoko_digit_mode(getattr(self.args, 'tatechuyoko_digit_mode', '2'))
@@ -5660,7 +5787,7 @@ class _VerticalPageRenderer:
         _raise_if_cancelled(self.should_cancel)
         base_font = default_font or self.font
         wrap_indent_chars = max(0, int(wrap_indent_chars or 0))
-        wrap_indent_step = self._indent_step_height(wrap_indent_chars)
+        wrap_indent_step = self._clamp_indent_step_height(self._indent_step_height(wrap_indent_chars))
         get_code_font = self._get_code_font
         draw_text_run = self.draw_text_run
         draw_text_run_plain = self._draw_text_run_plain

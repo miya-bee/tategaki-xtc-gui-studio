@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## v1.4.0
+
+- run_gui.bat hardening: added pushd/cd fallback, app-file existence check, pause-on-failure messaging, and CRLF-only packaging guard for Windows batch launchers. - Public release
+
+v1.4.0 は、前回公開版 v1.3.6 以降の v1.3.8.x 開発・安定化ラインを統合した公開版です。v1.3.7 は非公開のUI検討版として扱い、公開版の更新履歴には細かな v1.3.8.x ファイルを残していません。
+
+- 3ペインUIへ整理し、画面構成を `Left Preset/Spec → Center Settings/Results → Right Preview` にしました。
+- `XTC/XTCHを開く` を上部ボタン列へ移動し、中央設定ペインのスクロールとホイール誤操作防止を調整しました。
+- 新規設定時の既定出力形式を XTCH にし、保存先指定・保存先リセット・保存先を開く周りの安全性を高めました。
+- TXT行頭全角スペースの二重字下げ、行頭開き括弧の不要字下げ、標準禁則の短い文末処理、2-token約物ペアの hint cache を修正しました。
+- 大きな折り返し字下げで縦組み描画が無限ループする問題、および過大な字下げ注記で本文がページ外に出る問題を修正しました。安全範囲を超える字下げは無効化し、本文が列頭付近から始まるようにしています。
+- 画像入力の保存先生成、ライブプレビュー更新判定、画像変換中キャンセル伝播を修正しました。
+- `last_shutdown_clean=false` などの起動状態メタデータだけが残った ini でも、復元対象なしの初回起動相当として安全に起動するようにしました。
+- macOS / Linux のフォント検出候補を増やし、ヒラギノ / Osaka 系や等幅フォントの fallback を改善しました。
+- XTC/XTCH読み戻しの page table stride 推定、BOMなしUTF-16日本語本文推定、ページ番号フォントサイズ上限処理を堅牢化しました。
+- v1.3.8.x の細かな release notes / publish checklist は `RELEASE_NOTES_v1_4_0.md` と本項目へ統合しました。
+- Windows 起動用 `run_gui.bat` / `install_requirements.bat` / `run_tests.bat` を CRLF 改行に正規化し、配布zip作成時にも `.bat` 改行を検査・補正するようにしました。
+- `install_requirements.bat` / `run_tests.bat` も `run_gui.bat` と同じく、フォルダ切替失敗や終了時に `pause` を挟むよう統一し、Explorer からのダブルクリック実行でメッセージが読めずに閉じる経路を塞ぎました。
+
 ## v1.3.6 - Public release
 
 - v1.3.5 以降の v1.3.6.x 作業版を、公開版 v1.3.6 として統合しました。

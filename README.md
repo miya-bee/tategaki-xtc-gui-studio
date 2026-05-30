@@ -1,12 +1,6 @@
 # 縦書きXTC GUI Studio
 
-[English README](README_EN.md)
-
 **縦書きXTC GUI Studio** は、EPUB やテキストを、xteink X4 / X3 などで扱いやすい縦書き XTC / XTCH 形式へ変換するための Python GUI アプリです。
-
-青空文庫テキスト、EPUB、Markdown、画像などを、Xteink X3 / X4 向けの日本語縦書き固定レイアウトとして整え、XTC / XTCH ファイルへ変換できます。ルビ、ページ番号、余白、行間、禁則処理、記号位置補正などを調整し、小型 E Ink 端末で読みやすい表示を作ることを目的にしています。
-
-**TategakiXTC GUI Studio** is a Windows Python GUI tool for converting Aozora Bunko text, EPUB, Markdown, images, and plain text into Japanese vertical-writing **XTC / XTCH** files for **Xteink X3 / X4**.
 
 このリポジトリの公開版は **Python GUI版のみ**です。  
 旧ローカル Web 試作版関連ファイルは、v1.1.0 以降の公開対象から除外しています。
@@ -14,27 +8,34 @@
 > **License note:** This project is **Source Available**, not Open Source.  
 > You may view and study the source for personal use only. Redistribution, commercial use, and modified distribution are not permitted. See `LICENSE.txt` for details.
 
+
+### v1.4.0 public release
+
+v1.4.0 は、前回公開版 v1.3.6 以降の開発版で行った UI 整理、変換安定化、不具合修正をまとめた公開版です。v1.3.7 は公開版として配布せず、v1.3.8.x は v1.4.0 に向けた開発・安定化ラインとして扱います。
+
 ## バージョン
 
-現在の公開版は **v1.3.6** です。
+現在の公開版は **v1.4.0** です。
 
-v1.3.6 は、v1.3.5 以降の追加開発をまとめた公開版です。ページ番号表示、EPUB 堅牢化、プレビュー/ファイルビューワーモード改善、保存先処理改善、位置補正機能追加、XTC / XTCH 書き出し信頼性強化を含みます。内部作業版としては v1.3.6.45 を基準にしています。
+- 派生元の前回公開版: `v1.3.6`
+- 今回公開版: `v1.4.0`
+- GitHub Release tag: `v1.4.0`
+- GitHub Release title: `v1.4.0`
 
-- 前回公開版: `v1.3.5`
-- 今回公開版: `v1.3.6`
-- GitHub Release tag: `v1.3.6`
-- GitHub Release title: `v1.3.6`
+## v1.4.0 の主な更新
 
-## v1.3.6 の主な更新
+- 画面構成を `Left Preset/Spec → Center Settings/Results → Right Preview` の3ペインUIへ整理しました。
+- `XTC/XTCHを開く` を上部ボタン列へ移動し、中央設定ペインのスクロールとホイール誤操作防止を調整しました。
+- 新規設定時の既定出力形式を XTCH にし、保存先指定・保存先リセット・保存先を開く周りの安全性を高めました。
+- TXT行頭全角スペース、行頭開き括弧、標準禁則、2-token約物ペア、過大折り返し字下げハングと過大字下げの描画位置を修正しました。
+- 画像入力の保存先生成、ライブプレビュー更新判定、画像変換中キャンセル伝播を修正しました。
+- macOS / Linux のフォント検出候補を増やし、ヒラギノ / Osaka 系や等幅フォントの fallback を改善しました。
+- XTC/XTCH読み戻し、BOMなしUTF-16日本語本文推定、ページ番号フォントサイズ上限処理を堅牢化しました。
+- v1.3.8.x の細かな release notes / publish checklist は公開版に残さず、v1.3.6 から v1.4.0 までの差分を `RELEASE_NOTES_v1_4_0.md` と `CHANGELOG.md` に統合しました。
+- Windows 起動用 `.bat` ファイルを CRLF 改行に正規化し、ダブルクリック起動時にcmdが一瞬で閉じる問題を防止しました。
+- 旧 `device` view-mode 値は互換入力として受け入れますが、旧 device-view UI は復活させません。現行の右ペイン表示へ安全に丸めます。
 
-- TXT / Markdown / EPUB などの主経路 XTC / XTCH 書き出しで、`os.replace()` 前の temp file fsync と自己検証を行うようにしました。
-- page-entry pipeline の自己検証を、ページごとに width / height が異なる既存ケースにも対応させました。
-- フォルダ一括変換のキャンセル判定を文字列推測ではなく `ConversionCancelled` の型判定へ変更しました。
-- `ConversionWorker._convert()` の `None` 戻り値防御、folder batch log callback 防御、連番保存先候補探索の上限を追加しました。
-- v1.3.6.44 の保存先 helper 防御、v1.3.6.42 の保存先 helper 化、v1.3.6.41 の位置補正整理と sample_texts 配布ガードは維持しています。
-- v1.3.6.x 系のページ番号表示、EPUB 堅牢化、プレビュー進捗表示、半角数字/記号位置補正、半角英字位置補正、ファイルビューワーモード改善を維持しています。
-
-詳細は `RELEASE_NOTES_v1_3_6.md` と `CHANGELOG.md` を参照してください。
+詳細は `RELEASE_NOTES_v1_4_0.md` と `CHANGELOG.md` を参照してください。
 
 ### 同梱サンプルテキスト
 
@@ -83,6 +84,8 @@ GitHub で公開済みの v1.0.2 の次の公開版です。
 - `WINDOWS_SETUP.md` — Windowsでの導入・起動手順
 - `FAQ.md` — よくある質問
 - `KNOWN_LIMITATIONS.md` — 既知の注意点・仕様
+- `RELEASE_NOTES_v1_4_0.md` — v1.3.6 から v1.4.0 までの差分まとめ
+- `PUBLISH_CHECKLIST_v1_4_0.md` — v1.4.0 公開前チェックリスト
 - `RELEASE_NOTES_v1_3_6.md` — v1.3.5 から v1.3.6 までの差分まとめ
 - `RELEASE_NOTES_v1_3_5.md` — v1.3.4 から v1.3.5 までの差分まとめ
 - `RELEASE_NOTES_v1_3_4.md` — v1.3.3 から v1.3.4 までの差分まとめ
@@ -92,6 +95,8 @@ GitHub で公開済みの v1.0.2 の次の公開版です。
 - `RELEASE_NOTES_v1_2_0.md` — v1.2.0 の更新内容
 - `RELEASE_NOTES_v1_1_0.md` — v1.1.0 の更新内容
 - `CHANGELOG.md` — 公開版単位の更新履歴
+
+v1.3.8.x の細かな開発版 release notes / publish checklist は、公開版 v1.4.0 では残さず `RELEASE_NOTES_v1_4_0.md` と `CHANGELOG.md` に統合しています。
 
 ## 得意な文書
 
@@ -215,6 +220,7 @@ v1.1.0 では、以下のような用途で使用します。
 
 同名出力の扱いは、右上の歯車メニュー内「その他オプション > 同名出力」から変更できます。
 
+
 ## Font フォルダーの配置
 
 release zip にフォントを同梱する場合は、`Font/NotoSansJP-Regular.ttf` などのフォント本体と `LICENSE_OFL.txt` を一緒に含めます。
@@ -274,7 +280,7 @@ release zip は以下で作成できます。
     .venv\Scripts\python.exe -B ^
       build_release_zip.py ^
       --verify ^
-      dist\tategaki-xtc-gui-studio_v1.3.6-release.zip
+      dist\tategaki-xtc-gui-studio_v1.4.0-release.zip
 
 release zip の作成は、環境に応じて以下でも実行できます。
 
@@ -286,26 +292,28 @@ release zip の作成は、環境に応じて以下でも実行できます。
 
     python build_release_zip.py --verify <zipパス>
 
-    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.3.6-release.zip
+    python build_release_zip.py --verify dist\tategaki-xtc-gui-studio_v1.4.0-release.zip
 
-v1.3.6 の release zip は Python GUI版の source 構成に加えて `Font/` を同梱できます。Font フォルダが同梱されている release zip では、別コピー手順は不要です。source-only 配布に切り替える場合は、対応するフォント本体と `LICENSE_OFL.txt` の扱いを合わせてください。
+v1.4.0 の source-only zip は Python GUI版の source 構成に加えて `Font/` を同梱できます。Font フォルダが同梱されている release zip では、別コピー手順は不要です。source-only 配布に切り替える場合は、対応するフォント本体と `LICENSE_OFL.txt` の扱いを合わせてください。
 
 ## GitHub Release での公開方針
 
-v1.3.6 は、GitHub 上では以下の扱いで公開します。
+v1.4.0 は、GitHub 上では以下の扱いで公開します。
 
-- Release tag: `v1.3.6`
-- Release title: `v1.3.6`
-- Previous tag: `v1.3.5`
-- 添付ファイル: `tategaki-xtc-gui-studio_v1.3.6-release.zip`
+- Release tag: `v1.4.0`
+- Release title: `v1.4.0`
+- Previous tag: `v1.3.6`
+- 添付ファイル: `tategaki-xtc-gui-studio_v1.4.0-release.zip`
 
-Release 本文には `RELEASE_NOTES_v1_3_6.md` の内容を使用します。
+Release 本文には `RELEASE_NOTES_v1_4_0.md` の内容を使用します。
 
 開発用の `.venv/` や `node_modules/` は release 対象外です。
 
 ## 公開対象について
 
-v1.3.6 の公開対象は **Python GUI版のみ**です。
+v1.4.0 の公開対象は **Python GUI版のみ**です。
+
+v1.3.7 は非公開のUI検討版、v1.3.8.x は v1.4.0 に向けた開発・安定化ラインとして扱います。公開版には、v1.3.8.x の細かな release notes / publish checklist を残さず、v1.3.6 から v1.4.0 までの差分をまとめています。
 
 以下の旧ローカル Web 試作版関連ファイルは、公開用 payload / release 検査の対象外です。
 
@@ -326,7 +334,7 @@ v1.3.6 の公開対象は **Python GUI版のみ**です。
 
 ## 画面構成メモ
 
-現在の左ペイン構成は `Preset → Font → Image → Display` を基準にしています。
+現在の画面構成は `Left Preset/Spec → Center Settings/Results → Right Preview` を基準にしています。UI全体の流れは `Preset/Spec → Output → Composition → Position → Preview Update` を基準にし、中央設定ペインの順序は `出力先 → 組版 → 位置補正 → プレビュー更新行` です。
 GUI smoke をヘッドレス CI / WSL で動かす場合は `QT_QPA_PLATFORM=offscreen` を使います。
 
 ## テストと coverage の運用
@@ -350,6 +358,8 @@ GitHub のライセンス表示では、OSI 認定ライセンスではないた
 `Font/` に同梱している Noto Sans JP / Noto Serif JP 系フォントは、アプリ本体とは別に **SIL Open Font License 1.1** に基づきます。  
 詳細は `LICENSE_OFL.txt` を参照してください。
 
-## Keywords
 
-Xteink X3, Xteink X4, xteink, XTC, XTCH, Aozora Bunko, 青空文庫, EPUB, Japanese vertical writing, 日本語縦書き, ruby text, ルビ, E Ink, ebook converter, Windows GUI, Python GUI.
+
+### Windows launcher note
+
+The included `run_gui.bat` is hardened for normal extracted local folders: it switches to its own folder, falls back from `pushd` to `cd /d`, checks that app files are present, and pauses with a message instead of closing silently when launched from an unsuitable location such as a zip preview or inaccessible path.

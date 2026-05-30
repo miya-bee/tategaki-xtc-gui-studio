@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import unicodedata
+
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
 
@@ -39,7 +41,7 @@ _refresh_core_globals()
 # ==========================================
 
 FONT_SPEC_INDEX_TOKEN = '|index='
-BUNDLED_FONT_DIR_NAMES = ('Font', 'fonts')
+BUNDLED_FONT_DIR_NAMES = ('Font', 'font', 'fonts', 'Fonts')
 BUNDLED_FONT_FILE_SUFFIXES = ('.ttf', '.ttc', '.otf', '.otc')
 
 
@@ -53,6 +55,22 @@ def _existing_bundled_font_dirs() -> tuple[Path, ...]:
     return tuple(path for path in _bundled_font_dir_candidates() if path.exists() and path.is_dir())
 
 
+def _normalized_path_variants(path_value: object) -> tuple[Path, ...]:
+    """Return path candidates including macOS Unicode-normalized spellings."""
+    raw = str(path_value or '').strip()
+    if not raw:
+        return tuple()
+    variants: list[Path] = []
+    seen: set[str] = set()
+    for form in ('', 'NFC', 'NFD'):
+        text = raw if not form else unicodedata.normalize(form, raw)
+        if text in seen:
+            continue
+        seen.add(text)
+        variants.append(Path(text))
+    return tuple(variants)
+
+
 @lru_cache(maxsize=1)
 def _preferred_system_font_specs() -> tuple[str, ...]:
     _refresh_core_globals()
@@ -60,15 +78,18 @@ def _preferred_system_font_specs() -> tuple[str, ...]:
     seen: set[str] = set()
 
     def add_spec(value: object, index: int = 0) -> None:
-        spec = build_font_spec(value, index)
-        path_value, _font_index = parse_font_spec(spec)
-        if not path_value or spec in seen:
+        for path in _normalized_path_variants(value):
+            spec = build_font_spec(path, index)
+            if not spec or spec in seen:
+                continue
+            try:
+                if not path.exists() or not path.is_file():
+                    continue
+            except OSError:
+                continue
+            seen.add(spec)
+            specs.append(spec)
             return
-        path = Path(path_value)
-        if not path.exists() or not path.is_file():
-            return
-        seen.add(spec)
-        specs.append(spec)
 
     for candidate in (
         ('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', 0),
@@ -81,8 +102,14 @@ def _preferred_system_font_specs() -> tuple[str, ...]:
         ('C:/Windows/Fonts/msgothic.ttc', 0),
         ('C:/Windows/Fonts/msmincho.ttc', 0),
         ('/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc', 0),
+        ('/System/Library/Fonts/ヒラギノ角ゴ ProN W3.ttc', 0),
+        ('/System/Library/Fonts/ヒラギノ角ゴ ProN W6.ttc', 0),
         ('/System/Library/Fonts/ヒラギノ明朝 ProN.ttc', 0),
+        ('/System/Library/Fonts/ヒラギノ明朝 ProN W3.ttc', 0),
+        ('/System/Library/Fonts/ヒラギノ明朝 ProN W6.ttc', 0),
         ('/System/Library/Fonts/Hiragino Sans GB.ttc', 0),
+        ('/Library/Fonts/Hiragino Sans GB.ttc', 0),
+        ('/Library/Fonts/Osaka.ttf', 0),
         ('/System/Library/Fonts/Supplemental/Arial Unicode.ttf', 0),
     ):
         add_spec(*candidate)
@@ -140,9 +167,13 @@ def _legacy_font_fallback_spec(font_value: object) -> str:
     base = Path(path_value).name.lower()
     if not base:
         return ''
-    prefer_serif = 'serif' in base or 'mincho' in base
-    prefer_bold = any(token in base for token in ('bold', 'black', 'heavy', 'semibold', 'semi-bold'))
-    if any(token in base for token in ('notosansjp', 'notoserifjp', 'msgothic', 'msmincho', 'yugoth')):
+    prefer_serif = 'serif' in base or 'mincho' in base or '明朝' in base
+    prefer_bold = any(token in base for token in ('bold', 'black', 'heavy', 'semibold', 'semi-bold', 'w6'))
+    legacy_tokens = (
+        'notosansjp', 'notoserifjp', 'msgothic', 'msmincho', 'yugoth',
+        'hiragino', 'ヒラギノ', 'osaka',
+    )
+    if any(token in base for token in legacy_tokens):
         return _pick_system_font_spec(prefer_bold=prefer_bold, prefer_serif=prefer_serif)
     return ''
 
@@ -486,6 +517,12 @@ def get_code_font_value(primary_font_value: str = '') -> str:
         Path('C:/Windows/Fonts/cascadiamono.ttf'),
         Path('C:/Windows/Fonts/lucon.ttf'),
         Path('C:/Windows/Fonts/cour.ttf'),
+        Path('/System/Library/Fonts/Menlo.ttc'),
+        Path('/System/Library/Fonts/Monaco.ttf'),
+        Path('/System/Library/Fonts/Supplemental/Monaco.ttf'),
+        Path('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'),
+        Path('/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf'),
+        Path('/usr/share/fonts/opentype/noto/NotoSansMono-Regular.ttf'),
     ]
     seen = set()
 
@@ -497,8 +534,31 @@ def get_code_font_value(primary_font_value: str = '') -> str:
         candidates.append(value)
 
     for pref in preferred_paths:
-        if pref.exists():
-            add_candidate(str(pref))
+        for candidate_path in _normalized_path_variants(pref):
+            try:
+                if candidate_path.exists() and candidate_path.is_file():
+                    add_candidate(str(candidate_path))
+                    break
+            except OSError:
+                continue
+
+    fc_match = shutil.which('fc-match')
+    if fc_match:
+        try:
+            proc = subprocess.run(
+                [fc_match, '-f', '%{file}\n', 'monospace'],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=3,
+            )
+        except Exception:
+            pass
+        else:
+            matched = str(proc.stdout or '').strip()
+            if matched:
+                add_candidate(matched)
 
     for app_font_dir in _existing_bundled_font_dirs():
         for font_file in sorted(app_font_dir.glob('*')):

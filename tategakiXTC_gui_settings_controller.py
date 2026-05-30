@@ -55,7 +55,7 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('night_mode', _default_value('night_mode', False)),
     ('open_folder', _default_value('open_folder', True)),
     ('output_conflict', _default_value('output_conflict', 'rename')),
-    ('output_format', _default_value('output_format', 'xtc')),
+    ('output_format', _default_value('output_format', 'xtch')),
     ('kinsoku_mode', _default_value('kinsoku_mode', 'standard')),
     ('tatechuyoko_digit_mode', _default_value('tatechuyoko_digit_mode', '2')),
     ('punctuation_position_mode', _default_value('punctuation_position_mode', 'standard')),

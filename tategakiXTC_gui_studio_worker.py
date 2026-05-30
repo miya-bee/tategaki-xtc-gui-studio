@@ -481,6 +481,14 @@ class ConversionWorker(QObject):
                         message = f'{message} / {detail}'
                     self.log.emit(message)
                     postprocess_warnings.append(message)
+        if converted and explicit_output_root is not None and not tp.is_dir():
+            # For a single-file conversion with an explicit save folder, the
+            # manual [保存先を開く] action must open that selected folder even if a
+            # processor or future monkey-patch reports a relative saved path.
+            try:
+                open_folder_target = str(explicit_output_root)
+            except Exception:
+                pass
         if converted and not str(open_folder_target or '').strip():
             # Last-resort safety: the manual [保存先を開く] action should follow
             # the actual file written by this conversion.  This prevents an

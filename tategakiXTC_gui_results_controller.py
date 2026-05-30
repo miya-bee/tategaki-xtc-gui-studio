@@ -182,6 +182,48 @@ def _unique_result_parent_display_texts(paths: Sequence[object]) -> list[str]:
     return parents
 
 
+
+def _path_text_resolves_to_dot_or_parent(value: object) -> bool:
+    """Return True if ``value`` would resolve to ``.``/``..`` after normalization.
+
+    This catches user-visible inputs that look harmless (``'./'``, ``'.\\'``,
+    ``'foo/..'``) but expand to the current working directory or its parent.
+    ``os.startfile`` on Windows would then launch the app's cwd instead of a
+    real save folder, which is exactly the regression the manual
+    [保存先を開く] action must avoid.
+    """
+    text = worker_logic._normalized_path_text(value).strip()
+    if not text:
+        return True
+    try:
+        if worker_logic._is_windows_like_path(text):
+            normalized = ntpath.normpath(text)
+        else:
+            normalized = os.path.normpath(text)
+    except Exception:
+        normalized = text
+    return normalized in ('', '.', '..')
+
+
+def resolve_manual_open_folder_target(paths: object, preferred_target: object = '') -> str:
+    """Return the safest folder target for the manual [保存先を開く] action.
+
+    Prefer the worker-provided explicit target, but ignore blank/``.`` values
+    because opening ``.`` launches the app/current working directory on Windows.
+    Also reject paths whose normalized form is ``.``/``..`` (e.g. ``'./'``,
+    ``'.\\'``, ``'foo/..'``) for the same reason.  When no explicit target is
+    available, fall back to a single common parent from the converted result
+    paths.
+    """
+    target_text = worker_logic._normalized_path_text(preferred_target).strip()
+    if target_text and not _path_text_resolves_to_dot_or_parent(target_text):
+        return target_text
+    raw_paths = coerce_result_path_list(paths)
+    parents = _unique_result_parent_display_texts(raw_paths)
+    meaningful = [parent for parent in parents if parent and not _path_text_resolves_to_dot_or_parent(parent)]
+    return meaningful[0] if len(meaningful) == 1 else ''
+
+
 def build_conversion_completion_guidance_lines(
     paths: object,
     *,
@@ -227,7 +269,7 @@ def build_conversion_completion_guidance_lines(
                 lines.append(f'基準フォルダ: {target_text}')
             lines.append('確認対象: フォルダ構造を保った保存結果を、下の一覧から選べます。')
     lines.append('操作: ［保存先を開く］で出力フォルダを開けます。')
-    lines.append('操作: 一覧のファイルを選び［実機ビューで確認］またはダブルクリックで確認できます。')
+    lines.append('操作: 一覧のファイルを選び［右ペインで確認］またはダブルクリックで確認できます。')
     return studio_logic.merge_unique_message_values([], lines)
 
 
@@ -290,6 +332,7 @@ def build_loaded_xtc_path_success_context(
         label_text = studio_logic.build_result_display_name(path_text)
     log_message = f'XTC/XTCH読込: {path_text}' if path_text else ''
     return {
+        'right_pane_source': 'xtc',
         'device_view_source': 'xtc',
         'path_text': path_text,
         'display_name': label_text,
@@ -303,6 +346,7 @@ def build_loaded_xtc_path_success_context(
 def build_loaded_xtc_bytes_success_context(display_name: object = 'メモリ上のデータ') -> dict[str, Any]:
     label_text = worker_logic._normalized_path_text(display_name).strip() or 'メモリ上のデータ'
     return {
+        'right_pane_source': 'xtc',
         'device_view_source': 'xtc',
         'path_text': '',
         'display_name': label_text,

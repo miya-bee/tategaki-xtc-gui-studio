@@ -163,11 +163,16 @@ def _coerce_mapping(value: object) -> dict[str, object]:
     return {}
 
 
-def _normalize_device_view_source(value: object, *, default: str = 'preview') -> str:
+def _normalize_right_pane_source(value: object, *, default: str = 'preview') -> str:
     normalized = str(value or default).strip().lower()
     if normalized not in ALLOWED_DEVICE_VIEW_SOURCES:
         return default
     return normalized
+
+
+def _normalize_device_view_source(value: object, *, default: str = 'preview') -> str:
+    """Legacy wrapper for older device-view source terminology."""
+    return _normalize_right_pane_source(value, default=default)
 
 
 def build_preview_payload(
@@ -366,6 +371,7 @@ def build_preview_bundle_state(
     return {
         'pages': list(pages),
         'truncated': truncated,
+        'right_pane_source': 'preview',
         'device_view_source': 'preview',
         'last_preview_requested_limit': preview_limit,
         'last_applied_preview_payload': _coerce_mapping(payload),
@@ -403,6 +409,10 @@ def build_preview_apply_context(
         'device_preview_page_cache_tokens': list(page_tokens),
         'preview_pages_truncated': truncated,
         'device_preview_pages_truncated': truncated,
+        'right_pane_source': _normalize_right_pane_source(
+            bundle_state.get('right_pane_source', bundle_state.get('device_view_source')),
+            default='preview',
+        ),
         'device_view_source': _normalize_device_view_source(bundle_state.get('device_view_source'), default='preview'),
         'last_preview_requested_limit': max(
             0,
@@ -483,6 +493,7 @@ def build_preview_failure_context(
         'device_preview_page_cache_tokens': list(device_tokens),
         'preview_pages_truncated': studio_logic._config_bool_value(previous_preview_pages_truncated, False),
         'device_preview_pages_truncated': studio_logic._config_bool_value(previous_device_preview_pages_truncated, False),
+        'right_pane_source': 'xtc',
         'device_view_source': 'xtc',
         'current_preview_page_index': _clamp_preview_index(
             current_preview_index,

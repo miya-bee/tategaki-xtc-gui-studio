@@ -121,11 +121,19 @@ def _normalize_output_format(value: object) -> str:
     return 'xtch' if fmt == 'xtch' else 'xtc'
 
 
+def _supported_suffixes_for_output_path() -> frozenset[str]:
+    _refresh_core_globals()
+    return frozenset(
+        str(item).lower()
+        for item in tuple(SUPPORTED_INPUT_SUFFIXES) + tuple(IMG_EXTS)
+    )
+
+
 def get_output_path_for_target(path: PathLike, output_format: str = 'xtc', output_root: PathLike | None = None) -> Path | None:
     _refresh_core_globals()
     path = Path(path)
     suffix = path.suffix.lower()
-    if suffix not in SUPPORTED_INPUT_SUFFIXES:
+    if suffix not in _supported_suffixes_for_output_path():
         return None
     ext = '.xtch' if _normalize_output_format(output_format) == 'xtch' else '.xtc'
     if output_root:

@@ -5,9 +5,14 @@ set "PYTHONDONTWRITEBYTECODE=1"
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%" >nul 2>nul
-if errorlevel 1 (
+if errorlevel 1 cd /d "%SCRIPT_DIR%" >nul 2>nul
+if not exist "requirements.txt" (
   echo.
-  echo Could not switch to the script folder.
+  echo Could not switch to the app folder, or requirements.txt is missing:
+  echo   %SCRIPT_DIR%
+  echo Extract the whole zip to a normal local folder, then run run_tests.bat there.
+  echo ^(do not run it from inside the zip preview or a network path^).
+  pause
   exit /b 1
 )
 
@@ -49,6 +54,7 @@ echo.
 echo Python was not found.
 echo Install Python 3.10 / 3.11 / 3.12 and make sure py or python is available.
 popd
+pause
 exit /b 1
 
 :run
@@ -97,10 +103,12 @@ echo Coverage report: coverage-report.txt
 echo Coverage XML: coverage.xml
 echo Coverage HTML: htmlcov\index.html
 popd
+pause
 exit /b 0
 
 :error
 echo.
 echo Test run failed.
 popd
+pause
 exit /b 1

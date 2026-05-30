@@ -28,11 +28,34 @@ SETTINGS_SCHEMA_VERSION = 2
 SETTINGS_FILE = Path(__file__).with_name('tategakiXTC_gui_studio.ini')
 DEFAULT_WINDOW_WIDTH = 1600
 DEFAULT_WINDOW_HEIGHT = 1000
-DEFAULT_LEFT_PANEL_WIDTH = 600
+DEFAULT_LEFT_PANEL_WIDTH = 980
 DEFAULT_STARTUP_PRESET_KEY = 'preset_4'
 DEFAULT_TOP_PATH_BUTTON_WIDTH = 128
-DEFAULT_LEFT_SPLITTER_TOP = 760
-DEFAULT_LEFT_SPLITTER_BOTTOM = 140
+DEFAULT_LEFT_SPLITTER_TOP = 700
+DEFAULT_LEFT_SPLITTER_BOTTOM = 160
+# The center settings splitter still uses the historical left_splitter_*
+# settings keys so v1.3.6+ user INI files continue to restore unchanged.
+CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY = 'left_splitter_state'
+CENTER_SETTINGS_LEGACY_SPLITTER_SIZES_KEY = 'left_splitter_sizes'
+CENTER_SETTINGS_LEGACY_SPLITTER_TOP_KEY = 'left_splitter_top'
+CENTER_SETTINGS_LEGACY_SPLITTER_BOTTOM_KEY = 'left_splitter_bottom'
+# v1.3.8+ main three-pane splitter keys.  These are current keys, not
+# compatibility aliases, and are kept centralized so layout save/restore code
+# does not scatter raw strings across MainWindow.
+PRESET_PANEL_WIDTH_KEY = 'preset_panel_width'
+CENTER_SETTINGS_PANEL_WIDTH_KEY = 'center_settings_panel_width'
+PREVIEW_PANEL_WIDTH_KEY = 'preview_panel_width'
+MAIN_THREE_PANE_SPLITTER_STATE_KEY = 'main_three_pane_splitter_state'
+MAIN_THREE_PANE_SPLITTER_SIZES_KEY = 'main_three_pane_splitter_sizes'
+THREE_PANE_PANEL_WIDTH_KEYS = (
+    PRESET_PANEL_WIDTH_KEY,
+    CENTER_SETTINGS_PANEL_WIDTH_KEY,
+    PREVIEW_PANEL_WIDTH_KEY,
+)
+THREE_PANE_SPLITTER_KEYS = (
+    MAIN_THREE_PANE_SPLITTER_STATE_KEY,
+    MAIN_THREE_PANE_SPLITTER_SIZES_KEY,
+)
 DEFAULT_PREVIEW_PAGE_LIMIT = 20
 RESULT_TAB_INDEX = 0
 LOG_TAB_INDEX = 1
@@ -74,7 +97,7 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'lower_closing_bracket_position_mode': 'standard',
     'wave_dash_drawing_mode': 'rotate',
     'wave_dash_position_mode': 'standard',
-    'output_format': 'xtc',
+    'output_format': 'xtch',
     'output_dir': '',
 }
 
@@ -248,6 +271,17 @@ __all__ = [
     'DEFAULT_TOP_PATH_BUTTON_WIDTH',
     'DEFAULT_LEFT_SPLITTER_TOP',
     'DEFAULT_LEFT_SPLITTER_BOTTOM',
+    'CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY',
+    'CENTER_SETTINGS_LEGACY_SPLITTER_SIZES_KEY',
+    'CENTER_SETTINGS_LEGACY_SPLITTER_TOP_KEY',
+    'CENTER_SETTINGS_LEGACY_SPLITTER_BOTTOM_KEY',
+    'PRESET_PANEL_WIDTH_KEY',
+    'CENTER_SETTINGS_PANEL_WIDTH_KEY',
+    'PREVIEW_PANEL_WIDTH_KEY',
+    'MAIN_THREE_PANE_SPLITTER_STATE_KEY',
+    'MAIN_THREE_PANE_SPLITTER_SIZES_KEY',
+    'THREE_PANE_PANEL_WIDTH_KEYS',
+    'THREE_PANE_SPLITTER_KEYS',
     'DEFAULT_PREVIEW_PAGE_LIMIT',
     'RESULT_TAB_INDEX',
     'LOG_TAB_INDEX',

@@ -5,9 +5,14 @@ set "PYTHONDONTWRITEBYTECODE=1"
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%" >nul 2>nul
-if errorlevel 1 (
+if errorlevel 1 cd /d "%SCRIPT_DIR%" >nul 2>nul
+if not exist "requirements.txt" (
   echo.
-  echo Could not switch to the script folder.
+  echo Could not switch to the app folder, or requirements.txt is missing:
+  echo   %SCRIPT_DIR%
+  echo Extract the whole zip to a normal local folder, then run install_requirements.bat there.
+  echo ^(do not run it from inside the zip preview or a network path^).
+  pause
   exit /b 1
 )
 

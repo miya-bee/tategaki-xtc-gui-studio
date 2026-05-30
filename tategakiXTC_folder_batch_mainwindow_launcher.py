@@ -813,7 +813,7 @@ def install_folder_batch_menu_action_best_effort(main_window: object) -> object 
 
     This is deliberately less invasive than editing the crowded left pane.  The
     final GUI can still replace or supplement it with a proper
-    ``[フォルダ一括変換...]`` button once the concrete release tree is available.
+    ``[フォルダ一括変換]`` button once the concrete release tree is available.
     """
 
     menu_bar_getter = _callable_attr(main_window, 'menuBar')
@@ -822,7 +822,7 @@ def install_folder_batch_menu_action_best_effort(main_window: object) -> object 
         return None
     try:
         menu_bar = menu_bar_getter()
-        action = menu_bar.addAction('フォルダ一括変換...')
+        action = menu_bar.addAction('フォルダ一括変換')
         action.triggered.connect(opener)
         setattr(main_window, 'folder_batch_action', action)
         append_log_best_effort(main_window, 'フォルダ一括変換メニューを追加しました。')

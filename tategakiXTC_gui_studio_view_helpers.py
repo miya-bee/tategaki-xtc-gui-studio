@@ -11,8 +11,13 @@ import tategakiXTC_gui_studio_logic as studio_logic
 
 
 def _normalized_main_view_mode(mode: object) -> str:
-    """Normalize a main-view mode value to ``font`` or ``device``."""
-    return studio_logic.normalize_choice_value(mode, 'font', {'font', 'device'})
+    """Normalize a main-view mode value to the remaining ``font`` surface.
+
+    v1.3.8.10 removes the user-facing device-view mode.  Legacy INI/context
+    values such as ``device`` are accepted for compatibility but mapped to the
+    normal preview/file-viewer surface.
+    """
+    return studio_logic.normalize_choice_value(mode, 'font', {'font'})
 
 
 def _preview_view_help_text() -> str:
@@ -20,8 +25,8 @@ def _preview_view_help_text() -> str:
     toggle_plan = gui_layouts.build_view_toggle_bar_plan()
     return str(toggle_plan.get(
         'help_text',
-        'フォントビュー: 文字サイズ・余白・ルビの見え方を調整するときに使います。\n'
-        '実機ビュー: 変換後のXTCをページ送りしながら実機に近い形で確認します。',
+        '右ペイン: プレビュー生成後の見え方を確認します。\n'
+        'XTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。',
     ))
 
 
@@ -36,6 +41,4 @@ def _main_view_mode_help_text(mode: object) -> str:
 def _main_view_mode_status_text(mode: object) -> str:
     """Return the status-bar text for switching to a main-view mode."""
     normalized = _normalized_main_view_mode(mode)
-    if normalized == 'font':
-        return 'フォントビューに切り替えました。'
-    return '実機ビューに切り替えました。'
+    return '右ペイン表示に切り替えました。'

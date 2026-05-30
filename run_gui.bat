@@ -5,15 +5,37 @@ set "PYTHONDONTWRITEBYTECODE=1"
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%" >nul 2>nul
-if errorlevel 1 (
+if errorlevel 1 cd /d "%SCRIPT_DIR%" >nul 2>nul
+if not exist "tategakiXTC_gui_studio.py" (
   echo.
-  echo Could not switch to the script folder.
+  echo Could not switch to the app folder, or app files are missing:
+  echo   %SCRIPT_DIR%
+  echo Extract the whole zip to a normal local folder, then run run_gui.bat there.
+  echo ^(do not run it from inside the zip preview or a network path^).
+  pause
+  exit /b 1
+)
+if not exist "requirements.txt" (
+  echo.
+  echo requirements.txt was not found in the app folder:
+  echo   %CD%
+  echo Extract the whole zip again, then run run_gui.bat from the extracted folder.
+  pause
   exit /b 1
 )
 
 set "PY_EXE="
 set "PY_ARGS="
 set "PY_VERSION_CHECK=import sys; assert sys.version_info.major == 3 and sys.version_info.minor in [10, 11, 12]"
+
+if exist ".venv\Scripts\python.exe" (
+  ".venv\Scripts\python.exe" -c "%PY_VERSION_CHECK%" >nul 2>nul
+  if not errorlevel 1 (
+    set "PY_EXE=.venv\Scripts\python.exe"
+    goto :run
+  )
+)
+
 where py >nul 2>nul
 if not errorlevel 1 (
   for %%V in (3.12 3.11 3.10) do (
@@ -47,12 +69,16 @@ for %%V in (312 311 310) do (
 
 echo.
 echo Python was not found.
-echo Install Python 3.10 / 3.11 / 3.12 and make sure py or python is available.
+echo Install Python 3.10 / 3.11 / 3.12, then run install_requirements.bat.
 popd
 pause
 exit /b 1
 
 :run
+echo.
+echo Starting TategakiXTC GUI Studio...
+echo App folder: %CD%
+echo Python: "%PY_EXE%" %PY_ARGS%
 "%PY_EXE%" %PY_ARGS% tategakiXTC_gui_studio.py
 if errorlevel 1 (
   echo.

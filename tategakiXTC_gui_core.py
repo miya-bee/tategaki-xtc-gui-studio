@@ -321,7 +321,7 @@ class ConversionArgs:
         if self.page_number_font_size < 1:
             raise ValueError('ページ番号フォントサイズは 1 以上である必要があります。')
         if self.page_number_font_size >= 30:
-            raise ValueError('ページ番号フォントサイズは 30 未満である必要があります。')
+            self.page_number_font_size = 29
         if self.line_spacing <= 0:
             raise ValueError('line_spacing は 1 以上である必要があります。')
         for margin_name in ('margin_t', 'margin_b', 'margin_r', 'margin_l'):
@@ -444,6 +444,7 @@ class VerticalLayoutHints(TypedDict):
     continuous_pair_with_next: tuple[bool, ...]
     protected_group_len: tuple[int, ...]
     would_start_forbidden_after_hang_pair: tuple[bool, ...]
+    would_orphan_short_tail_after_break: tuple[bool, ...]
 
 
 class ConversionErrorReport(TypedDict):
@@ -608,6 +609,8 @@ from tategakiXTC_gui_core_text import (
     read_text_file_with_fallback,
     _markdown_inline_to_runs,
     _plain_inline_to_runs,
+    _consume_plain_text_leading_fullwidth_indent,
+    _plain_text_line_starts_with_opening_bracket,
     _normalize_text_line,
     TEXT_INPUT_SUPPORT_SUMMARY,
     _dedupe_preserve_order,
@@ -750,6 +753,8 @@ def process_image_data(data: bytes | bytearray | memoryview | str | PathLike | B
         finally:
             if close_source and hasattr(image_source, 'close'):
                 image_source.close()
+    except ConversionCancelled:
+        raise
     except Exception as e:
         LOGGER.exception('画像処理エラー: %s', e)
         return None
@@ -1031,7 +1036,9 @@ from tategakiXTC_gui_core_renderer import (
     _effective_vertical_layout_bottom_margin,
     _remaining_vertical_slots,
     _remaining_vertical_slots_for_current_column,
+    _is_after_effective_column_top,
     _would_start_forbidden_after_hang_pair,
+    _would_orphan_short_tail_after_break,
     _choose_vertical_layout_action,
     _double_punctuation_layout,
     _double_punctuation_draw_offsets,

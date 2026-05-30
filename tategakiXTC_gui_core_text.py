@@ -60,6 +60,35 @@ def _try_decode_bytes(raw: bytes, encoding: str) -> tuple[str, str] | None:
         return None
 
 
+def _is_utf16_plain_text_char(char: str) -> bool:
+    code = ord(char)
+    return (
+        char in '\t\n\r ・、。！？「」『』【】（）()[]［］《》〈〉ー〜～…‥―—'
+        or 0x20 <= code <= 0x7E
+        or 0x3040 <= code <= 0x30FF
+        or 0x3400 <= code <= 0x9FFF
+        or 0xF900 <= code <= 0xFAFF
+        or 0xFF00 <= code <= 0xFFEF
+    )
+
+
+def _utf16_without_bom_japanese_score(text: str) -> tuple[float, int]:
+    if not text:
+        return 0.0, 0
+    bad = 0
+    plain = 0
+    kana = 0
+    for char in text:
+        code = ord(char)
+        if 0x3040 <= code <= 0x30FF:
+            kana += 1
+        if _is_utf16_plain_text_char(char):
+            plain += 1
+        elif code < 0x20 or 0xD800 <= code <= 0xDFFF or 0xE000 <= code <= 0xF8FF:
+            bad += 1
+    return (plain / max(1, len(text))) - (bad / max(1, len(text))) * 2.0, kana
+
+
 def _guess_utf16_without_bom(raw: bytes) -> str | None:
     """BOM なし UTF-16 の可能性を簡易推定する。"""
     _refresh_core_globals()
@@ -74,6 +103,26 @@ def _guess_utf16_without_bom(raw: bytes) -> str | None:
         return 'utf-16-le'
     if even_ratio >= 0.25 and even_ratio >= odd_ratio * 3:
         return 'utf-16-be'
+
+    # 日本語UTF-16は、漢字・かな中心の本文だと NUL 比率だけでは判定
+    # できない。CP932 等の偶数長バイト列を誤判定しないよう、かなを
+    # 含む自然な日本語本文に限定して LE/BE を比較する。
+    scored: list[tuple[float, int, str]] = []
+    for encoding in ('utf-16-le', 'utf-16-be'):
+        try:
+            text = raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        score, kana_count = _utf16_without_bom_japanese_score(text)
+        scored.append((score, kana_count, encoding))
+    if not scored:
+        return None
+    scored.sort(reverse=True)
+    best_score, best_kana_count, best_encoding = scored[0]
+    second_score = scored[1][0] if len(scored) > 1 else 0.0
+    required_kana = max(1, min(4, len(raw) // 24))
+    if best_kana_count >= required_kana and best_score >= 0.85 and best_score >= second_score + 0.15:
+        return best_encoding
     return None
 
 
@@ -693,6 +742,38 @@ def _plain_inline_to_runs(value: str, parse_aozora: bool = True, code: bool = Fa
     return [{'text': value, 'ruby': '', 'bold': False, 'italic': False, 'emphasis': '', 'side_line': '', 'code': bool(code)}]
 
 
+def _consume_plain_text_leading_fullwidth_indent(value: str) -> tuple[str, int]:
+    """Return text without leading ideographic spaces and their indent width.
+
+    Plain TXT paragraphs are given a default one-character paragraph indent at
+    render time. Aozora-style text often also stores that same paragraph indent
+    as a leading fullwidth space in the source line. Leaving the space in the
+    text run would render it in addition to the default paragraph indent, so the
+    leading fullwidth spaces are converted into an explicit paragraph-indent
+    width instead.
+    """
+    _refresh_core_globals()
+    text = str(value or '')
+    leading = len(text) - len(text.lstrip('　'))
+    if leading <= 0:
+        return text, 0
+    return text[leading:], leading
+
+
+def _plain_text_line_starts_with_opening_bracket(value: str) -> bool:
+    """Return True when a TXT body line starts with an opening bracket.
+
+    Dialogue lines in Japanese plain text often begin directly with an opening
+    quote such as ``「`` or ``『``.  Those lines should not receive the default
+    one-character paragraph indent; otherwise an artificial blank appears before
+    the quote.  Explicit Aozora indent notes and literal leading fullwidth spaces
+    are handled separately by the caller.
+    """
+    _refresh_core_globals()
+    text = str(value or '')
+    return bool(text) and text[0] in OPENING_BRACKET_CHARS
+
+
 def _normalize_text_line(value: str, has_started_document: bool = False, strip_leading_for_indent: bool = False) -> str:
     _refresh_core_globals()
     value = value.replace('\ufeff', '').replace('\r', '').replace('\t', '    ').replace('\xa0', ' ')
@@ -797,17 +878,28 @@ def _blocks_from_plain_text(text: str) -> TextBlocks:
             elif note_block['kind'] in {'emphasis', 'side_line'}:
                 _apply_note_to_previous_block(blocks, note_block)
             continue
-        runs = _plain_inline_to_runs(normalized)
+        body_text, leading_fullwidth_indent = _consume_plain_text_leading_fullwidth_indent(normalized)
+        runs = _plain_inline_to_runs(body_text)
         if not runs:
             blocks.append({'kind': 'blank'})
             continue
         indent_spec = pending_once_indent or active_indent
+        explicit_indent_active = indent_spec is not None
+        starts_with_opening_bracket = _plain_text_line_starts_with_opening_bracket(body_text)
+        if indent_spec:
+            base_indent_chars = int(indent_spec.get('indent_chars', 1) or 0)
+            base_wrap_indent_chars = indent_spec.get('wrap_indent_chars', indent_spec.get('indent_chars', 1))
+        else:
+            base_indent_chars = 0 if starts_with_opening_bracket else 1
+            base_wrap_indent_chars = 0
+        if leading_fullwidth_indent:
+            base_indent_chars = max(int(base_indent_chars or 0), int(leading_fullwidth_indent or 0))
         blocks.append({
             'kind': 'paragraph',
             'runs': runs,
-            'indent': True,
-            'indent_chars': indent_spec.get('indent_chars', 1) if indent_spec else 1,
-            'wrap_indent_chars': indent_spec.get('wrap_indent_chars', indent_spec.get('indent_chars', 1)) if indent_spec else 0,
+            'indent': bool(explicit_indent_active or base_indent_chars > 0),
+            'indent_chars': max(0, int(base_indent_chars or 0)),
+            'wrap_indent_chars': base_wrap_indent_chars,
             'blank_before': 1,
         })
         has_started_content = True
