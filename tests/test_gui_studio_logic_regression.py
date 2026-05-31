@@ -30,6 +30,98 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
             message = logic.build_top_status_message('C:/very/large/book.epub', 'X4', 26, 44)
         self.assertIn('ファイル: book.epub', message)
 
+    def test_normalize_ui_language_accepts_aliases(self):
+        self.assertEqual(logic.normalize_ui_language('ja_JP'), 'ja')
+        self.assertEqual(logic.normalize_ui_language('English'), 'en')
+        self.assertEqual(logic.normalize_ui_language('EN-us'), 'en')
+        self.assertEqual(logic.normalize_ui_language('unknown', 'en'), 'en')
+
+    def test_language_restart_notice_uses_selected_language(self):
+        english = logic.build_language_restart_notice('en')
+        self.assertEqual(english['title'], 'Restart required')
+        self.assertEqual(english['message'], 'Please restart the app to apply the language change.')
+        self.assertIn('Language saved as English.', english['status'])
+        self.assertNotIn('次回起動', english['status'])
+
+        japanese = logic.build_language_restart_notice('ja')
+        self.assertEqual(japanese['title'], '再起動が必要です')
+        self.assertIn('表示言語の変更は次回起動時に反映されます。', japanese['message'])
+        self.assertIn('表示言語を 日本語 に保存しました。', japanese['status'])
+
+    def test_translate_ui_text_returns_english_for_main_controls(self):
+        self.assertEqual(logic.translate_ui_text('縦書きXTC Studio', 'en'), 'TategakiXTC GUI Studio')
+        self.assertEqual(logic.translate_ui_text('ファイルを開く', 'en'), 'Open File')
+        self.assertEqual(logic.translate_ui_text('▶  変換実行', 'English'), '▶  Convert')
+        self.assertEqual(logic.translate_ui_text('表示設定', 'EN-us'), 'Display settings')
+        self.assertEqual(logic.translate_ui_text('ファイルを開く', 'ja'), 'ファイルを開く')
+
+    def test_translate_ui_text_uses_compact_english_labels_for_layout(self):
+        self.assertEqual(logic.translate_ui_text('保存先リセット', 'en'), 'Reset Folder')
+        self.assertEqual(logic.translate_ui_text('フォルダ一括変換', 'en'), 'Batch Convert')
+        self.assertEqual(logic.translate_ui_text('半角数字/記号', 'en'), 'Numbers/Symbols')
+        self.assertEqual(logic.translate_ui_text('縦中横記号', 'en'), 'TCY Symbols')
+        self.assertEqual(logic.translate_ui_text('上補正強', 'en'), 'Up strong')
+        self.assertEqual(logic.translate_ui_text('下補正強', 'en'), 'Down strong')
+        self.assertEqual(logic.translate_ui_text('回転グリフ', 'en'), 'Rotated')
+        self.assertEqual(logic.translate_ui_text('別描画', 'en'), 'Separate')
+
+
+    def test_translate_ui_text_returns_english_for_option_labels_and_help(self):
+        self.assertEqual(logic.translate_ui_text('標準', 'en'), 'Standard')
+        self.assertEqual(logic.translate_ui_text('下補正弱', 'en'), 'Down weak')
+        self.assertEqual(logic.translate_ui_text('自動連番で保存', 'en'), 'Auto-number')
+        self.assertIn('Page Number:', logic.translate_ui_text('ページ番号: チェックすると各ページ右下に「現在ページ/総ページ」を表示します。\nサイズ: 1〜29 の数値を指定します。30以上はエラーです。\nページ番号ON時は、下余白を「サイズ+1」以上に自動確保します。', 'en'))
+
+    def test_translate_ui_text_covers_remaining_english_ui_labels(self):
+        self.assertEqual(logic.translate_ui_text('参照...', 'en'), 'Browse...')
+        self.assertEqual(logic.translate_ui_text('プレビュー更新が必要です', 'en'), 'Preview refresh needed')
+        self.assertEqual(
+            logic.translate_ui_text('プレビュー更新が必要です（更新対象 25 ページのため自動更新しません）', 'en'),
+            'Preview refresh needed (auto-refresh skipped because the target is 25 pages)',
+        )
+        self.assertIn('Right Pane:', logic.translate_ui_text('右ペイン: プレビュー生成後の見え方を確認します。\nXTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。', 'en'))
+        self.assertIn('Actual Size:', logic.translate_ui_text('実寸近似: PC画面上の表示サイズを、選択中の機種の実物サイズに近づける表示モードです。\n端末に表示したときのおおよその大きさを確認したい場合に使います。\nONにすると右ペインの倍率欄は「実寸補正」に切り替わります。\n表示が実物より大きい/小さい場合は、この実寸補正を調整してください。\nOFFでは右ペイン倍率は通常の表示ズームとして働きます。', 'en'))
+        self.assertIn('Guides:', logic.translate_ui_text('ガイド: 右ペインのプレビューに、余白や非描画域の目安線を重ねて表示します。\n本文が端に寄りすぎていないか、余白設定が意図通りかを確認するときに使います。\nONにすると補助線を表示し、OFFにすると実際の見た目に近い状態で確認できます。\n変換結果そのものを書き換える機能ではなく、確認用の表示補助です。', 'en'))
+        self.assertEqual(
+            logic.translate_ui_text('実寸補正は右ペインの倍率UIで調整します。', 'en'),
+            'Adjust actual-size scaling with the zoom control in the right pane.',
+        )
+
+    def test_translate_ui_text_returns_english_for_dialogs_and_status(self):
+        self.assertEqual(logic.translate_ui_text('使い方', 'en'), 'How to use')
+        self.assertEqual(logic.translate_ui_text('プリセット名称変更', 'en'), 'Rename Preset')
+        self.assertEqual(logic.translate_ui_text('保存先フォルダを選択', 'en'), 'Choose Save Folder')
+        self.assertEqual(
+            logic.translate_ui_text('保存先指定を解除しました。\n次回の単体変換は、ソースファイルと同じフォルダへ保存します。', 'en'),
+            'The custom save folder was cleared.\nThe next single-file conversion will save next to the source file.',
+        )
+
+
+    def test_translate_ui_text_handles_dynamic_conversion_logs_and_summaries(self):
+        self.assertEqual(logic.translate_ui_text('保存 3 件', 'en'), 'Saved files: 3')
+        self.assertEqual(logic.translate_ui_text('エラー 2 件', 'en'), 'Errors: 2')
+        self.assertEqual(
+            logic.translate_ui_text('変換完了しました。(3 件を保存 / 1 件エラー)', 'en'),
+            'Conversion complete. (3 saved / 1 errors)',
+        )
+        self.assertEqual(logic.translate_ui_text('[2/5] 変換中: book.txt', 'en'), '[2/5] Converting: book.txt')
+        self.assertEqual(logic.translate_ui_text('保存: book.xtc', 'en'), 'Saved: book.xtc')
+        self.assertEqual(
+            logic.build_results_summary_message(['保存 2 件', '自動連番 1 件', 'エラー 0 件'], 0, language='en'),
+            'Saved files: 2 / Auto-numbered: 1 / Errors: 0',
+        )
+
+    def test_translate_ui_structure_translates_nested_plan_strings(self):
+        plan = {
+            'button': 'ファイルを開く',
+            'nested': {'labels': ('前', 'ページ', '次')},
+            'width': 128,
+        }
+        translated = logic.translate_ui_structure(plan, 'en')
+        self.assertEqual(translated['button'], 'Open File')
+        self.assertEqual(translated['nested']['labels'], ('Prev', 'Page', 'Next'))
+        self.assertEqual(translated['width'], 128)
+
     def test_should_prompt_for_output_name(self):
         self.assertTrue(logic.should_prompt_for_output_name(1, True))
         self.assertFalse(logic.should_prompt_for_output_name(1, False))
@@ -1705,6 +1797,42 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
                 'assign_main_view_mode': True,
             },
         )
+
+
+
+    def test_english_status_summary_helpers(self):
+        self.assertEqual(logic.build_top_status_message('', 'X4', 32, 14, 'en'), 'Choose a source file or folder.')
+        self.assertIn('File: book.epub', logic.build_top_status_message('C:/books/book.epub', 'X4', 26, 44, 'en'))
+        self.assertIn('Converting', logic.build_running_results_summary('en'))
+        self.assertEqual(logic.build_start_log_message('xtch', 3, 'en'), 'Conversion started. (xtch, 3 files)')
+        self.assertEqual(logic.build_progress_status_text(1, 4, '', 'en'), 'Converting… (1/4, 25%)')
+        self.assertEqual(logic.build_conversion_failure_summary_text('エラー', '', 'en'), 'Error: Unknown error')
+
+    def test_english_preview_and_display_context_helpers(self):
+        self.assertEqual(logic.build_displaying_document_label('book.xtc', language='en'), 'Viewing: book.xtc')
+        self.assertEqual(logic.build_displaying_document_label('', language='en'), 'Viewing: none')
+        self.assertEqual(logic.display_context_name_from_label_text('Viewing: book.xtc'), 'book.xtc')
+        self.assertEqual(logic.build_preview_status_message('dirty', language='en'), 'Settings changed (not applied)')
+        self.assertEqual(
+            logic.build_preview_status_message('complete', generated_pages=3, preview_limit=10, language='en'),
+            'Preview update complete (3 / limit 10 pages)',
+        )
+        self.assertEqual(
+            logic.build_preview_render_status_message(page_count=3, requested_limit=10, running=True, language='en'),
+            'Updating preview up to the first 10 pages…',
+        )
+
+    def test_english_render_failure_and_results_helpers(self):
+        self.assertEqual(
+            logic.build_render_failure_status_message('ページ表示エラー', 'boom', 'book.xtc', language='en'),
+            'Page display error (still showing book.xtc): boom',
+        )
+        self.assertEqual(
+            logic.build_xtc_load_failure_status_message('', '', '', language='en'),
+            'XTC/XTCH load failed: specified file',
+        )
+        self.assertEqual(logic.render_failure_preserved_display_name('Page display error (still showing book.xtc): boom'), 'book.xtc')
+        self.assertEqual(logic.build_results_summary_message([], 2, language='en'), 'Saved files: 2')
 
 
 

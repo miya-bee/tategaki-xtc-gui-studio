@@ -318,5 +318,37 @@ class GuiResultsControllerRegressionTests(unittest.TestCase):
         )
 
 
+    def test_results_and_xtc_contexts_support_english_language(self):
+        context = results_controller.build_results_apply_context(
+            [b'exports/book.xtc'],
+            [],
+            language='en',
+        )
+        self.assertEqual(context['summary_text'], 'Saved files: 1')
+
+        loaded = results_controller.build_loaded_xtc_path_success_context(
+            'exports/book.xtc',
+            '',
+            ['exports/book.xtc'],
+            language='en',
+        )
+        self.assertEqual(loaded['log_message'], 'XTC/XTCH loaded: exports/book.xtc')
+
+        bytes_context = results_controller.build_loaded_xtc_bytes_success_context(language='en')
+        self.assertEqual(bytes_context['display_name'], 'in-memory data')
+
+    def test_conversion_completion_guidance_supports_english_language(self):
+        lines = results_controller.build_conversion_completion_guidance_lines(
+            ['exports/book.xtc'],
+            open_folder_target='exports',
+            language='en',
+        )
+        self.assertIn('[Conversion complete] You can check the saved results.', lines)
+        self.assertIn('Type: single-file conversion', lines)
+        self.assertIn('Output file: book.xtc', lines)
+        self.assertTrue(any(line.startswith('Action:') for line in lines))
+
+
+
 if __name__ == '__main__':
     unittest.main()

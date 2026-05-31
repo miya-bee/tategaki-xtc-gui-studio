@@ -242,6 +242,7 @@ class TypeAnnotationRegressionTests(unittest.TestCase):
                 'wave_dash_drawing_mode',
                 'wave_dash_position_mode', 'output_format',
                 'output_conflict', 'output_name', 'open_folder', 'width', 'height',
+                'progress_bar_enabled', 'progress_bar_position',
             },
         )
         self.assertEqual(

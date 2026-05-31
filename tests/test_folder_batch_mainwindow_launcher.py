@@ -243,6 +243,40 @@ class FolderBatchMainWindowLauncherTests(unittest.TestCase):
 
 
 
+
+    def test_folder_batch_progress_callback_uses_english_ui_language(self) -> None:
+        mw = FakeMainWindow()
+        mw.current_ui_language = 'en'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'input'
+            out = Path(tmp) / 'out'
+            root.mkdir()
+            (root / 'book.txt').write_text('hello', encoding='utf-8')
+            plan = build_folder_batch_plan(root, out)
+            item = plan.items[0]
+
+            make_folder_batch_before_execute_callback(mw)(plan)
+            self.assertIn('Batch converting… 0/1 | Preparing', mw.progress_label.text)
+            self.assertEqual(mw.busy_badge.text, 'Batch converting')
+            make_folder_batch_progress_callback(mw)(1, 1, item)
+            self.assertIn('Batch converting… 1/1', mw.progress_label.text)
+            self.assertIn('book.txt', mw.progress_label.text)
+            make_folder_batch_inner_progress_callback(mw)(1, 2, '保存が完了しました。')
+            self.assertIn('Inner 1/2', mw.progress_label.text)
+            self.assertIn('Save complete.', mw.progress_label.text)
+            make_folder_batch_after_execute_callback(mw)(type('Result', (), {
+                'stopped': False,
+                'success_count': 1,
+                'skipped_count': 0,
+                'failed_count': 0,
+                'processed_count': 1,
+                'plan': plan,
+            })())
+
+        self.assertEqual(mw.busy_badge.text, 'Idle')
+        self.assertIn('Folder batch complete.', mw.progress_label.text)
+        self.assertIn('Success 1 / Skipped 0 / Failed 0 / Processed 1/1', mw.progress_label.text)
+
     def test_folder_batch_progress_callback_updates_bottom_status_widgets(self) -> None:
         mw = FakeMainWindow()
         with tempfile.TemporaryDirectory() as tmp:

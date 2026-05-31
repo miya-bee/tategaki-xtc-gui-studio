@@ -90,17 +90,26 @@ class ReleaseDocsRegressionTests(unittest.TestCase):
 
 
     def test_current_public_release_docs_are_consolidated(self) -> None:
+        self.assertTrue(Path('RELEASE_NOTES_v1_4_1.md').exists())
+        self.assertTrue(Path('PUBLISH_CHECKLIST_v1_4_1.md').exists())
         self.assertTrue(Path('RELEASE_NOTES_v1_4_0.md').exists())
         self.assertTrue(Path('PUBLISH_CHECKLIST_v1_4_0.md').exists())
         self.assertTrue(Path('RELEASE_NOTES_v1_3_6.md').exists())
         self.assertTrue(Path('PUBLISH_CHECKLIST_v1_3_6.md').exists())
         self.assertFalse(list(Path('.').glob('RELEASE_NOTES_v1_3_8*.md')))
         self.assertFalse(list(Path('.').glob('PUBLISH_CHECKLIST_v1_3_8*.md')))
+        self.assertFalse(list(Path('.').glob('RELEASE_NOTES_v1_4_1_*.md')))
+        self.assertFalse(list(Path('.').glob('PUBLISH_CHECKLIST_v1_4_1_*.md')))
+        self.assertFalse(list(Path('.').glob('RELEASE_NOTES_v1_4_2*.md')))
+        self.assertFalse(list(Path('.').glob('PUBLISH_CHECKLIST_v1_4_2*.md')))
         readme = Path('README.md').read_text(encoding='utf-8')
+        self.assertIn('RELEASE_NOTES_v1_4_1.md` — v1.4.0 から v1.4.1 までの差分まとめ', readme)
         self.assertIn('RELEASE_NOTES_v1_4_0.md` — v1.3.6 から v1.4.0 までの差分まとめ', readme)
         self.assertIn('RELEASE_NOTES_v1_3_6.md` — v1.3.5 から v1.3.6 までの差分まとめ', readme)
         self.assertNotIn('RELEASE_NOTES_v1_3_8_40.md', readme)
-        self.assertNotIn('PUBLISH_CHECKLIST_v1_3_8_40.md', Path('RELEASE_CHECKLIST.md').read_text(encoding='utf-8'))
+        release_checklist = Path('RELEASE_CHECKLIST.md').read_text(encoding='utf-8')
+        self.assertNotIn('PUBLISH_CHECKLIST_v1_3_8_40.md', release_checklist)
+        self.assertNotIn('PUBLISH_CHECKLIST_v1_4_2_17.md', release_checklist)
 
     def test_docs_treat_v1_1_0_as_next_after_v1_0_2(self) -> None:
         readme = Path('README.md').read_text(encoding='utf-8')

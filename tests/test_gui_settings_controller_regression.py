@@ -36,9 +36,9 @@ class SettingsControllerRegressionTests(unittest.TestCase):
 
     def test_page_number_margin_auto_defaults_come_from_constants(self):
         keys = (
-            'page_number_margin_auto_active',
-            'page_number_margin_auto_base_value',
-            'page_number_margin_auto_value',
+            'bottom_overlay_margin_auto_active',
+            'bottom_overlay_margin_auto_base_value',
+            'bottom_overlay_margin_auto_value',
         )
         for key in keys:
             self.assertIn(key, controller.studio_constants.DEFAULT_UI_SETTINGS)
@@ -60,6 +60,28 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             expected = controller.studio_constants.DEFAULT_UI_SETTINGS[key]
             self.assertEqual(seen[key], expected)
             self.assertEqual(payload[key], expected)
+
+    def test_ui_language_is_restored_and_saved(self):
+        seen: dict[str, object] = {}
+
+        def reader(key: str, default: object) -> object:
+            seen[key] = default
+            return 'English' if key == 'ui_language' else default
+
+        raw = controller.build_settings_restore_raw_payload(
+            read_default_value=reader,
+            default_font_name='safe.ttf',
+            default_preview_page_limit=5,
+        )
+        self.assertEqual(seen['ui_language'], controller.studio_constants.DEFAULT_UI_LANGUAGE)
+        self.assertEqual(raw['ui_language'], 'English')
+
+        payload = controller.build_settings_save_raw_payload(
+            current_settings={'target': 'sample.epub'},
+            ui_state={'ui_language': 'en'},
+            default_preview_page_limit=5,
+        )
+        self.assertEqual(payload['ui_language'], 'en')
 
     def test_build_current_settings_payload_merges_runtime_fields(self):
         payload = controller.build_current_settings_payload(

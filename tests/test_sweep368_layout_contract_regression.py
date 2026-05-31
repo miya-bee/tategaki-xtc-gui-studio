@@ -41,7 +41,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
         source = _method_source(STUDIO_SOURCE, '_section_file_viewer')
 
         self.assertIn("'ファイルビューワー'", source)
-        self.assertIn("file_viewer_plan = gui_layouts.build_file_viewer_section_plan()", source)
+        self.assertIn("file_viewer_plan = self._localized_plan(gui_layouts.build_file_viewer_section_plan())", source)
         self.assertIn("self.open_xtc_btn", source)
         self.assertIn("file_viewer_plan.get('open_xtc_button_text', 'XTC/XTCHを開く')", source)
         self.assertIn("file_viewer_plan.get(", source)
@@ -79,7 +79,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
     def test_preview_toolbar_help_texts_are_substantive(self):
         source = STUDIO_SOURCE
 
-        self.assertIn("preview_toggle_plan = gui_layouts.build_preview_display_toggle_plan()", source)
+        self.assertIn("preview_toggle_plan = self._localized_plan(gui_layouts.build_preview_display_toggle_plan())", source)
         self.assertIn("self.actual_size_help_btn = self._help_icon_button(actual_size_help_text)", source)
         self.assertIn("ONにすると右ペインの倍率欄は「実寸補正」に切り替わります。", LAYOUTS_SOURCE)
         self.assertIn("表示が実物より大きい/小さい場合は、この実寸補正を調整してください。", LAYOUTS_SOURCE)
@@ -140,7 +140,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
     def test_preview_zoom_dynamic_label_and_tooltips_are_owned_by_plan(self):
         source = _method_source(STUDIO_SOURCE, '_sync_preview_zoom_control_state')
 
-        self.assertIn('toggle_plan = gui_layouts.build_view_toggle_bar_plan()', source)
+        self.assertIn('toggle_plan = self._localized_plan(gui_layouts.build_view_toggle_bar_plan())', source)
         self.assertIn("'preview_zoom_actual_size_label_text' if actual_size else 'preview_zoom_label_text'", source)
         self.assertIn("'preview_zoom_actual_size_tooltip' if actual_size else 'preview_zoom_normal_tooltip'", source)
 
@@ -148,6 +148,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
     def test_preview_view_help_text_is_owned_by_view_toggle_plan(self):
         source = _method_source(STUDIO_SOURCE, '_preview_view_help_text')
         self.assertIn('toggle_plan = gui_layouts.build_view_toggle_bar_plan()', source)
+        self.assertIn('toggle_plan = localizer(toggle_plan)', source)
         self.assertIn("'help_text'", source)
         self.assertIn("'help_text': '右ペイン:", LAYOUTS_SOURCE)
         self.assertIn('XTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。', LAYOUTS_SOURCE)
@@ -197,7 +198,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
         self.assertIn("'page_input_empty_minimum': 0", LAYOUTS_SOURCE)
         self.assertIn("'page_input_empty_maximum': 0", LAYOUTS_SOURCE)
         self.assertIn("'page_input_active_minimum': 1", LAYOUTS_SOURCE)
-        self.assertIn('nav_bar_plan = gui_layouts.build_nav_bar_plan()', source)
+        self.assertIn('nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())', source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_empty_minimum', 0)", source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_empty_maximum', 0)", source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_active_minimum', 1)", source)
@@ -208,7 +209,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
         source = _method_source(STUDIO_SOURCE, '_apply_xtc_navigation_ui')
 
         self.assertIn("'page_total_label_format': '/ {total}'", LAYOUTS_SOURCE)
-        self.assertIn('nav_bar_plan = gui_layouts.build_nav_bar_plan()', source)
+        self.assertIn('nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())', source)
         self.assertIn("nav_bar_plan.get('page_total_label_format', '/ {total}')", source)
         self.assertIn('total_label_format.format(total=total)', source)
 
@@ -242,7 +243,7 @@ class Sweep368LayoutContractRegressionTests(unittest.TestCase):
 
         self.assertIn("'prev_button_text': '前'", LAYOUTS_SOURCE)
         self.assertIn("'next_button_text': '次'", LAYOUTS_SOURCE)
-        self.assertIn('nav_bar_plan = gui_layouts.build_nav_bar_plan()', source)
+        self.assertIn('nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())', source)
         self.assertIn("nav_bar_plan.get('prev_button_text', '前')", source)
         self.assertIn("nav_bar_plan.get('next_button_text', '次')", source)
         self.assertIn('self.prev_btn.setText(next_text)', source)

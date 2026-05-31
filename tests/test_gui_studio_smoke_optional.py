@@ -31,7 +31,7 @@ class GuiStudioSmokeOptionalTests(unittest.TestCase):
         window = self.studio.MainWindow()
         try:
             self.assertIsNotNone(window)
-            self.assertEqual(window.windowTitle(), self.studio.APP_NAME)
+            self.assertEqual(window.windowTitle(), window._app_window_title())
         finally:
             window.close()
 

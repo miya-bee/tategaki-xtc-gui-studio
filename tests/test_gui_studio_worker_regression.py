@@ -96,8 +96,8 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
             right_source.index('lay.addWidget(self.preview_stack, 1)'),
         )
         self.assertLess(
-            toggle_source.index('top_lay.addWidget(self.view_help_btn)'),
             toggle_source.index('top_lay.addStretch(1)'),
+            toggle_source.index('top_lay.addWidget(self.view_help_btn)'),
         )
         self.assertLess(
             toggle_source.index('bottom_lay = QHBoxLayout()'),
@@ -150,7 +150,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
     def test_log_tab_read_only_state_is_read_from_layout_plan(self):
         source = inspect.getsource(self.studio.MainWindow._build_log_tab)
 
-        self.assertIn('log_tab_plan = gui_layouts.build_log_tab_plan', source)
+        self.assertIn('log_tab_plan = self._localized_plan(gui_layouts.build_log_tab_plan', source)
         self.assertIn("log_path_read_only = self._plan_bool_value(log_tab_plan, 'log_path_edit_read_only', True)", source)
         self.assertIn("log_edit_read_only = self._plan_bool_value(log_tab_plan, 'log_edit_read_only', True)", source)
         self.assertIn("log_edit_vertical_scroll_bar_policy", source)
@@ -163,7 +163,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
     def test_results_tab_chrome_is_read_from_layout_plan(self):
         source = inspect.getsource(self.studio.MainWindow._build_results_tab)
 
-        self.assertIn('results_tab_plan = gui_layouts.build_results_tab_plan()', source)
+        self.assertIn('results_tab_plan = self._localized_plan(gui_layouts.build_results_tab_plan())', source)
         self.assertIn("self._plan_int_tuple_value(results_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4)", source)
         self.assertIn("self._plan_int_value(results_tab_plan, 'spacing', 4)", source)
         self.assertIn("results_tab_plan.get('summary_label_object_name', 'resultsPlaceholderLabel')", source)
@@ -243,7 +243,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
     def test_page_input_runtime_range_is_read_from_layout_plan(self):
         source = inspect.getsource(self.studio.MainWindow._reset_xtc_page_input)
 
-        self.assertIn('nav_bar_plan = gui_layouts.build_nav_bar_plan()', source)
+        self.assertIn('nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())', source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_empty_minimum', 0)", source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_empty_maximum', 0)", source)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_active_minimum', 1)", source)
@@ -252,7 +252,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
     def test_nav_button_texts_are_read_from_layout_plan(self):
         source = inspect.getsource(self.studio.MainWindow._update_nav_button_texts)
 
-        self.assertIn('nav_bar_plan = gui_layouts.build_nav_bar_plan()', source)
+        self.assertIn('nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())', source)
         self.assertIn("nav_bar_plan.get('prev_button_text', '前')", source)
         self.assertIn("nav_bar_plan.get('next_button_text', '次')", source)
         self.assertIn('self.prev_btn.setText(next_text)', source)
@@ -1970,6 +1970,25 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window._apply_loaded_xtc_view_mode('device', safe=True)
 
         self.assertEqual(window.main_view_mode, 'font')
+
+    def test_main_view_mode_help_tooltip_uses_current_ui_language_on_runtime_sync(self):
+        window = self.make_window()
+        window.current_ui_language = 'en'
+        window.preview_stack = _StackStub()
+        window.font_view_btn = _ButtonStub()
+        window.device_view_btn = _ButtonStub()
+        window.view_help_btn = _ButtonStub()
+        window._sync_preview_zoom_control_state = lambda: None
+        window._runtime_preview_pages = lambda: []
+        window._runtime_device_preview_pages = lambda: []
+        window.update_navigation_ui = lambda: None
+
+        window._apply_main_view_mode_ui('font')
+
+        self.assertIn('Right Pane:', window.view_help_btn.tooltip)
+        self.assertNotIn('右ペイン', window.view_help_btn.tooltip)
+        self.assertEqual(window.view_help_btn.properties.get('helpText'), window.view_help_btn.tooltip)
+
 
     def test_legacy_device_view_mode_apply_with_ui_uses_font_surface(self):
         window = self.make_window()
@@ -8148,8 +8167,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
         self.assertIn('def _show_ui_status_message_direct_with_reflection_best_effort(', source)
         self.assertIn('def _show_ui_status_message_direct_with_reflection(', source)
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback('準備完了', None)", source)
-        self.assertNotIn("self._show_ui_status_message_direct_with_reflection('準備完了', None)", source)
+        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback(self._ui_text('準備完了'), None)", source)
+        self.assertNotIn("self._show_ui_status_message_direct_with_reflection(self._ui_text('準備完了'), None)", source)
 
         preview_marker = '    def _refresh_successful_preview_render_status(self: MainWindow) -> None:'
         preview_start = source.index(preview_marker)
@@ -8175,8 +8194,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         start = source.index(marker)
         end = source.index('    def _apply_direct_conversion_terminal_fallback(', start)
         block = source[start:end]
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback('変換中…', None)", block)
-        self.assertNotIn("self._show_ui_status_message_direct_with_reflection('変換中…', None)", block)
+        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback(self._ui_text('変換中…'), None)", block)
+        self.assertNotIn("self._show_ui_status_message_direct_with_reflection(self._ui_text('変換中…'), None)", block)
 
 
     def test_source_declares_prepare_conversion_ui_tolerates_initial_clear_helper_failures(self):
@@ -8186,7 +8205,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         end = source.index('    def _apply_direct_conversion_terminal_fallback(', start)
         block = source[start:end]
         self.assertIn("""try:
-            self._clear_results_view(studio_logic.build_running_results_summary())
+            self._clear_results_view(studio_logic.build_running_results_summary(self.current_ui_language_value()))
         except Exception:
             pass""", block)
         self.assertIn("""try:
@@ -11179,7 +11198,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         start = studio_source.index(marker)
         end = studio_source.index('def _sync_loaded_xtc_display_context_for_device_view(', start)
         block = studio_source[start:end]
-        self.assertIn("expected_label = studio_logic.build_displaying_document_label(text, fallback='なし')", block)
+        self.assertIn("expected_label = studio_logic.build_displaying_document_label(text, fallback='なし', language=self.current_ui_language_value())", block)
         self.assertIn("self._set_current_xtc_display_name(display_name)", block)
         self.assertIn("self.current_xtc_label.setText(expected_label)", block)
         self.assertIn("return self._ui_widget_text(getattr(self, 'current_xtc_label', None)) == expected_label", block)
@@ -14553,7 +14572,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window.preset_summary_label = _LabelStub()
         window.selected_preset_key = lambda: 'preset_1'
         window._refresh_preset_ui()
-        self.assertEqual(window.preset_combo.items[0][0], 'プリセット1')
+        self.assertEqual(window.preset_combo.items[0][0], 'プリセット1 / P1')
         summary_lines = window.preset_summary_label.text().splitlines()
         self.assertNotIn('プリセット1', window.preset_summary_label.text())
         self.assertEqual(summary_lines[0], '機種: X4')
@@ -14658,7 +14677,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window_multi.preset_summary_label = line_spacing_label
         window_multi._update_preset_summary_label_layout()
         self.assertFalse(line_spacing_label.text().endswith('\n'))
-        self.assertEqual(line_spacing_label.fixed_height, 196)
+        self.assertEqual(line_spacing_label.fixed_height, 210)
         self.assertIsNone(line_spacing_label.minimum_height)
         self.assertIsNone(line_spacing_label.maximum_height)
 
@@ -14670,8 +14689,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         fallback_label.setText(selected_summary)
         window_multi.preset_summary_label = fallback_label
         window_multi._update_preset_summary_label_layout()
-        self.assertEqual(fallback_label.minimum_height, 196)
-        self.assertEqual(fallback_label.maximum_height, 196)
+        self.assertEqual(fallback_label.minimum_height, 210)
+        self.assertEqual(fallback_label.maximum_height, 210)
 
         class _ZeroHeightLabelStub(_LineSpacingCompactSummaryLabelStub):
             def __init__(self):
@@ -14726,7 +14745,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
                 mock.patch.object(self.studio, 'QRect', lambda _x, _y, width, _height: _RectWithWidthStub(width)):
             window_multi._update_preset_summary_label_layout()
         self.assertFalse(narrow_before_layout_label.text().endswith('\n'))
-        self.assertEqual(narrow_before_layout_label.fixed_height, 196)
+        self.assertEqual(narrow_before_layout_label.fixed_height, 210)
         self.assertTrue(narrow_before_layout_label.measured_widths)
         self.assertGreaterEqual(max(narrow_before_layout_label.measured_widths), 300)
 
@@ -16980,7 +16999,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window.page_number_font_size_spin = _SpinStub(12)
         window.margin_b_spin = _SpinStub(4)
 
-        changed = window._sync_page_number_bottom_margin_to_ui()
+        changed = window._sync_bottom_overlay_margin_to_ui()
 
         self.assertTrue(changed)
         self.assertEqual(window.margin_b_spin.value(), 13)
@@ -16992,7 +17011,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window.page_number_font_size_spin = _SpinStub(12)
         window.margin_b_spin = _SpinStub(20)
 
-        changed = window._sync_page_number_bottom_margin_to_ui()
+        changed = window._sync_bottom_overlay_margin_to_ui()
 
         self.assertFalse(changed)
         self.assertEqual(window.margin_b_spin.value(), 20)
@@ -17002,122 +17021,167 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window.page_number_check = _CheckStub(True)
         window.page_number_font_size_spin = _SpinStub(12)
         window.margin_b_spin = _SpinStub(20)
-        window._page_number_bottom_margin_auto_state = {
+        window._bottom_overlay_margin_auto_state = {
             'active': True,
             'base_value': 4,
             'auto_value': 20,
         }
 
-        changed = window._sync_page_number_bottom_margin_to_ui()
+        changed = window._sync_bottom_overlay_margin_to_ui()
 
         self.assertTrue(changed)
         self.assertEqual(window.margin_b_spin.value(), 13)
-        self.assertEqual(window._page_number_bottom_margin_auto_state['base_value'], 4)
-        self.assertEqual(window._page_number_bottom_margin_auto_state['auto_value'], 13)
+        self.assertEqual(window._bottom_overlay_margin_auto_state['base_value'], 4)
+        self.assertEqual(window._bottom_overlay_margin_auto_state['auto_value'], 13)
 
     def test_page_number_setting_preserves_user_margin_when_auto_requirement_shrinks(self):
         window = self.make_window()
         window.page_number_check = _CheckStub(True)
         window.page_number_font_size_spin = _SpinStub(12)
         window.margin_b_spin = _SpinStub(21)
-        window._page_number_bottom_margin_auto_state = {
+        window._bottom_overlay_margin_auto_state = {
             'active': True,
             'base_value': 20,
             'auto_value': 21,
         }
 
-        changed = window._sync_page_number_bottom_margin_to_ui()
+        changed = window._sync_bottom_overlay_margin_to_ui()
 
         self.assertTrue(changed)
         self.assertEqual(window.margin_b_spin.value(), 20)
-        self.assertEqual(window._page_number_bottom_margin_auto_state['base_value'], 20)
-        self.assertEqual(window._page_number_bottom_margin_auto_state['auto_value'], 20)
+        self.assertEqual(window._bottom_overlay_margin_auto_state['base_value'], 20)
+        self.assertEqual(window._bottom_overlay_margin_auto_state['auto_value'], 20)
 
     def test_page_number_setting_does_not_lower_after_manual_margin_override(self):
         window = self.make_window()
         window.page_number_check = _CheckStub(True)
         window.page_number_font_size_spin = _SpinStub(13)
         window.margin_b_spin = _SpinStub(25)
-        window._page_number_bottom_margin_auto_state = {
+        window._bottom_overlay_margin_auto_state = {
             'active': True,
             'base_value': 4,
             'auto_value': 20,
         }
 
-        changed = window._sync_page_number_bottom_margin_to_ui()
+        changed = window._sync_bottom_overlay_margin_to_ui()
 
         self.assertFalse(changed)
         self.assertEqual(window.margin_b_spin.value(), 25)
-        self.assertNotIn('_page_number_bottom_margin_auto_state', getattr(window, '__dict__', {}))
+        self.assertNotIn('_bottom_overlay_margin_auto_state', getattr(window, '__dict__', {}))
 
     def test_page_number_off_restores_previous_auto_margin(self):
         window = self.make_window()
         window.page_number_check = _CheckStub(False)
         window.page_number_font_size_spin = _SpinStub(12)
         window.margin_b_spin = _SpinStub(13)
-        window._page_number_bottom_margin_auto_state = {
+        window._bottom_overlay_margin_auto_state = {
             'active': True,
             'base_value': 4,
             'auto_value': 13,
         }
 
-        changed = window._sync_page_number_bottom_margin_to_ui()
+        changed = window._sync_bottom_overlay_margin_to_ui()
 
         self.assertTrue(changed)
         self.assertEqual(window.margin_b_spin.value(), 4)
         self.assertEqual(window.margin_b_spin.blocked, [True, False])
-        self.assertNotIn('_page_number_bottom_margin_auto_state', getattr(window, '__dict__', {}))
+        self.assertNotIn('_bottom_overlay_margin_auto_state', getattr(window, '__dict__', {}))
 
     def test_page_number_off_preserves_manual_margin_override(self):
         window = self.make_window()
         window.page_number_check = _CheckStub(False)
         window.page_number_font_size_spin = _SpinStub(12)
         window.margin_b_spin = _SpinStub(20)
-        window._page_number_bottom_margin_auto_state = {
+        window._bottom_overlay_margin_auto_state = {
             'active': True,
             'base_value': 4,
             'auto_value': 13,
         }
 
-        changed = window._sync_page_number_bottom_margin_to_ui()
+        changed = window._sync_bottom_overlay_margin_to_ui()
 
         self.assertFalse(changed)
         self.assertEqual(window.margin_b_spin.value(), 20)
         self.assertEqual(window.margin_b_spin.blocked, [])
-        self.assertNotIn('_page_number_bottom_margin_auto_state', getattr(window, '__dict__', {}))
+        self.assertNotIn('_bottom_overlay_margin_auto_state', getattr(window, '__dict__', {}))
 
     def test_page_number_auto_margin_state_round_trips_through_saved_payload(self):
         window = self.make_window()
         window.page_number_check = _CheckStub(True)
         window.page_number_font_size_spin = _SpinStub(12)
         window.margin_b_spin = _SpinStub(13)
-        window._page_number_bottom_margin_auto_state = {
+        window._bottom_overlay_margin_auto_state = {
             'active': True,
             'base_value': 4,
             'auto_value': 13,
         }
 
-        payload = window._page_number_margin_auto_save_payload()
+        payload = window._bottom_overlay_margin_auto_save_payload()
 
-        self.assertTrue(payload['page_number_margin_auto_active'])
+        self.assertTrue(payload['bottom_overlay_margin_auto_active'])
         restored = self.make_window()
         restored.page_number_check = _CheckStub(True)
         restored.page_number_font_size_spin = _SpinStub(12)
         restored.margin_b_spin = _SpinStub(13)
-        restored._restore_page_number_bottom_margin_auto_state_from_payload(payload)
+        restored._restore_bottom_overlay_margin_auto_state_from_payload(payload)
         restored.page_number_check.setChecked(False)
 
-        changed = restored._sync_page_number_bottom_margin_to_ui()
+        changed = restored._sync_bottom_overlay_margin_to_ui()
 
         self.assertTrue(changed)
         self.assertEqual(restored.margin_b_spin.value(), 4)
+
+    def test_bottom_overlay_auto_margin_state_restores_legacy_page_number_payload(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.progress_bar_check = _CheckStub(False)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(13)
+
+        window._restore_bottom_overlay_margin_auto_state_from_payload({
+            'page_number_margin_auto_active': True,
+            'page_number_margin_auto_base_value': 4,
+            'page_number_margin_auto_value': 13,
+        })
+        window.page_number_check.setChecked(False)
+
+        changed = window._sync_bottom_overlay_margin_to_ui()
+
+        self.assertTrue(changed)
+        self.assertEqual(window.margin_b_spin.value(), 4)
+        self.assertNotIn('_bottom_overlay_margin_auto_state', getattr(window, '__dict__', {}))
+
+
+    def test_bottom_overlay_auto_margin_state_prefers_legacy_values_when_new_keys_are_defaults(self):
+        window = self.make_window()
+        window.page_number_check = _CheckStub(True)
+        window.progress_bar_check = _CheckStub(False)
+        window.page_number_font_size_spin = _SpinStub(12)
+        window.margin_b_spin = _SpinStub(13)
+
+        window._restore_bottom_overlay_margin_auto_state_from_payload({
+            'bottom_overlay_margin_auto_active': False,
+            'bottom_overlay_margin_auto_base_value': 14,
+            'bottom_overlay_margin_auto_value': 14,
+            'page_number_margin_auto_active': True,
+            'page_number_margin_auto_base_value': 4,
+            'page_number_margin_auto_value': 13,
+        })
+        window.page_number_check.setChecked(False)
+
+        changed = window._sync_bottom_overlay_margin_to_ui()
+
+        self.assertTrue(changed)
+        self.assertEqual(window.margin_b_spin.value(), 4)
+        self.assertNotIn('_bottom_overlay_margin_auto_state', getattr(window, '__dict__', {}))
+
 
     def test_page_number_margin_restore_uses_explicit_toggle_false_signal(self):
         window = self.make_window()
         window.page_number_check = _CheckStub(True)
         window.page_number_font_size_spin = _SpinStub(4)
         window.margin_b_spin = _SpinStub(13)
-        window._page_number_bottom_margin_auto_state = {
+        window._bottom_overlay_margin_auto_state = {
             'active': True,
             'base_value': 4,
             'auto_value': 13,
@@ -17129,7 +17193,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window.on_page_number_setting_changed(False)
 
         self.assertEqual(window.margin_b_spin.value(), 4)
-        self.assertNotIn('_page_number_bottom_margin_auto_state', getattr(window, '__dict__', {}))
+        self.assertNotIn('_bottom_overlay_margin_auto_state', getattr(window, '__dict__', {}))
 
 
     def test_page_number_auto_margin_save_payload_clears_after_manual_override(self):
@@ -17137,17 +17201,17 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         window.page_number_check = _CheckStub(True)
         window.page_number_font_size_spin = _SpinStub(12)
         window.margin_b_spin = _SpinStub(20)
-        window._page_number_bottom_margin_auto_state = {
+        window._bottom_overlay_margin_auto_state = {
             'active': True,
             'base_value': 4,
             'auto_value': 13,
         }
 
-        payload = window._page_number_margin_auto_save_payload()
+        payload = window._bottom_overlay_margin_auto_save_payload()
 
-        self.assertFalse(payload['page_number_margin_auto_active'])
-        self.assertEqual(payload['page_number_margin_auto_base_value'], 20)
-        self.assertEqual(payload['page_number_margin_auto_value'], 20)
+        self.assertFalse(payload['bottom_overlay_margin_auto_active'])
+        self.assertEqual(payload['bottom_overlay_margin_auto_base_value'], 20)
+        self.assertEqual(payload['bottom_overlay_margin_auto_value'], 20)
 
     def test_preview_page_limit_spin_allows_large_manual_preview_requests(self):
         source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
@@ -17242,6 +17306,59 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         self.assertEqual(window.viewer_widget.guide_margins, (0, 0, 12, 34))
 
+    def test_language_section_is_added_before_preset_section(self):
+        import inspect
+
+        source = inspect.getsource(self.studio.MainWindow._build_preset_side_panel)
+        self.assertLess(
+            source.index('lay.addWidget(self._section_language())'),
+            source.index('lay.addWidget(self._section_preset())'),
+        )
+        section_source = inspect.getsource(self.studio.MainWindow._section_language)
+        self.assertIn('self.language_combo = QComboBox()', section_source)
+        self.assertIn('UI_LANGUAGE_OPTIONS', section_source)
+        self.assertIn('on_language_combo_changed', section_source)
+        self.assertIn('language_restart_note_label', section_source)
+        change_source = inspect.getsource(self.studio.MainWindow.on_language_combo_changed)
+        self.assertIn('build_language_restart_notice(selected)', change_source)
+        self.assertIn('_show_information_dialog_with_status_fallback', change_source)
+
+    def test_english_option_labels_are_localized_through_ui_text(self):
+        import inspect
+
+        source = inspect.getsource(self.studio.MainWindow._ensure_behavior_controls)
+        self.assertIn('self._ui_text(label)', source)
+        combo_source = inspect.getsource(self.studio.MainWindow._make_position_mode_combo)
+        self.assertIn('self._ui_text(label)', combo_source)
+        position_source = inspect.getsource(self.studio.MainWindow._add_glyph_position_control)
+        self.assertIn('self._ui_text(help_text)', position_source)
+
+    def test_dialog_and_help_helpers_route_strings_through_ui_text(self):
+        import inspect
+
+        warning_source = inspect.getsource(self.studio.MainWindow._show_warning_dialog_with_status_fallback)
+        self.assertIn('ui_text(title)', warning_source)
+        self.assertIn('ui_text(message)', warning_source)
+
+        info_source = inspect.getsource(self.studio.MainWindow._show_information_dialog_with_status_fallback)
+        self.assertIn('ui_text(fallback_status_message)', info_source)
+
+        file_dialog_source = inspect.getsource(self.studio.MainWindow._get_open_file_name_with_status_fallback)
+        self.assertIn('warning_title=(getattr(self,', file_dialog_source)
+        self.assertIn('fallback_status_message=(getattr(self,', file_dialog_source)
+
+        help_source = inspect.getsource(self.studio.MainWindow._help_icon_button)
+        self.assertIn('self._ui_text(text)', help_source)
+        self.assertIn('dialog_title=self._ui_text(title)', help_source)
+
+    def test_main_help_dialog_has_english_branch(self):
+        import inspect
+
+        source = inspect.getsource(self.studio.MainWindow.show_help_dialog)
+        self.assertIn("== 'en'", source)
+        self.assertIn('[Basic workflow]', source)
+        self.assertIn('How to use', self.studio.studio_logic.translate_ui_text('使い方', 'en'))
+
     def test_build_view_toggle_bar_uses_two_rows_for_compact_preview_header(self):
         import inspect
 
@@ -17260,17 +17377,17 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         source = inspect.getsource(self.studio.MainWindow._build_view_toggle_bar)
         self.assertLess(
-            source.index('top_lay.addWidget(self.view_help_btn)'),
-            source.index('self._add_preview_display_toggles_to_layout(top_lay)'),
-        )
-        self.assertLess(
             source.index('self._add_preview_display_toggles_to_layout(top_lay)'),
             source.index('top_lay.addStretch(1)'),
+        )
+        self.assertLess(
+            source.index('top_lay.addStretch(1)'),
+            source.index('top_lay.addWidget(self.view_help_btn)'),
         )
         helper_source = inspect.getsource(self.studio.MainWindow._add_preview_display_toggles_to_layout)
         self.assertIn("self._add_optional_widget_to_layout(lay, 'actual_size_check')", helper_source)
         self.assertIn("self._add_optional_widget_to_layout(lay, 'actual_size_help_btn')", helper_source)
-        self.assertIn("preview_toggle_plan = gui_layouts.build_preview_display_toggle_plan()", helper_source)
+        self.assertIn("preview_toggle_plan = self._localized_plan(gui_layouts.build_preview_display_toggle_plan())", helper_source)
         self.assertIn("self._plan_int_value(preview_toggle_plan, 'toggle_spacing', 18)", helper_source)
         self.assertIn("self._add_optional_widget_to_layout(lay, 'guides_help_btn')", helper_source)
         spacing_marker = "self._plan_int_value(preview_toggle_plan, 'toggle_spacing', 18)"
@@ -17388,7 +17505,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         self.assertIn('build_view_toggle_bar_plan()', help_source)
         self.assertIn("'help_text'", help_source)
-        self.assertIn('self._help_icon_button(self._preview_view_help_text())', build_source)
+        self.assertIn('self._help_icon_button(self._ui_text(self._preview_view_help_text()))', build_source)
         section_source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
         layout_source = inspect.getsource(self.studio.gui_layouts.build_preview_display_toggle_plan)
         self.assertIn("self._add_optional_widget_to_layout(lay, 'actual_size_help_btn')", helper_source)
@@ -17835,19 +17952,19 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         output_source = inspect.getsource(self.studio.MainWindow._section_output)
         self.assertIn("output_row = self._make_hbox_layout_from_plan(", output_source)
-        self.assertIn("output_row.addWidget(self._dim_label('機種'))", output_source)
+        self.assertIn("output_row.addWidget(self._dim_label(self._ui_text('機種')))", output_source)
         self.assertIn("self.profile_combo = QComboBox()", output_source)
         self.assertIn("output_row.addWidget(self.profile_combo)", output_source)
-        self.assertIn("output_row.addWidget(self._dim_label('出力形式'))", output_source)
+        self.assertIn("output_row.addWidget(self._dim_label(self._ui_text('出力形式')))", output_source)
         self.assertIn("self.custom_size_row = QWidget()", output_source)
-        self.assertIn("composition_row.addWidget(self._dim_label('禁則処理'))", source)
+        self.assertIn("composition_row.addWidget(self._dim_label(self._ui_text('禁則処理')))", source)
         self.assertIn("lay.addLayout(composition_row)", source)
 
     def test_display_section_trial_no_longer_places_profile_combo(self):
         source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
 
         output_source = inspect.getsource(self.studio.MainWindow._section_output)
-        self.assertIn("output_row.addWidget(self._dim_label('機種'))", output_source)
+        self.assertIn("output_row.addWidget(self._dim_label(self._ui_text('機種')))", output_source)
         self.assertIn("output_row.addWidget(self.profile_combo)", output_source)
         self.assertIn("self.custom_size_row = QWidget()", output_source)
         self.assertIn("self.preview_update_btn = self._make_button_from_plan(", source)
@@ -17872,9 +17989,9 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn("image_wave_dash_row = self._make_hbox_layout_from_plan(", image_source)
         self.assertIn("gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))", image_source)
         self.assertIn("image_tatechuyoko_symbol_row,\n            '下鍵括弧',\n            self.lower_closing_bracket_position_combo", image_source)
-        self.assertIn("image_wave_dash_row.addWidget(self._dim_label('波線描画'))", image_source)
+        self.assertIn("image_wave_dash_row.addWidget(self._dim_label(self._ui_text('波線描画')))", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)", image_source)
-        self.assertIn("image_wave_dash_row.addWidget(self._dim_label('波線位置'))", image_source)
+        self.assertIn("image_wave_dash_row.addWidget(self._dim_label(self._ui_text('波線位置')))", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self.wave_dash_position_combo)", image_source)
         self.assertIn("lay.addLayout(image_wave_dash_row)", image_source)
 
