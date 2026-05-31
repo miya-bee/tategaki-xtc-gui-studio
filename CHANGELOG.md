@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v1.4.1
+
+v1.4.1 は、v1.4.0 公開後の安定化・仕上げをまとめた公開版です。内部作業版 v1.4.1.x / v1.4.2.x の細かな変更は、この v1.4.1 項目へ統合しています。
+
+- ページ下部 progress bar と、ページ番号 / progress bar の下部オーバーレイ余白管理を追加・整理しました。
+- 旧ページ番号 margin 設定との互換復元を維持しつつ、下部オーバーレイ用の共通 margin 管理へ移行しました。
+- UI language support を追加し、初回起動時は OS ロケールに応じて日本語UI / English UI を自動選択するようにしました。
+- Language 欄で選択した表示言語を ini に保存し、次回以降は保存済み言語を優先するようにしました。
+- English UI の主要ラベル、ヘルプ、ツールチップ、ダイアログ、ログ、変換結果、フォルダ一括変換メッセージを英語化しました。
+- English UI のウィンドウタイトルを `TategakiXTC GUI Studio <version>` にしました。日本語UIは `縦書きXTC Studio <version>` を維持します。
+- 右ペイン表示モード切替後に、ヘルプツールチップが日本語へ戻る経路を修正しました。
+- English UI の実ウィジェットを offscreen で走査するテストを追加し、ラベル、ツールチップ、コンボ、タブ、ウィンドウタイトルの未翻訳日本語を検出できるようにしました。
+- 実 PySide6 走査はサブプロセスで実行し、通常の stub Qt 系テストと衝突しないようにしました。
+- フォルダ一括変換 launcher の Python 3.10 / 3.11 互換性を修正しました。
+- i18n 対応に合わせ、ソース文字列固定テスト、sweep 系テスト、TypedDict 期待値を現行実装へ同期しました。
+- v1.4.0 からの描画・変換・EPUB・XTC/XTCH 出力ロジックは維持しています。
+
 ## v1.4.0
 
 - run_gui.bat hardening: added pushd/cd fallback, app-file existence check, pause-on-failure messaging, and CRLF-only packaging guard for Windows batch launchers. - Public release

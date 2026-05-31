@@ -1969,7 +1969,7 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
     total_docs = max(1, len(docs))
     _emit_progress(progress_cb, 0, total_docs, f'EPUBを解析しました。({len(docs)} 章)')
 
-    if bool(getattr(args, 'page_number_enabled', False)):
+    if bool(getattr(args, 'page_number_enabled', False)) or bool(getattr(args, 'progress_bar_enabled', False)):
         page_entries: PageEntries = []
         page_number_memory_notice_emitted = False
         for doc_index, item in enumerate(_iter_with_optional_tqdm(docs, desc="描画中", unit="章", leave=False), 1):
@@ -2005,7 +2005,7 @@ def process_epub(epub_path: str | Path, font_path: str | Path, args: ConversionA
                     progress_cb,
                     doc_index,
                     total_docs,
-                    'ページ番号表示ONのため、総ページ数確定までEPUBページを一時保持しています。大きいEPUBでは処理に時間やメモリを使います。'
+                    'ページ番号または進捗バー表示ONのため、総ページ数確定までEPUBページを一時保持しています。大きいEPUBでは処理に時間やメモリを使います。'
                 )
             _emit_progress(progress_cb, doc_index, total_docs, f'章の変換を完了しました。({doc_index}/{total_docs} 章 / {total_rendered_pages} 累計ページ)')
         if not page_entries:

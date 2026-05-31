@@ -229,6 +229,7 @@ def build_conversion_completion_guidance_lines(
     *,
     open_folder_target: object = '',
     stopped: object = False,
+    language: object = 'ja',
 ) -> list[str]:
     """Return user-facing completion guidance for converted result paths.
 
@@ -238,55 +239,61 @@ def build_conversion_completion_guidance_lines(
     subfolder-preserving cases can be regression-tested cheaply.
     """
 
+    english = studio_logic.normalize_ui_language(language, 'ja') == 'en'
     raw_paths = coerce_result_path_list(paths)
     if not raw_paths:
         if bool(stopped):
+            if english:
+                return ['Note: conversion was stopped, so no files were saved. Check the log.']
             return ['確認: 途中停止のため保存ファイルはありません。ログ欄を確認してください。']
         return []
 
     parents = _unique_result_parent_display_texts(raw_paths)
     target_text = worker_logic._normalized_path_text(open_folder_target).strip()
-    lines: list[str] = ['【変換完了】保存結果を確認できます。']
+    lines: list[str] = ['[Conversion complete] You can check the saved results.' if english else '【変換完了】保存結果を確認できます。']
     count = len(raw_paths)
     if count == 1:
-        lines.append('種類: 単独ファイル変換')
+        lines.append('Type: single-file conversion' if english else '種類: 単独ファイル変換')
         display_name = studio_logic.build_result_display_name(raw_paths[0])
         if display_name:
-            lines.append(f'出力ファイル: {display_name}')
+            lines.append(f'Output file: {display_name}' if english else f'出力ファイル: {display_name}')
         destination = parents[0] if parents else target_text
         if destination:
-            lines.append(f'保存先: {destination}')
+            lines.append(f'Save folder: {destination}' if english else f'保存先: {destination}')
     else:
-        lines.append(f'保存件数: {count}件')
+        lines.append(f'Saved files: {count}' if english else f'保存件数: {count}件')
         if len(parents) == 1:
-            lines.append('種類: 複数ファイル変換')
-            lines.append(f'保存先: {parents[0]}')
-            lines.append('確認対象: 下の一覧からファイルを選べます。')
+            lines.append('Type: multiple-file conversion' if english else '種類: 複数ファイル変換')
+            lines.append(f'Save folder: {parents[0]}' if english else f'保存先: {parents[0]}')
+            lines.append('Check: choose a file from the list below.' if english else '確認対象: 下の一覧からファイルを選べます。')
         else:
-            lines.append('種類: サブフォルダ込み一括変換')
-            lines.append(f'保存先: 複数フォルダ（{len(parents)}か所）')
+            lines.append('Type: subfolder-preserving batch conversion' if english else '種類: サブフォルダ込み一括変換')
+            lines.append(f'Save folders: multiple folders ({len(parents)})' if english else f'保存先: 複数フォルダ（{len(parents)}か所）')
             if target_text:
-                lines.append(f'基準フォルダ: {target_text}')
-            lines.append('確認対象: フォルダ構造を保った保存結果を、下の一覧から選べます。')
-    lines.append('操作: ［保存先を開く］で出力フォルダを開けます。')
-    lines.append('操作: 一覧のファイルを選び［右ペインで確認］またはダブルクリックで確認できます。')
+                lines.append(f'Base folder: {target_text}' if english else f'基準フォルダ: {target_text}')
+            lines.append('Check: choose a saved result from the list below; folder structure is preserved.' if english else '確認対象: フォルダ構造を保った保存結果を、下の一覧から選べます。')
+    lines.append('Action: use [Open Save Folder] to open the output folder.' if english else '操作: ［保存先を開く］で出力フォルダを開けます。')
+    lines.append('Action: select a file and use [Preview on Right], or double-click it.' if english else '操作: 一覧のファイルを選び［右ペインで確認］またはダブルクリックで確認できます。')
     return studio_logic.merge_unique_message_values([], lines)
 
 
-def build_completion_summary_text(lines: object, entry_count: int = 0) -> str:
+def build_completion_summary_text(lines: object, entry_count: int = 0, language: object = 'ja') -> str:
     normalized = coerce_summary_line_list(lines)
     if not normalized and entry_count > 0:
-        normalized = ['【変換完了】保存結果を確認できます。', f'保存ファイル: {entry_count} 件']
+        if studio_logic.normalize_ui_language(language, 'ja') == 'en':
+            normalized = ['[Conversion complete] You can check the saved results.', f'Saved files: {entry_count}']
+        else:
+            normalized = ['【変換完了】保存結果を確認できます。', f'保存ファイル: {entry_count} 件']
     if not normalized:
         return ''
     return '\n'.join(normalized)
 
-def build_results_view_state(paths: object, summary_lines: object = None) -> dict[str, Any]:
+def build_results_view_state(paths: object, summary_lines: object = None, language: object = 'ja') -> dict[str, Any]:
     entries = build_results_entries(paths)
     normalized_summary_lines = coerce_summary_line_list(summary_lines)
     return {
         'entries': entries,
-        'summary_text': studio_logic.build_results_summary_message(normalized_summary_lines, len(entries)),
+        'summary_text': studio_logic.build_results_summary_message(normalized_summary_lines, len(entries), language=language),
         'initial_index': 0 if entries else None,
     }
 
@@ -294,8 +301,8 @@ def build_results_view_state(paths: object, summary_lines: object = None) -> dic
 
 
 
-def build_results_apply_context(paths: object, summary_lines: object = None) -> dict[str, Any]:
-    state = build_results_view_state(paths, summary_lines)
+def build_results_apply_context(paths: object, summary_lines: object = None, language: object = 'ja') -> dict[str, Any]:
+    state = build_results_view_state(paths, summary_lines, language=language)
     entries = list(state.get('entries') or [])
     initial_index = studio_logic.payload_optional_int_value(state, 'initial_index')
     return {
@@ -325,12 +332,16 @@ def build_loaded_xtc_path_success_context(
     path: object,
     display_name: object,
     candidate_paths: Sequence[object],
+    language: object = 'ja',
 ) -> dict[str, Any]:
     path_text = worker_logic._normalized_path_text(path).strip()
     label_text = worker_logic._normalized_path_text(display_name).strip()
     if not label_text and path_text:
         label_text = studio_logic.build_result_display_name(path_text)
-    log_message = f'XTC/XTCH読込: {path_text}' if path_text else ''
+    if path_text and studio_logic.normalize_ui_language(language, 'ja') == 'en':
+        log_message = f'XTC/XTCH loaded: {path_text}'
+    else:
+        log_message = f'XTC/XTCH読込: {path_text}' if path_text else ''
     return {
         'right_pane_source': 'xtc',
         'device_view_source': 'xtc',
@@ -343,8 +354,11 @@ def build_loaded_xtc_path_success_context(
     }
 
 
-def build_loaded_xtc_bytes_success_context(display_name: object = 'メモリ上のデータ') -> dict[str, Any]:
-    label_text = worker_logic._normalized_path_text(display_name).strip() or 'メモリ上のデータ'
+def build_loaded_xtc_bytes_success_context(display_name: object = 'メモリ上のデータ', language: object = 'ja') -> dict[str, Any]:
+    fallback_label = 'in-memory data' if studio_logic.normalize_ui_language(language, 'ja') == 'en' else 'メモリ上のデータ'
+    label_text = worker_logic._normalized_path_text(display_name).strip() or fallback_label
+    if studio_logic.normalize_ui_language(language, 'ja') == 'en' and label_text == 'メモリ上のデータ':
+        label_text = fallback_label
     return {
         'right_pane_source': 'xtc',
         'device_view_source': 'xtc',

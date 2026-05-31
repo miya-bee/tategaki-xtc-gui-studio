@@ -200,6 +200,8 @@ def build_preview_payload(
         'ruby_hide': 'true' if studio_logic._config_bool_value(render_settings_base.get('ruby_hide'), False) else 'false',
         'page_number_enabled': 'true' if studio_logic._config_bool_value(render_settings_base.get('page_number_enabled'), False) else 'false',
         'page_number_font_size': studio_logic._config_int_value(render_settings_base.get('page_number_font_size'), 12),
+        'progress_bar_enabled': 'true' if studio_logic._config_bool_value(render_settings_base.get('progress_bar_enabled'), False) else 'false',
+        'progress_bar_position': studio_logic.normalize_progress_bar_position(render_settings_base.get('progress_bar_position'), 'center'),
         'line_spacing': render_settings_base['line_spacing'],
         'margin_t': render_settings_base['margin_t'],
         'margin_b': render_settings_base['margin_b'],

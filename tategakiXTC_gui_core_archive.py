@@ -346,7 +346,7 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
                         _raise_if_cancelled(should_cancel)
                         try:
                             with zf.open(info) as member_fp:
-                                runtime_state = _set_archive_page_number_runtime(args, img_index, max(1, total_images)) if bool(getattr(args, 'page_number_enabled', False)) else None
+                                runtime_state = _set_archive_page_number_runtime(args, img_index, max(1, total_images)) if (bool(getattr(args, 'page_number_enabled', False)) or bool(getattr(args, 'progress_bar_enabled', False))) else None
                                 try:
                                     blob = process_image_data(member_fp, args, should_cancel=should_cancel)
                                 finally:
@@ -407,7 +407,7 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
                                 LOGGER.warning('パス・トラバーサル検出のためスキップ: %s', img_p)
                                 traversal_skipped += 1
                                 continue
-                        runtime_state = _set_archive_page_number_runtime(args, img_index, max(1, total_images)) if bool(getattr(args, 'page_number_enabled', False)) else None
+                        runtime_state = _set_archive_page_number_runtime(args, img_index, max(1, total_images)) if (bool(getattr(args, 'page_number_enabled', False)) or bool(getattr(args, 'progress_bar_enabled', False))) else None
                         try:
                             blob = process_image_data(resolved_img, args, should_cancel=should_cancel)
                         finally:

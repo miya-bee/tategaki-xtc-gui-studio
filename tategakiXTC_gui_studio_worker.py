@@ -105,7 +105,7 @@ def _process_single_image_file(
     if progress_cb is not None:
         progress_cb(0, 1, '画像を読み込み中…')
     runtime_state = None
-    if bool(getattr(args, 'page_number_enabled', False)):
+    if bool(getattr(args, 'page_number_enabled', False)) or bool(getattr(args, 'progress_bar_enabled', False)):
         runtime_state = (
             getattr(args, '_page_number_current', None),
             getattr(args, '_page_number_total', None),

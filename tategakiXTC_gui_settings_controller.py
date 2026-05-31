@@ -40,6 +40,11 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('ruby_hide', _default_value('ruby_hide', False)),
     ('page_number_enabled', _default_value('page_number_enabled', False)),
     ('page_number_font_size', _default_value('page_number_font_size', 12)),
+    ('progress_bar_enabled', _default_value('progress_bar_enabled', False)),
+    ('progress_bar_position', _default_value('progress_bar_position', 'center')),
+    ('bottom_overlay_margin_auto_active', _settings_default('bottom_overlay_margin_auto_active')),
+    ('bottom_overlay_margin_auto_base_value', _settings_default('bottom_overlay_margin_auto_base_value')),
+    ('bottom_overlay_margin_auto_value', _settings_default('bottom_overlay_margin_auto_value')),
     ('page_number_margin_auto_active', _settings_default('page_number_margin_auto_active')),
     ('page_number_margin_auto_base_value', _settings_default('page_number_margin_auto_base_value')),
     ('page_number_margin_auto_value', _settings_default('page_number_margin_auto_value')),
@@ -70,6 +75,7 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('output_dir', _default_value('output_dir', '')),
     ('main_view_mode', _default_value('main_view_mode', 'font')),
     ('bottom_tab_index', _default_value('bottom_tab_index', 0)),
+    ('ui_language', _default_value('ui_language', studio_constants.DEFAULT_UI_LANGUAGE)),
 )
 
 def _coerce_mapping_payload(value: object) -> dict[str, object]:
@@ -91,6 +97,7 @@ _SAVE_UI_FIELDS: tuple[tuple[str, object], ...] = (
     ('show_guides', True),
     ('calibration_pct', 100),
     ('nav_buttons_reversed', False),
+    ('ui_language', studio_constants.DEFAULT_UI_LANGUAGE),
 )
 
 
@@ -166,6 +173,8 @@ def build_settings_ui_apply_defaults(
     ruby_hide: object = False,
     page_number_enabled: object = False,
     page_number_font_size: object = 12,
+    progress_bar_enabled: object = False,
+    progress_bar_position: object = 'center',
     line_spacing: object,
     margin_t: object,
     margin_b: object,
@@ -200,6 +209,8 @@ def build_settings_ui_apply_defaults(
         'ruby_hide': studio_logic._config_bool_value(ruby_hide, bool(_DEFAULT_RENDER_SETTINGS['ruby_hide'])),
         'page_number_enabled': studio_logic._config_bool_value(page_number_enabled, bool(_DEFAULT_RENDER_SETTINGS['page_number_enabled'])),
         'page_number_font_size': studio_logic._config_int_value(page_number_font_size, _DEFAULT_RENDER_SETTINGS['page_number_font_size']),
+        'progress_bar_enabled': studio_logic._config_bool_value(progress_bar_enabled, bool(_DEFAULT_RENDER_SETTINGS['progress_bar_enabled'])),
+        'progress_bar_position': studio_logic.normalize_progress_bar_position(progress_bar_position, str(_DEFAULT_RENDER_SETTINGS['progress_bar_position'])),
         'line_spacing': studio_logic._config_int_value(line_spacing, 0),
         'margin_t': studio_logic._config_int_value(margin_t, 0),
         'margin_b': studio_logic._config_int_value(margin_b, 0),
@@ -265,6 +276,7 @@ def build_settings_save_ui_state(
     calibration_pct: object,
     nav_buttons_reversed: object,
     preview_page_limit: object,
+    ui_language: object = studio_constants.DEFAULT_UI_LANGUAGE,
 ) -> dict[str, object]:
     return {
         'bottom_tab_index': studio_logic._config_int_value(bottom_tab_index, 0),
@@ -279,6 +291,7 @@ def build_settings_save_ui_state(
         'calibration_pct': studio_logic._config_int_value(calibration_pct, 100),
         'nav_buttons_reversed': studio_logic._config_bool_value(nav_buttons_reversed, False),
         'preview_page_limit': studio_logic._config_int_value(preview_page_limit, 1),
+        'ui_language': studio_logic.normalize_ui_language(ui_language, studio_constants.DEFAULT_UI_LANGUAGE),
     }
 
 
@@ -365,6 +378,8 @@ def build_current_preset_payload(
         'night_mode': studio_logic._config_bool_value(render_settings.get('night_mode'), bool(_DEFAULT_RENDER_SETTINGS['night_mode'])),
         'ruby_hide': studio_logic._config_bool_value(render_settings.get('ruby_hide'), bool(_DEFAULT_RENDER_SETTINGS['ruby_hide'])),
         'page_number_enabled': studio_logic._config_bool_value(render_settings.get('page_number_enabled'), bool(_DEFAULT_RENDER_SETTINGS['page_number_enabled'])),
+        'progress_bar_enabled': studio_logic._config_bool_value(render_settings.get('progress_bar_enabled'), bool(_DEFAULT_RENDER_SETTINGS['progress_bar_enabled'])),
+        'progress_bar_position': studio_logic.normalize_progress_bar_position(render_settings.get('progress_bar_position'), str(_DEFAULT_RENDER_SETTINGS['progress_bar_position'])),
         'dither': studio_logic._config_bool_value(render_settings.get('dither'), bool(_DEFAULT_RENDER_SETTINGS['dither'])),
         'kinsoku_mode': str(render_settings.get('kinsoku_mode') or fallback_kinsoku_mode),
         'output_format': str(render_settings.get('output_format') or fallback_output_format),
@@ -401,6 +416,8 @@ def build_live_preset_widget_payload(
     ruby_hide: object = False,
     page_number_enabled: object = False,
     page_number_font_size: object = 12,
+    progress_bar_enabled: object = False,
+    progress_bar_position: object = 'center',
     line_spacing: object,
     margin_t: object,
     margin_b: object,
@@ -448,6 +465,10 @@ def build_live_preset_widget_payload(
         payload['page_number_enabled'] = studio_logic._config_bool_value(page_number_enabled, bool(_DEFAULT_RENDER_SETTINGS['page_number_enabled']))
     if page_number_font_size is not None:
         payload['page_number_font_size'] = studio_logic._config_int_value(page_number_font_size, _DEFAULT_RENDER_SETTINGS['page_number_font_size'])
+    if progress_bar_enabled is not None:
+        payload['progress_bar_enabled'] = studio_logic._config_bool_value(progress_bar_enabled, bool(_DEFAULT_RENDER_SETTINGS['progress_bar_enabled']))
+    if progress_bar_position is not None:
+        payload['progress_bar_position'] = studio_logic.normalize_progress_bar_position(progress_bar_position, str(_DEFAULT_RENDER_SETTINGS['progress_bar_position']))
     if line_spacing is not None:
         payload['line_spacing'] = studio_logic._config_int_value(line_spacing, _DEFAULT_RENDER_SETTINGS['line_spacing'])
     if margin_t is not None:
@@ -541,9 +562,9 @@ def resolve_preset_combo_index(
     if normalized_key.startswith('preset_'):
         suffix = normalized_key.split('_')[-1].strip()
         if suffix.isdigit():
-            fallback_text = f'プリセット{int(suffix)}'
+            fallback_texts = {f'プリセット{int(suffix)}', f'Preset {int(suffix)}'}
             for index, (item_text, _item_data) in enumerate(combo_entries):
-                if str(item_text or '').strip() == fallback_text:
+                if str(item_text or '').strip() in fallback_texts:
                     return index
     return -1
 

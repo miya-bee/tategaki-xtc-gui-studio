@@ -284,6 +284,8 @@ class ConversionArgs:
     page_number_enabled: bool = False
     page_number_font_size: int = 12
     page_number_font_file: str = ''
+    progress_bar_enabled: bool = False
+    progress_bar_position: str = 'center'
     line_spacing: int = 44
     margin_t: int = 12
     margin_b: int = 14
@@ -344,8 +346,17 @@ class ConversionArgs:
         self.ruby_hide = bool(getattr(self, 'ruby_hide', False))
         self.page_number_enabled = bool(getattr(self, 'page_number_enabled', False))
         self.page_number_font_file = str(getattr(self, 'page_number_font_file', '') or '')
+        self.progress_bar_enabled = bool(getattr(self, 'progress_bar_enabled', False))
+        self.progress_bar_position = str(getattr(self, 'progress_bar_position', 'center') or 'center').strip().lower()
+        if self.progress_bar_position not in {'center', 'left'}:
+            self.progress_bar_position = 'center'
+        bottom_reserve = 0
         if self.page_number_enabled:
-            self.margin_b = max(int(self.margin_b), int(self.page_number_font_size) + 1)
+            bottom_reserve = max(bottom_reserve, int(self.page_number_font_size) + 1)
+        if self.progress_bar_enabled:
+            bottom_reserve = max(bottom_reserve, 10)
+        if bottom_reserve > 0:
+            self.margin_b = max(int(self.margin_b), bottom_reserve)
         self.output_format = _normalize_output_format(getattr(self, 'output_format', 'xtc'))
 
 
@@ -722,7 +733,9 @@ from tategakiXTC_gui_core_xtc import (
     _xtc_threshold_lut,
     _xtch_plane_value_lut,
     _xtch_quantization_lut,
+    apply_bottom_overlays_to_canvas,
     apply_page_number_overlay_to_canvas,
+    apply_progress_bar_overlay_to_canvas,
     apply_xtc_filter,
     apply_xtch_filter,
     build_xtc,

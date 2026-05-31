@@ -13,6 +13,8 @@ from pathlib import Path
 import re
 from typing import Callable, Protocol
 
+import tategakiXTC_gui_studio_logic as studio_logic
+
 from tategakiXTC_folder_batch_controller import (
     FolderBatchControllerRun,
     make_dry_run_converter,
@@ -72,6 +74,24 @@ def _text_attr_or_default(obj: object, name: str, default: str = '') -> str:
     return str(value) if value is not None else default
 
 
+def _main_window_ui_language(main_window: object) -> str:
+    getter = getattr(main_window, 'current_ui_language_value', None)
+    if callable(getter):
+        try:
+            return studio_logic.normalize_ui_language(getter(), 'ja')
+        except Exception:
+            pass
+    return studio_logic.normalize_ui_language(getattr(main_window, 'current_ui_language', 'ja'), 'ja')
+
+
+def _ui_text_for_main_window(main_window: object, text: object) -> str:
+    return studio_logic.translate_ui_text(text, _main_window_ui_language(main_window))
+
+
+def _is_english_main_window(main_window: object) -> bool:
+    return _main_window_ui_language(main_window) == 'en'
+
+
 def append_log_best_effort(main_window: object, message: str) -> None:
     """Append to the app log if a known logging method exists."""
 
@@ -97,6 +117,8 @@ def append_log_best_effort(main_window: object, message: str) -> None:
 
 
 def information_dialog_best_effort(main_window: object, title: str, body: str) -> None:
+    title = _ui_text_for_main_window(main_window, title)
+    body = studio_logic.translate_ui_text(body, _main_window_ui_language(main_window))
     callback = _callable_attr(main_window, '_show_information_dialog_with_status_fallback')
     if callback is not None:
         try:
@@ -111,7 +133,7 @@ def extract_folder_batch_output_root_from_summary(body: str) -> Path | None:
     """Extract the output folder path from a folder-batch completion summary."""
 
     for line in str(body or '').splitlines():
-        match = re.match(r'^\s*出力先\s*:\s*(.+?)\s*$', line)
+        match = re.match(r'^\s*(?:出力先|Output folder)\s*:\s*(.+?)\s*$', line)
         if match is None:
             continue
         text = match.group(1).strip().strip('"')
@@ -128,11 +150,11 @@ def open_folder_in_desktop_best_effort(path: str | Path, main_window: object | N
         folder = Path(path).expanduser()
     except Exception as exc:
         if main_window is not None:
-            append_log_best_effort(main_window, f'[WARN] 出力フォルダを開けませんでした: {exc}')
+            append_log_best_effort(main_window, f'[WARN] {_ui_text_for_main_window(main_window, "出力フォルダを開けませんでした")}: {exc}')
         return False
     if not folder.exists() or not folder.is_dir():
         if main_window is not None:
-            append_log_best_effort(main_window, f'[WARN] 出力フォルダが見つかりません: {folder}')
+            append_log_best_effort(main_window, f'[WARN] {_ui_text_for_main_window(main_window, "出力フォルダが見つかりません")}: {folder}')
         return False
     try:
         from PySide6.QtCore import QUrl
@@ -141,11 +163,11 @@ def open_folder_in_desktop_best_effort(path: str | Path, main_window: object | N
         opened = bool(QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))))
         if opened:
             if main_window is not None:
-                append_log_best_effort(main_window, f'[BATCH] 出力フォルダを開きました: {folder}')
+                append_log_best_effort(main_window, f'[BATCH] {_ui_text_for_main_window(main_window, "出力フォルダを開きました")}: {folder}')
             return True
     except Exception as exc:
         if main_window is not None:
-            append_log_best_effort(main_window, f'[WARN] Qt 経由で出力フォルダを開けませんでした: {exc}')
+            append_log_best_effort(main_window, f'[WARN] {_ui_text_for_main_window(main_window, "Qt 経由で出力フォルダを開けませんでした")}: {exc}')
 
     try:
         import os
@@ -159,11 +181,11 @@ def open_folder_in_desktop_best_effort(path: str | Path, main_window: object | N
         else:
             subprocess.Popen(['xdg-open', str(folder)])
         if main_window is not None:
-            append_log_best_effort(main_window, f'[BATCH] 出力フォルダを開きました: {folder}')
+            append_log_best_effort(main_window, f'[BATCH] {_ui_text_for_main_window(main_window, "出力フォルダを開きました")}: {folder}')
         return True
     except Exception as exc:
         if main_window is not None:
-            append_log_best_effort(main_window, f'[WARN] 出力フォルダを開けませんでした: {exc}')
+            append_log_best_effort(main_window, f'[WARN] {_ui_text_for_main_window(main_window, "出力フォルダを開けませんでした")}: {exc}')
         return False
 
 
@@ -182,17 +204,19 @@ def folder_batch_completion_dialog_best_effort(main_window: object, title: str, 
         dialog.setWindowTitle(title)
         dialog.setText(body)
         ok_button = dialog.addButton(QMessageBox.Ok)
-        open_button = dialog.addButton('出力フォルダを開く', QMessageBox.ActionRole)
+        open_button = dialog.addButton(_ui_text_for_main_window(main_window, '出力フォルダを開く'), QMessageBox.ActionRole)
         dialog.setDefaultButton(ok_button)
         dialog.exec()
         if dialog.clickedButton() is open_button:
             open_folder_in_desktop_best_effort(output_root, main_window)
     except Exception as exc:
-        append_log_best_effort(main_window, f'[WARN] 出力フォルダボタン付き完了通知に失敗しました: {exc}')
+        append_log_best_effort(main_window, f'[WARN] {_ui_text_for_main_window(main_window, "出力フォルダボタン付き完了通知に失敗しました")}: {exc}')
         information_dialog_best_effort(main_window, title, body)
 
 
 def warning_dialog_best_effort(main_window: object, title: str, body: str) -> None:
+    title = _ui_text_for_main_window(main_window, title)
+    body = studio_logic.translate_ui_text(body, _main_window_ui_language(main_window))
     callback = _callable_attr(main_window, '_show_warning_dialog_with_status_fallback')
     if callback is not None:
         try:
@@ -295,7 +319,9 @@ def _folder_batch_cancel_requested(main_window: object) -> bool:
         return False
 
 
-def _folder_batch_cancel_waiting_message() -> str:
+def _folder_batch_cancel_waiting_message(language: object = 'ja') -> str:
+    if studio_logic.normalize_ui_language(language, 'ja') == 'en':
+        return 'Stop request accepted. Stopping folder batch conversion… The current file will stop if supported, or conversion will stop after it finishes.'
     return '停止要求を受け付けました。フォルダ一括変換を中止中… 現在処理中のファイルに停止を伝えています。対応していない処理では現在のファイルが終わりしだい停止します。'
 
 
@@ -332,9 +358,11 @@ def format_folder_batch_progress_text(
     item: FolderBatchPlanItem | object | None = None,
     *,
     detail: object = '',
+    language: object = 'ja',
 ) -> str:
     """Format the folder-batch progress label in a stable, readable way."""
 
+    english = studio_logic.normalize_ui_language(language, 'ja') == 'en'
     try:
         total_value = max(1, int(total))
     except Exception:
@@ -344,19 +372,20 @@ def format_folder_batch_progress_text(
     except Exception:
         current_value = 0
     if current_value <= 0:
-        base = f'フォルダ一括変換中… 0/{total_value} 件｜準備中'
+        base = f'Batch converting… 0/{total_value} | Preparing' if english else f'フォルダ一括変換中… 0/{total_value} 件｜準備中'
     else:
         rel = _compact_folder_batch_status_text(
             _relative_path_from_folder_batch_item(item),
             max_chars=60,
         )
         if rel:
-            base = f'フォルダ一括変換中… {current_value}/{total_value} 件目｜{rel}'
+            base = f'Batch converting… {current_value}/{total_value} | {rel}' if english else f'フォルダ一括変換中… {current_value}/{total_value} 件目｜{rel}'
         else:
-            base = f'フォルダ一括変換中… {current_value}/{total_value} 件目'
-    detail_text = _compact_folder_batch_status_text(detail, max_chars=60)
+            base = f'Batch converting… {current_value}/{total_value}' if english else f'フォルダ一括変換中… {current_value}/{total_value} 件目'
+    raw_detail_text = _compact_folder_batch_status_text(detail, max_chars=60)
+    detail_text = studio_logic.translate_ui_text(raw_detail_text, language)
     if detail_text:
-        return f'{base}｜{detail_text}'
+        return f'{base} | {detail_text}' if english else f'{base}｜{detail_text}'
     return base
 
 
@@ -399,17 +428,17 @@ def set_folder_batch_running_state_best_effort(
     _set_widget_enabled(getattr(main_window, 'folder_batch_action', None), not running)
     _set_widget_enabled(getattr(main_window, 'stop_btn', None), running)
     if running:
-        _set_widget_text(getattr(main_window, 'run_btn', None), '一括変換中…')
-        _set_widget_text(getattr(main_window, 'busy_badge', None), '一括変換中')
+        _set_widget_text(getattr(main_window, 'run_btn', None), _ui_text_for_main_window(main_window, '一括変換中…'))
+        _set_widget_text(getattr(main_window, 'busy_badge', None), _ui_text_for_main_window(main_window, '一括変換中'))
         _set_progress_bar(getattr(main_window, 'progress_bar', None), 0, max(1, total))
-        status_text = message or 'フォルダ一括変換中…'
+        status_text = message or _ui_text_for_main_window(main_window, 'フォルダ一括変換中…')
         _set_widget_text(getattr(main_window, 'progress_label', None), status_text)
-        append_log_best_effort(main_window, '[BATCH] フォルダ一括変換を開始しました。')
+        append_log_best_effort(main_window, '[BATCH] ' + _ui_text_for_main_window(main_window, 'フォルダ一括変換を開始しました。'))
         show_status_best_effort(main_window, status_text, None)
     else:
-        _set_widget_text(getattr(main_window, 'run_btn', None), '▶  変換実行')
-        _set_widget_text(getattr(main_window, 'busy_badge', None), '待機中')
-        status_text = message or 'フォルダ一括変換が終了しました。'
+        _set_widget_text(getattr(main_window, 'run_btn', None), _ui_text_for_main_window(main_window, '▶  変換実行'))
+        _set_widget_text(getattr(main_window, 'busy_badge', None), _ui_text_for_main_window(main_window, '待機中'))
+        status_text = message or _ui_text_for_main_window(main_window, 'フォルダ一括変換が終了しました。')
         _set_widget_text(getattr(main_window, 'progress_label', None), status_text)
         show_status_best_effort(main_window, status_text, 5000)
     process_gui_events_best_effort()
@@ -434,7 +463,7 @@ def request_folder_batch_cancel_best_effort(main_window: object) -> None:
     message = _folder_batch_cancel_waiting_message()
     append_log_best_effort(main_window, f'[STOP] {message}')
     _set_widget_text(getattr(main_window, 'progress_label', None), message)
-    _set_widget_text(getattr(main_window, 'busy_badge', None), '中止中')
+    _set_widget_text(getattr(main_window, 'busy_badge', None), _ui_text_for_main_window(main_window, '中止中'))
     show_status_best_effort(main_window, message, 5000)
     process_gui_events_best_effort()
 
@@ -453,7 +482,7 @@ def make_folder_batch_before_execute_callback(main_window: object) -> Callable[[
         set_folder_batch_running_state_best_effort(
             main_window,
             True,
-            message=format_folder_batch_progress_text(0, total),
+            message=format_folder_batch_progress_text(0, total, language=_main_window_ui_language(main_window)),
             total=total,
         )
     return _before
@@ -505,7 +534,7 @@ def reflect_folder_batch_results_best_effort(main_window: object, result: object
                     pass
             return
         except Exception as exc:
-            append_log_best_effort(main_window, f'[WARN] フォルダ一括変換結果一覧の反映に失敗しました: {exc}')
+            append_log_best_effort(main_window, f'[WARN] {_ui_text_for_main_window(main_window, "フォルダ一括変換結果一覧の反映に失敗しました")}: {exc}')
     set_summary = _callable_attr(main_window, '_set_results_summary_text_with_fallback')
     if set_summary is not None and summary_lines:
         try:
@@ -521,6 +550,8 @@ def _show_folder_batch_completion_card_best_effort(main_window: object, result: 
     plan = getattr(result, 'plan', None)
     stopped = bool(getattr(result, 'stopped', False))
     failed_count = int(getattr(result, 'failed_count', 0) or 0)
+    language = _main_window_ui_language(main_window)
+    raw_summary_lines = list(result.summary_lines()) if hasattr(result, 'summary_lines') else []
     payload = {
         'open_folder_target': str(getattr(plan, 'output_root', '') or ''),
         'folder_batch': True,
@@ -529,14 +560,14 @@ def _show_folder_batch_completion_card_best_effort(main_window: object, result: 
         'folder_batch_processed_count': int(getattr(result, 'processed_count', 0) or 0),
         'folder_batch_total_count': int(getattr(plan, 'total_count', 0) or 0) if plan is not None else 0,
         'folder_batch_pending_count': int(getattr(result, 'stopped_pending_count', 0) or 0),
-        'folder_batch_summary_lines': list(result.summary_lines()) if hasattr(result, 'summary_lines') else [],
+        'folder_batch_summary_lines': [studio_logic.translate_ui_text(line, language) for line in raw_summary_lines],
         'show_without_paths': stopped,
-        'completion_title': 'フォルダ一括変換を中止しました' if stopped else ('フォルダ一括変換が完了しました' if failed_count == 0 else 'フォルダ一括変換が完了しました（失敗あり）'),
+        'completion_title': studio_logic.translate_ui_text('フォルダ一括変換を中止しました' if stopped else ('フォルダ一括変換が完了しました' if failed_count == 0 else 'フォルダ一括変換が完了しました（失敗あり）'), language),
     }
     try:
         show_card(paths, payload)
     except Exception as exc:
-        append_log_best_effort(main_window, f'[WARN] フォルダ一括変換カードの表示に失敗しました: {exc}')
+        append_log_best_effort(main_window, f'[WARN] {_ui_text_for_main_window(main_window, "フォルダ一括変換カードの表示に失敗しました")}: {exc}')
 
 
 def make_folder_batch_after_execute_callback(main_window: object) -> Callable[[object | None], None]:
@@ -548,8 +579,10 @@ def make_folder_batch_after_execute_callback(main_window: object) -> Callable[[o
         processed_count = int(getattr(result, 'processed_count', 0) or 0) if result is not None else 0
         total_count = int(getattr(getattr(result, 'plan', None), 'total_count', 1) or 1) if result is not None else 1
         _set_progress_bar(getattr(main_window, 'progress_bar', None), processed_count, max(1, total_count))
+        language = _main_window_ui_language(main_window)
+        english = language == 'en'
         if result is None:
-            message = 'フォルダ一括変換を完了できませんでした。'
+            message = studio_logic.translate_ui_text('フォルダ一括変換を完了できませんでした。', language)
         else:
             pending_count = 0
             if stopped:
@@ -557,16 +590,26 @@ def make_folder_batch_after_execute_callback(main_window: object) -> Callable[[o
                     pending_count = int(getattr(result, 'stopped_pending_count', 0) or 0)
                 except Exception:
                     pending_count = max(0, total_count - processed_count)
-            count_text = (
-                f'成功 {success_count} / スキップ {skipped_count} / 失敗 {failed_count} / '
-                f'処理済み {processed_count}/{total_count}'
-            )
-            if stopped:
-                message = f'フォルダ一括変換を停止しました。{count_text} / 未処理 {pending_count}'
-            elif failed_count:
-                message = f'フォルダ一括変換が完了しました。{count_text}'
+            if english:
+                count_text = (
+                    f'Success {success_count} / Skipped {skipped_count} / Failed {failed_count} / '
+                    f'Processed {processed_count}/{total_count}'
+                )
+                if stopped:
+                    message = f'Folder batch stopped. {count_text} / Pending {pending_count}'
+                else:
+                    message = f'Folder batch complete. {count_text}'
             else:
-                message = f'フォルダ一括変換が完了しました。{count_text}'
+                count_text = (
+                    f'成功 {success_count} / スキップ {skipped_count} / 失敗 {failed_count} / '
+                    f'処理済み {processed_count}/{total_count}'
+                )
+                if stopped:
+                    message = f'フォルダ一括変換を停止しました。{count_text} / 未処理 {pending_count}'
+                elif failed_count:
+                    message = f'フォルダ一括変換が完了しました。{count_text}'
+                else:
+                    message = f'フォルダ一括変換が完了しました。{count_text}'
         reflect_folder_batch_results_best_effort(main_window, result)
         _show_folder_batch_completion_card_best_effort(main_window, result)
         set_folder_batch_running_state_best_effort(main_window, False, message=message, total=max(1, total_count))
@@ -607,13 +650,13 @@ def make_folder_batch_progress_callback(main_window: object) -> FolderBatchProgr
                 pass
         if _folder_batch_cancel_requested(main_window):
             _freeze_folder_batch_progress_bar_best_effort(main_window)
-            text = _folder_batch_cancel_waiting_message()
+            text = _folder_batch_cancel_waiting_message(_main_window_ui_language(main_window))
             _set_widget_text(getattr(main_window, 'progress_label', None), text)
-            _set_widget_text(getattr(main_window, 'busy_badge', None), '中止中')
+            _set_widget_text(getattr(main_window, 'busy_badge', None), _ui_text_for_main_window(main_window, '中止中'))
             show_status_best_effort(main_window, text, 5000)
             process_gui_events_best_effort()
             return
-        text = format_folder_batch_progress_text(current_value, total_value, item)
+        text = format_folder_batch_progress_text(current_value, total_value, item, language=_main_window_ui_language(main_window))
         _set_progress_bar(getattr(main_window, 'progress_bar', None), current_value, total_value)
         _set_widget_text(getattr(main_window, 'progress_label', None), text)
         show_status_best_effort(main_window, text, None)
@@ -625,9 +668,9 @@ def make_folder_batch_inner_progress_callback(main_window: object) -> InnerProgr
     def _progress(index: int, total: int, text: str) -> None:
         if _folder_batch_cancel_requested(main_window):
             _freeze_folder_batch_progress_bar_best_effort(main_window)
-            status_text = _folder_batch_cancel_waiting_message()
+            status_text = _folder_batch_cancel_waiting_message(_main_window_ui_language(main_window))
             _set_widget_text(getattr(main_window, 'progress_label', None), status_text)
-            _set_widget_text(getattr(main_window, 'busy_badge', None), '中止中')
+            _set_widget_text(getattr(main_window, 'busy_badge', None), _ui_text_for_main_window(main_window, '中止中'))
             show_status_best_effort(main_window, status_text, 5000)
             process_gui_events_best_effort()
             return
@@ -639,9 +682,9 @@ def make_folder_batch_inner_progress_callback(main_window: object) -> InnerProgr
             inner_total = 0
             inner_index = 0
         if inner_total > 1 and inner_index >= 0:
-            detail_parts.append(f'内部 {inner_index}/{inner_total}')
+            detail_parts.append(_ui_text_for_main_window(main_window, f'内部 {inner_index}/{inner_total}'))
         if text:
-            detail_parts.append(str(text))
+            detail_parts.append(_ui_text_for_main_window(main_window, text))
         detail = ' / '.join(part for part in detail_parts if part)
         current_index = _int_attr_or_default(main_window, '_folder_batch_progress_index', 0)
         current_total = max(1, _int_attr_or_default(main_window, '_folder_batch_progress_total', 1))
@@ -652,6 +695,7 @@ def make_folder_batch_inner_progress_callback(main_window: object) -> InnerProgr
                 int(current_total),
                 current_item,
                 detail=detail,
+                language=_main_window_ui_language(main_window),
             )
         else:
             status_text = _compact_folder_batch_status_text(detail or text, max_chars=96)
@@ -735,6 +779,7 @@ def open_folder_batch_dialog_for_mainwindow_with_converter(
         after_execute_cb=actual_after_execute_cb,
         information_cb=lambda title, body: folder_batch_completion_dialog_best_effort(main_window, title, body),
         warning_cb=lambda title, body: warning_dialog_best_effort(main_window, title, body),
+        language=_main_window_ui_language(main_window),
     )
 
 
@@ -795,7 +840,7 @@ def open_folder_batch_dialog_for_mainwindow_real_or_warn(
         except AttributeError as settings_exc:
             warning_dialog_best_effort(
                 main_window,
-                'フォルダ一括変換',
+                _ui_text_for_main_window(main_window, 'フォルダ一括変換'),
                 str(hook_exc) + '\n\n' + str(settings_exc),
             )
             return None
@@ -822,11 +867,11 @@ def install_folder_batch_menu_action_best_effort(main_window: object) -> object 
         return None
     try:
         menu_bar = menu_bar_getter()
-        action = menu_bar.addAction('フォルダ一括変換')
+        action = menu_bar.addAction(_ui_text_for_main_window(main_window, 'フォルダ一括変換'))
         action.triggered.connect(opener)
         setattr(main_window, 'folder_batch_action', action)
-        append_log_best_effort(main_window, 'フォルダ一括変換メニューを追加しました。')
+        append_log_best_effort(main_window, _ui_text_for_main_window(main_window, 'フォルダ一括変換メニューを追加しました。'))
         return action
     except Exception as exc:
-        append_log_best_effort(main_window, f'フォルダ一括変換メニューの追加をスキップしました: {exc}')
+        append_log_best_effort(main_window, f'{_ui_text_for_main_window(main_window, "フォルダ一括変換メニューの追加をスキップしました")}: {exc}')
         return None

@@ -183,6 +183,12 @@ def build_center_settings_section_layout_plan(section_key: object) -> dict[str, 
             'contents_margins': (8, 12, 8, 7),
             'spacing': 5,
         },
+        'language': {
+            'title': '表示言語 / Language',
+            'contents_margins': (8, 12, 8, 8),
+            'spacing': 5,
+            'row_spacing': 8,
+        },
         'preset': {
             'title': 'プリセット',
             'contents_margins': (8, 14, 8, 0),
@@ -322,6 +328,18 @@ def build_behavior_section_plan() -> dict[str, Any]:
     }
 
 
+
+def build_language_section_plan() -> dict[str, Any]:
+    return {
+        'title': '表示言語 / Language',
+        'row_spacing': 8,
+        'label_text': '表示言語',
+        'combo_width': 170,
+        'combo_tooltip': 'UI表示言語を選びます。変更は次回起動時に反映されます。',
+        'restart_note_text': '変更は次回起動時に反映されます。',
+        'restart_note_object_name': 'hintLabel',
+    }
+
 def build_preset_section_plan(*, minimum_button_width: object = 104) -> dict[str, Any]:
     return {
         'row_spacing': 8,
@@ -364,6 +382,8 @@ def build_top_bar_plan(*, path_button_width: object = 128) -> dict[str, Any]:
         'file_button_tooltip': '1つのファイルを開いて変換します',
         'folder_button_text': '保存先を選ぶ',
         'folder_button_tooltip': '変換後のXTC / XTCH の保存先を選びます',
+        'output_reset_button_text': '保存先リセット',
+        'output_reset_button_tooltip': '保存先指定を解除し、ソースファイルと同じフォルダへ戻します',
         'folder_batch_button_text': 'フォルダ一括変換',
         'folder_batch_button_width': 152,
         'folder_batch_button_tooltip': 'フォルダ内の複数ファイルをまとめて変換します',
@@ -414,6 +434,7 @@ def build_view_toggle_bar_plan() -> dict[str, Any]:
         'device_view_checked_default': False,
         'help_text': '右ペイン: プレビュー生成後の見え方を確認します。\nXTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。',
         'preview_zoom_label_text': '表示倍率',
+        'preview_zoom_label_visible': False,
         'preview_zoom_actual_size_label_text': '実寸補正',
         'preview_zoom_normal_tooltip': '右ペイン表示の表示倍率です。',
         'preview_zoom_actual_size_tooltip': '実寸近似ON: 実機サイズに合わせる補正倍率です。',
@@ -424,7 +445,9 @@ def build_view_toggle_bar_plan() -> dict[str, Any]:
         'preview_zoom_button_size': (24, 24),
         'preview_zoom_button_object_name': 'stepBtn',
         'preview_zoom_down_text': '−',
+        'preview_zoom_down_tooltip': '表示倍率を下げます。',
         'preview_zoom_up_text': '+',
+        'preview_zoom_up_tooltip': '表示倍率を上げます。',
         'preview_zoom_spin_width': 78,
         'preview_zoom_spin_accelerated': True,
         'preview_zoom_spin_button_symbols': 'no_buttons',
@@ -469,6 +492,7 @@ def build_nav_bar_plan() -> dict[str, Any]:
         'nav_button_side_spacing': 10,
         'nav_section_separator_object_name': 'navSectionSep',
         'current_xtc_label_text': '表示中: なし',
+        'current_xtc_label_visible': False,
         'current_xtc_label_object_name': 'hintLabel',
         'current_xtc_label_min_width': 0,
         'current_xtc_label_max_width': 120,

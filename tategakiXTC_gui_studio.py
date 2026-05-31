@@ -12,6 +12,7 @@ import math
 import re
 from collections import OrderedDict
 import logging
+import locale
 import os
 import ntpath
 import subprocess
@@ -262,6 +263,9 @@ from tategakiXTC_gui_studio_constants import (
     THREE_PANE_PANEL_WIDTH_KEYS,
     THREE_PANE_SPLITTER_KEYS,
     DEFAULT_PREVIEW_PAGE_LIMIT,
+    DEFAULT_UI_LANGUAGE,
+    UI_LANGUAGE_OPTIONS,
+    UI_LANGUAGE_LABELS,
     SETTINGS_SCHEMA_VERSION,
     DEFAULT_RENDER_SETTINGS,
     RESULT_TAB_INDEX,
@@ -283,6 +287,8 @@ from tategakiXTC_gui_studio_constants import (
     KINSOKU_MODE_LABELS,
     TATECHUYOKO_DIGIT_MODE_OPTIONS,
     TATECHUYOKO_DIGIT_MODE_LABELS,
+    PROGRESS_BAR_POSITION_OPTIONS,
+    PROGRESS_BAR_POSITION_LABELS,
     GLYPH_POSITION_MODE_OPTIONS,
     GLYPH_POSITION_MODE_LABELS,
     CLOSING_BRACKET_POSITION_MODE_OPTIONS,
@@ -345,6 +351,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         _configure_app_logging()
         self.settings_store = QSettings(str(SETTINGS_FILE), QSettings.IniFormat)
+        self.current_ui_language = self._initial_ui_language()
         self._previous_shutdown_clean = self._settings_bool_value('last_shutdown_clean', True)
         if not self._previous_shutdown_clean and not self._has_restorable_user_settings():
             APP_LOGGER.warning(
@@ -353,7 +360,7 @@ class MainWindow(QMainWindow):
             self._previous_shutdown_clean = True
         self._mark_shutdown_clean(False)
         self.preset_definitions = self._load_preset_definitions()
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(self._app_window_title())
         initial_size = self._default_window_size()
         self.resize(initial_size.width(), initial_size.height())
 
@@ -457,12 +464,13 @@ class MainWindow(QMainWindow):
         *,
         duration_ms: int = 5000,
     ) -> None:
+        ui_text = getattr(self, '_ui_text', lambda value: str(value if value is not None else ''))
         _show_warning_dialog_with_status_fallback_impl(
             self,
             getattr(QMessageBox, 'warning', None),
             self._show_ui_status_message_with_reflection_or_direct_fallback,
-            title,
-            message,
+            ui_text(title),
+            ui_text(message),
             duration_ms=duration_ms,
         )
 
@@ -477,17 +485,18 @@ class MainWindow(QMainWindow):
         fallback_status_message: str = '',
         fallback_answer: object = None,
     ) -> object:
+        ui_text = getattr(self, '_ui_text', lambda value: str(value if value is not None else ''))
         return _ask_question_dialog_with_status_fallback_impl(
             self,
             getattr(QMessageBox, 'question', None),
             self._show_ui_status_message_with_reflection_or_direct_fallback,
             _coerce_ui_message_text,
-            title,
-            message,
+            ui_text(title),
+            ui_text(message),
             buttons,
             default_button,
             duration_ms=duration_ms,
-            fallback_status_message=fallback_status_message,
+            fallback_status_message=ui_text(fallback_status_message),
             fallback_answer=fallback_answer,
         )
 
@@ -499,15 +508,16 @@ class MainWindow(QMainWindow):
         duration_ms: int = 5000,
         fallback_status_message: str = '',
     ) -> None:
+        ui_text = getattr(self, '_ui_text', lambda value: str(value if value is not None else ''))
         _show_information_dialog_with_status_fallback_impl(
             self,
             getattr(QMessageBox, 'information', None),
             self._show_ui_status_message_with_reflection_or_direct_fallback,
             _coerce_ui_message_text,
-            title,
-            message,
+            ui_text(title),
+            ui_text(message),
             duration_ms=duration_ms,
-            fallback_status_message=fallback_status_message,
+            fallback_status_message=ui_text(fallback_status_message),
         )
 
     def _show_critical_dialog_with_status_fallback(
@@ -518,15 +528,16 @@ class MainWindow(QMainWindow):
         duration_ms: int = 5000,
         fallback_status_message: str = '',
     ) -> None:
+        ui_text = getattr(self, '_ui_text', lambda value: str(value if value is not None else ''))
         _show_critical_dialog_with_status_fallback_impl(
             self,
             getattr(QMessageBox, 'critical', None),
             self._show_ui_status_message_with_reflection_or_direct_fallback,
             _coerce_ui_message_text,
-            title,
-            message,
+            ui_text(title),
+            ui_text(message),
             duration_ms=duration_ms,
-            fallback_status_message=fallback_status_message,
+            fallback_status_message=ui_text(fallback_status_message),
         )
 
     def _get_open_file_name_with_status_fallback(
@@ -543,11 +554,11 @@ class MainWindow(QMainWindow):
             getattr(QFileDialog, 'getOpenFileName', None),
             self._show_warning_dialog_with_status_fallback,
             _coerce_ui_message_text,
-            title,
+            (getattr(self, '_ui_text', lambda value: str(value if value is not None else '')))(title),
             start_dir,
             filter_text,
-            warning_title=warning_title,
-            fallback_status_message=fallback_status_message,
+            warning_title=(getattr(self, '_ui_text', lambda value: str(value if value is not None else '')))(warning_title),
+            fallback_status_message=(getattr(self, '_ui_text', lambda value: str(value if value is not None else '')))(fallback_status_message),
         )
 
     def _get_existing_directory_with_status_fallback(
@@ -563,10 +574,10 @@ class MainWindow(QMainWindow):
             getattr(QFileDialog, 'getExistingDirectory', None),
             self._show_warning_dialog_with_status_fallback,
             _coerce_ui_message_text,
-            title,
+            (getattr(self, '_ui_text', lambda value: str(value if value is not None else '')))(title),
             start_dir,
-            warning_title=warning_title,
-            fallback_status_message=fallback_status_message,
+            warning_title=(getattr(self, '_ui_text', lambda value: str(value if value is not None else '')))(warning_title),
+            fallback_status_message=(getattr(self, '_ui_text', lambda value: str(value if value is not None else '')))(fallback_status_message),
         )
 
     def _install_folder_batch_menu_action(self: MainWindow) -> None:
@@ -671,6 +682,93 @@ class MainWindow(QMainWindow):
 
     def _settings_str_value(self: MainWindow, key: str, default: str = '') -> str:
         return _settings_str_value_from_store(self.settings_store, key, default)
+
+    def _os_default_ui_language(self: MainWindow) -> str:
+        locale_name = ''
+        try:
+            locale_name = str(locale.getlocale()[0] or '').strip().lower()
+        except Exception:
+            locale_name = ''
+        if not locale_name:
+            for env_name in ('LC_ALL', 'LC_MESSAGES', 'LANG'):
+                locale_name = str(os.environ.get(env_name, '') or '').strip().lower()
+                if locale_name:
+                    break
+        return 'ja' if locale_name.startswith('ja') else 'en'
+
+    def _normalize_ui_language(self: MainWindow, value: object, default: str | None = None) -> str:
+        fallback = default or DEFAULT_UI_LANGUAGE
+        return studio_logic.normalize_ui_language(value, fallback)
+
+    def _initial_ui_language(self: MainWindow) -> str:
+        fallback = self._os_default_ui_language()
+        if self._settings_contains_key('ui_language'):
+            return self._normalize_ui_language(self._settings_str_value('ui_language', fallback), fallback)
+        return self._normalize_ui_language(fallback, DEFAULT_UI_LANGUAGE)
+
+    def current_ui_language_value(self: MainWindow) -> str:
+        combo = getattr(self, 'language_combo', None)
+        data_getter = getattr(combo, 'currentData', None)
+        if callable(data_getter):
+            try:
+                return self._normalize_ui_language(data_getter(), getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE))
+            except Exception:
+                pass
+        return self._normalize_ui_language(getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE), DEFAULT_UI_LANGUAGE)
+
+    def _app_window_title(self: MainWindow) -> str:
+        return f'{self._ui_text(APP_BASE_NAME)} {APP_VERSION}'
+
+    def _ui_text(self: MainWindow, text: object) -> str:
+        return studio_logic.translate_ui_text(text, getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE))
+
+    def _localized_plan(self: MainWindow, plan: object) -> object:
+        return studio_logic.translate_ui_structure(plan, getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE))
+
+    def _set_language_combo_value(self: MainWindow, language: object) -> str:
+        normalized = self._normalize_ui_language(language, getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE))
+        self.current_ui_language = normalized
+        combo = getattr(self, 'language_combo', None)
+        if combo is not None:
+            self._set_combo_to_data(combo, normalized)
+        return normalized
+
+    def _update_language_restart_note_label(self: MainWindow, language: object) -> None:
+        label = getattr(self, 'language_restart_note_label', None)
+        setter = getattr(label, 'setText', None)
+        if not callable(setter):
+            return
+        try:
+            setter(studio_logic.build_language_restart_notice(language).get('note', ''))
+        except Exception:
+            pass
+
+    def on_language_combo_changed(self: MainWindow, _index: int = 0) -> None:
+        previous = self._normalize_ui_language(getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE), DEFAULT_UI_LANGUAGE)
+        selected = self.current_ui_language_value()
+        self.current_ui_language = selected
+        self._update_language_restart_note_label(selected)
+        if getattr(self, '_initialized', False):
+            self.save_ui_state()
+            if selected != previous:
+                notice = studio_logic.build_language_restart_notice(selected)
+                try:
+                    self._show_information_dialog_with_status_fallback(
+                        notice.get('title', ''),
+                        notice.get('message', ''),
+                        fallback_status_message=notice.get('status', ''),
+                    )
+                except Exception:
+                    try:
+                        self._show_ui_status_message_with_reflection_or_direct_fallback(
+                            notice.get('status', ''),
+                            5000,
+                        )
+                    except Exception:
+                        try:
+                            self.statusBar().showMessage(notice.get('status', ''), 5000)
+                        except Exception:
+                            pass
 
     def _mark_shutdown_clean(self: MainWindow, clean: bool) -> None:
         try:
@@ -975,6 +1073,10 @@ class MainWindow(QMainWindow):
         payload['preview_zoom_pct'] = self._normalize_preview_zoom_pct(
             self._settings_raw_value('preview_zoom_pct', 100)
         )
+        if not self._settings_contains_key('ui_language'):
+            payload['ui_language'] = self._os_default_ui_language()
+        else:
+            payload['ui_language'] = self._normalize_ui_language(payload.get('ui_language'), self._os_default_ui_language())
         return payload
 
     def _startup_preview_defaults_payload(self: MainWindow, payload: Mapping[str, object]) -> dict[str, object]:
@@ -1027,10 +1129,11 @@ class MainWindow(QMainWindow):
 
     def _restore_settings_widgets(self: MainWindow) -> tuple[object, ...]:
         return self._existing_widgets(
+            'language_combo',
             'profile_combo', 'actual_size_check', 'guides_check', 'calib_spin', 'preview_zoom_spin', 'nav_reverse_check',
             'font_combo', 'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'dither_check', 'night_check',
+            'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'progress_bar_check', 'progress_bar_position_combo', 'dither_check', 'night_check',
             'open_folder_check', 'output_conflict_combo', 'output_format_combo',
             'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
         )
@@ -1040,7 +1143,7 @@ class MainWindow(QMainWindow):
             'profile_combo', 'width_spin', 'height_spin', 'font_combo',
             'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
+            'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'progress_bar_check', 'progress_bar_position_combo', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
         )
 
     def _apply_profile_dimensions_to_ui(
@@ -1078,6 +1181,8 @@ class MainWindow(QMainWindow):
             ruby_hide=self._safe_widget_checked('ruby_hide_check'),
             page_number_enabled=self._safe_widget_checked('page_number_check'),
             page_number_font_size=self._safe_widget_value('page_number_font_size_spin', 12),
+            progress_bar_enabled=self._safe_widget_checked('progress_bar_check'),
+            progress_bar_position=self._safe_combo_data('progress_bar_position_combo', 'center'),
             line_spacing=self._safe_widget_value('line_spacing_spin', 44),
             margin_t=self._safe_widget_value('margin_t_spin', 12),
             margin_b=self._safe_widget_value('margin_b_spin', 14),
@@ -1112,6 +1217,9 @@ class MainWindow(QMainWindow):
             allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
             bottom_tab_count=self.bottom_tabs.count() if hasattr(self, 'bottom_tabs') else 0,
         )
+
+        if 'ui_language' in apply_plan:
+            self._set_language_combo_value(apply_plan.get('ui_language'))
 
         profile_value = apply_plan.get('profile', self._current_profile_key_or_default())
         width = apply_plan.get('width')
@@ -1185,7 +1293,13 @@ class MainWindow(QMainWindow):
             getattr(self, 'page_number_check', None) is not None and self.page_number_check.setChecked(bool(apply_plan['page_number_enabled']))
         if getattr(self, 'page_number_font_size_spin', None) is not None and getattr(self, 'page_number_check', None) is not None:
             self.page_number_font_size_spin.setEnabled(bool(self.page_number_check.isChecked()))
-        self._restore_page_number_bottom_margin_auto_state_from_payload(payload)
+        if 'progress_bar_enabled' in apply_plan:
+            getattr(self, 'progress_bar_check', None) is not None and self.progress_bar_check.setChecked(bool(apply_plan['progress_bar_enabled']))
+        if 'progress_bar_position' in apply_plan:
+            getattr(self, 'progress_bar_position_combo', None) is not None and self._set_combo_to_data(self.progress_bar_position_combo, str(apply_plan['progress_bar_position']))
+        if getattr(self, 'progress_bar_position_combo', None) is not None and getattr(self, 'progress_bar_check', None) is not None:
+            self.progress_bar_position_combo.setEnabled(bool(self.progress_bar_check.isChecked()))
+        self._restore_bottom_overlay_margin_auto_state_from_payload(payload)
         if 'dither' in apply_plan:
             getattr(self, 'dither_check', None) is not None and self.dither_check.setChecked(bool(apply_plan['dither']))
         self._apply_render_option_ui_state()
@@ -1485,7 +1599,7 @@ class MainWindow(QMainWindow):
             name = Path(target_text).name
         except (OSError, ValueError):
             name = ''
-        return name or target_text or '前回の作業ファイル'
+        return name or target_text or self._ui_text('前回の作業ファイル')
 
     def _confirm_startup_previous_target_preview(self: MainWindow, target_text: str) -> bool:
         question = getattr(QMessageBox, 'question', None)
@@ -1495,21 +1609,31 @@ class MainWindow(QMainWindow):
         if not callable(question) or yes_button is None or no_button is None:
             return False
         display_name = self._startup_previous_target_display_text(target_text)
-        message = (
-            '前回の作業ファイルが見つかりました。\n\n'
-            f'{display_name}\n'
-            f'{target_text}\n\n'
-            '前回の作業の続きを行いますか？'
-        )
+        if self._normalize_ui_language(getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE), DEFAULT_UI_LANGUAGE) == 'en':
+            dialog_title = 'Previous Work'
+            message = (
+                'A previous work file was found.\n\n'
+                f'{display_name}\n'
+                f'{target_text}\n\n'
+                'Do you want to continue from the previous work?'
+            )
+        else:
+            dialog_title = '前回の作業'
+            message = (
+                '前回の作業ファイルが見つかりました。\n\n'
+                f'{display_name}\n'
+                f'{target_text}\n\n'
+                '前回の作業の続きを行いますか？'
+            )
         try:
             buttons = yes_button | no_button
         except Exception:
             buttons = yes_button
         try:
-            response = question(self, '前回の作業', message, buttons, yes_button)
+            response = question(self, dialog_title, message, buttons, yes_button)
         except TypeError:
             try:
-                response = question(self, '前回の作業', message)
+                response = question(self, dialog_title, message)
             except Exception:
                 return False
         except Exception:
@@ -1657,6 +1781,7 @@ class MainWindow(QMainWindow):
                 page_count=len(preview_pages),
                 requested_limit=requested_limit,
                 truncated=getattr(self, 'preview_pages_truncated', False),
+                language=self.current_ui_language_value(),
             )
             try:
                 self._update_preview_status_label(str(status_state.get('status_message', '')))
@@ -2351,12 +2476,12 @@ class MainWindow(QMainWindow):
 
         root.addWidget(self.main_splitter, 1)
         self.main_view_mode = 'font'
-        self._show_ui_status_message_with_reflection_or_direct_fallback('準備完了', None)
+        self._show_ui_status_message_with_reflection_or_direct_fallback(self._ui_text('準備完了'), None)
 
     # ── トップバー ─────────────────────────────────────────
 
     def _build_top_bar(self):
-        top_bar_plan = gui_layouts.build_top_bar_plan(path_button_width=DEFAULT_TOP_PATH_BUTTON_WIDTH)
+        top_bar_plan = self._localized_plan(gui_layouts.build_top_bar_plan(path_button_width=DEFAULT_TOP_PATH_BUTTON_WIDTH))
         bar = QFrame()
         bar.setObjectName('topBar')
         bar.setFixedHeight(self._plan_int_value(top_bar_plan, 'bar_height', 56))
@@ -2514,7 +2639,7 @@ class MainWindow(QMainWindow):
     # ── 左プリセットパネル ────────────────────────────────
 
     def _build_preset_side_panel(self):
-        preset_plan = gui_layouts.build_preset_side_panel_plan()
+        preset_plan = self._localized_plan(gui_layouts.build_preset_side_panel_plan())
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(self._plan_frame_shape_value(preset_plan, 'scroll_frame_shape', 'no_frame'))
@@ -2531,6 +2656,7 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(container)
         lay.setContentsMargins(*self._plan_int_tuple_value(preset_plan, 'contents_margins', (10, 9, 10, 9), expected_length=4))
         lay.setSpacing(self._plan_int_value(preset_plan, 'spacing', 8))
+        lay.addWidget(self._section_language())
         lay.addWidget(self._section_preset())
         lay.addStretch(1)
         scroll.setWidget(container)
@@ -2670,9 +2796,10 @@ class MainWindow(QMainWindow):
         default_margins: tuple[int, int, int, int],
         default_spacing: int,
     ) -> tuple[QGroupBox, QVBoxLayout, dict[str, Any]]:
-        section_plan = gui_layouts.build_center_settings_section_layout_plan(section_key)
+        section_plan = self._localized_plan(gui_layouts.build_center_settings_section_layout_plan(section_key))
+        title = self._ui_text(str(section_plan.get('title', fallback_title)))
         return gui_widget_factory.make_section_box_layout(
-            str(section_plan.get('title', fallback_title)),
+            title,
             section_plan,
             default_margins=default_margins,
             default_spacing=default_spacing,
@@ -2681,8 +2808,8 @@ class MainWindow(QMainWindow):
     # ── 設定セクション：出力先 ──────────────────────────
 
     def _section_output(self):
-        font_plan = gui_layouts.build_font_section_plan()
-        display_plan = gui_layouts.build_display_section_plan()
+        font_plan = self._localized_plan(gui_layouts.build_font_section_plan())
+        display_plan = self._localized_plan(gui_layouts.build_display_section_plan())
         box, lay, _section_plan = self._build_section_box_layout(
             'output',
             '出力先',
@@ -2693,24 +2820,24 @@ class MainWindow(QMainWindow):
         output_row = self._make_hbox_layout_from_plan(
             gui_layouts.build_row_layout_plan(spacing=font_plan.get('output_profile_row_spacing', 6))
         )
-        output_row.addWidget(self._dim_label('機種'))
+        output_row.addWidget(self._dim_label(self._ui_text('機種')))
         self.profile_combo = QComboBox()
         for label, key in tuple(display_plan.get('profile_items', ())):
             self.profile_combo.addItem(str(label), key)
         self.profile_combo.setMinimumWidth(self._plan_int_value(display_plan, 'profile_combo_min_width', 130))
         self.profile_combo.currentIndexChanged.connect(self.on_profile_changed)
         output_row.addWidget(self.profile_combo)
-        output_row.addWidget(self._help_icon_button('機種: 選ぶと解像度が自動設定されます。\nCustom: 手動で幅・高さを指定します。'))
+        output_row.addWidget(self._help_icon_button(self._ui_text('機種: 選ぶと解像度が自動設定されます。\nCustom: 手動で幅・高さを指定します。')))
         output_row.addSpacing(12)
 
-        output_row.addWidget(self._dim_label('出力形式'))
+        output_row.addWidget(self._dim_label(self._ui_text('出力形式')))
         self.output_format_combo = QComboBox()
         for key, label in OUTPUT_FORMAT_LABELS.items():
-            self.output_format_combo.addItem(label, key)
+            self.output_format_combo.addItem(self._ui_text(label), key)
         self.output_format_combo.currentIndexChanged.connect(self._schedule_live_preview_refresh_from_signal)
         self.output_format_combo.currentIndexChanged.connect(lambda _i, self=self: self.save_ui_state())
         output_row.addWidget(self.output_format_combo)
-        output_row.addWidget(self._help_icon_button('XTC: 2 階調（白黒）で保存します。\nXTCH: 4 階調（白黒 4 段階）で保存します。\n使い分け: 通常の白黒表示なら XTC、階調を残したい画像寄りの用途では XTCH を選びます。'))
+        output_row.addWidget(self._help_icon_button(self._ui_text('XTC: 2 階調（白黒）で保存します。\nXTCH: 4 階調（白黒 4 段階）で保存します。\n使い分け: 通常の白黒表示なら XTC、階調を残したい画像寄りの用途では XTCH を選びます。')))
         output_row.addStretch(1)
         lay.addLayout(output_row)
 
@@ -2738,8 +2865,8 @@ class MainWindow(QMainWindow):
     # ── 設定セクション：組版 ────────────────────────────
 
     def _section_composition(self):
-        font_plan = gui_layouts.build_font_section_plan()
-        image_plan = gui_layouts.build_image_section_plan()
+        font_plan = self._localized_plan(gui_layouts.build_font_section_plan())
+        image_plan = self._localized_plan(gui_layouts.build_image_section_plan())
         box, lay, _section_plan = self._build_section_box_layout(
             'composition',
             '組版',
@@ -2768,9 +2895,9 @@ class MainWindow(QMainWindow):
         self.ruby_size_spin = self._spin(8, 32, 12, compact=True, buttons=True)
         self.line_spacing_spin = self._spin(24, 80, 44, compact=True, buttons=True)
         lay.addLayout(self._spin_row([
-            ('本文', self.font_size_spin),
-            ('ルビ', self.ruby_size_spin),
-            ('行間', self.line_spacing_spin),
+            (self._ui_text('本文'), self.font_size_spin),
+            (self._ui_text('ルビ'), self.ruby_size_spin),
+            (self._ui_text('行間'), self.line_spacing_spin),
         ]))
 
         self.margin_t_spin = self._spin(0, 80, 12, compact=True, buttons=True)
@@ -2783,31 +2910,47 @@ class MainWindow(QMainWindow):
         composition_row = self._make_hbox_layout_from_plan(
             gui_layouts.build_row_layout_plan(spacing=font_plan.get('format_kinsoku_row_spacing', 6))
         )
-        composition_row.addWidget(self._dim_label('縦中横'))
+        composition_row.addWidget(self._dim_label(self._ui_text('縦中横')))
         self.tatechuyoko_digit_mode_combo.setMaximumWidth(self._plan_int_value(font_plan, 'tatechuyoko_digit_mode_combo_width', 92))
         composition_row.addWidget(self.tatechuyoko_digit_mode_combo)
-        composition_row.addWidget(self._help_icon_button('半角数字を1文字分に横組みする上限です。\n4文字: 4桁までを縦中横にします。\n3文字: 3桁までを縦中横にします。\n2文字: 2桁までを縦中横にします。\n無し: 半角数字を縦中横にしません。'))
+        composition_row.addWidget(self._help_icon_button(self._ui_text('半角数字を1文字分に横組みする上限です。\n4文字: 4桁までを縦中横にします。\n3文字: 3桁までを縦中横にします。\n2文字: 2桁までを縦中横にします。\n無し: 半角数字を縦中横にしません。')))
         composition_row.addSpacing(12)
-        composition_row.addWidget(self._dim_label('禁則処理'))
+        composition_row.addWidget(self._dim_label(self._ui_text('禁則処理')))
         composition_row.addWidget(self.kinsoku_mode_combo)
-        composition_row.addWidget(self._help_icon_button('オフ: 禁則処理を行わず機械的に流し込みます。\n簡易: 行頭禁則・行末禁則・句読点のぶら下げのみ行います。\n標準: 連続約物や閉じ括弧＋句読点のまとまりも含めて、現在の禁則処理を有効にします。'))
+        composition_row.addWidget(self._help_icon_button(self._ui_text('オフ: 禁則処理を行わず機械的に流し込みます。\n簡易: 行頭禁則・行末禁則・句読点のぶら下げのみ行います。\n標準: 連続約物や閉じ括弧＋句読点のまとまりも含めて、現在の禁則処理を有効にします。')))
         composition_row.addStretch(1)
         lay.addLayout(composition_row)
 
         page_row = self._make_hbox_layout_from_plan()
-        self.page_number_check = QCheckBox('ページ番号')
+        self.page_number_check = QCheckBox(self._ui_text('ページ番号'))
         self.page_number_check.setChecked(False)
         page_row.addWidget(self.page_number_check)
         page_row.addSpacing(8)
-        page_row.addWidget(self._dim_label('サイズ'))
+        page_row.addWidget(self._dim_label(self._ui_text('サイズ')))
         self.page_number_font_size_spin = self._spin(1, 29, 12, compact=True, buttons=True)
         self.page_number_font_size_spin.setEnabled(False)
         page_row.addWidget(self.page_number_font_size_spin)
-        page_row.addWidget(self._help_icon_button('ページ番号: チェックすると各ページ右下に「現在ページ/総ページ」を表示します。\nサイズ: 1〜29 の数値を指定します。30以上はエラーです。\nページ番号ON時は、下余白を「サイズ+1」以上に自動確保します。'))
+        page_row.addWidget(self._help_icon_button(self._ui_text('ページ番号: チェックすると各ページ右下に「現在ページ/総ページ」を表示します。\nサイズ: 1〜29 の数値を指定します。30以上はエラーです。\nページ番号ON時は、下余白を「サイズ+1」以上に自動確保します。')))
+        page_row.addSpacing(16)
+        self.progress_bar_check = QCheckBox(self._ui_text('進捗バー'))
+        self.progress_bar_check.setChecked(False)
+        page_row.addWidget(self.progress_bar_check)
+        page_row.addSpacing(8)
+        page_row.addWidget(self._dim_label(self._ui_text('位置')))
+        self.progress_bar_position_combo = QComboBox()
+        for key, label in PROGRESS_BAR_POSITION_OPTIONS:
+            self.progress_bar_position_combo.addItem(self._ui_text(label), key)
+        self._set_combo_to_data(self.progress_bar_position_combo, 'center')
+        self.progress_bar_position_combo.setEnabled(False)
+        page_row.addWidget(self.progress_bar_position_combo)
+        page_row.addWidget(self._help_icon_button(self._ui_text('進捗バー: チェックすると下部に読書位置を示す黒い横棒を表示します。\n位置: 下中央または下左を選べます。\n進捗バーON時は、下余白を最低10px程度に自動確保します。')))
         page_row.addStretch(1)
         self.page_number_check.toggled.connect(self.page_number_font_size_spin.setEnabled)
         self.page_number_check.toggled.connect(self.on_page_number_setting_changed)
         self.page_number_font_size_spin.valueChanged.connect(self.on_page_number_setting_changed)
+        self.progress_bar_check.toggled.connect(self.progress_bar_position_combo.setEnabled)
+        self.progress_bar_check.toggled.connect(self.on_progress_bar_setting_changed)
+        self.progress_bar_position_combo.currentIndexChanged.connect(self.on_progress_bar_setting_changed)
         lay.addLayout(page_row)
 
         image_row = self._make_hbox_layout_from_plan()
@@ -2831,7 +2974,7 @@ class MainWindow(QMainWindow):
         self.threshold_spin.valueChanged.connect(self.on_threshold_changed)
         image_row.addWidget(self.threshold_spin)
         image_row.addSpacing(self._plan_int_value(image_plan, 'threshold_help_spacing', 6))
-        image_row.addWidget(self._help_icon_button(str(image_plan.get('help_text', 'ルビ消し: チェックした場合だけ、親文字は残したままルビを表示しない変換モードにします。\n白黒反転: 白と黒を入れ替えて出力します。プレビューにも反映されます。\nディザリング: 粒状感と引き換えに濃淡感を残します。\nしきい値: 白と黒の分かれ目を調整します。'))))
+        image_row.addWidget(self._help_icon_button(str(image_plan.get('help_text', self._ui_text('ルビ消し: チェックした場合だけ、親文字は残したままルビを表示しない変換モードにします。\n白黒反転: 白と黒を入れ替えて出力します。プレビューにも反映されます。\nディザリング: 粒状感と引き換えに濃淡感を残します。\nしきい値: 白と黒の分かれ目を調整します。')))))
         if self._plan_bool_value(image_plan, 'trailing_stretch', True):
             image_row.addStretch(1)
         lay.addLayout(image_row)
@@ -2859,11 +3002,11 @@ class MainWindow(QMainWindow):
         return self._section_composition()
 
     def _build_margin_rows(self):
-        font_plan = gui_layouts.build_font_section_plan()
-        margin_rows_plan = gui_layouts.build_margin_rows_plan(
+        font_plan = self._localized_plan(gui_layouts.build_font_section_plan())
+        margin_rows_plan = self._localized_plan(gui_layouts.build_margin_rows_plan(
             row_spacing=font_plan.get('margin_rows_spacing', 2),
             pair_spacing=font_plan.get('margin_pair_spacing', 16),
-        )
+        ))
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(*self._plan_int_tuple_value(margin_rows_plan, 'container_margins', (0, 0, 0, 0), expected_length=4))
@@ -2893,12 +3036,12 @@ class MainWindow(QMainWindow):
     # ── プレビュー更新コントロール（セクション外） ────────────────
 
     def _section_preview_controls(self):
-        display_plan = gui_layouts.build_display_section_plan()
+        display_plan = self._localized_plan(gui_layouts.build_display_section_plan())
 
         # sweep363/sweep365: 実寸近似/ガイドは右ペインの表示ツールバーへ集約する。
         # v1.3.8.6: 中央ペインでは「プレビュー」セクションを廃止するが、
         # 右ペインへ移す既存 widget と設定互換はここで生成する。
-        preview_toggle_plan = gui_layouts.build_preview_display_toggle_plan()
+        preview_toggle_plan = self._localized_plan(gui_layouts.build_preview_display_toggle_plan())
         self.actual_size_check = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
                 preview_toggle_plan.get('actual_size_text', '実寸近似'),
@@ -3037,7 +3180,7 @@ class MainWindow(QMainWindow):
     # ── 設定セクション：位置補正 ──────────────────────────
 
     def _section_position(self):
-        image_plan = gui_layouts.build_image_section_plan()
+        image_plan = self._localized_plan(gui_layouts.build_image_section_plan())
         box, lay, _section_plan = self._build_section_box_layout(
             'position',
             '位置補正',
@@ -3112,13 +3255,13 @@ class MainWindow(QMainWindow):
         self.wave_dash_drawing_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_drawing_combo_width', 108))
         self.wave_dash_position_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_position_combo_width', 92))
         wave_dash_group_spacing = self._plan_int_value(image_plan, 'wave_dash_group_spacing', 8)
-        image_wave_dash_row.addWidget(self._dim_label('波線描画'))
+        image_wave_dash_row.addWidget(self._dim_label(self._ui_text('波線描画')))
         image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)
-        image_wave_dash_row.addWidget(self._help_icon_button('対象: 波線系記号（～/〜/〰/~ など）の描画方式です。\n回転グリフ: フォントの質感を保って90度回転します。\n別描画: アプリ側で縦波線を描きます。\n自動フォールバック: 回転グリフに失敗した場合は別描画へ切り替えます。'))
+        image_wave_dash_row.addWidget(self._help_icon_button(self._ui_text('対象: 波線系記号（～/〜/〰/~ など）の描画方式です。\n回転グリフ: フォントの質感を保って90度回転します。\n別描画: アプリ側で縦波線を描きます。\n自動フォールバック: 回転グリフに失敗した場合は別描画へ切り替えます。')))
         image_wave_dash_row.addSpacing(wave_dash_group_spacing)
-        image_wave_dash_row.addWidget(self._dim_label('波線位置'))
+        image_wave_dash_row.addWidget(self._dim_label(self._ui_text('波線位置')))
         image_wave_dash_row.addWidget(self.wave_dash_position_combo)
-        image_wave_dash_row.addWidget(self._help_icon_button('対象: 波線系記号の縦位置だけを補正します。\n標準: これまでの位置です。\n下補正弱/強: 標準より下へ寄せます。'))
+        image_wave_dash_row.addWidget(self._help_icon_button(self._ui_text('対象: 波線系記号の縦位置だけを補正します。\n標準: これまでの位置です。\n下補正弱/強: 標準より下へ寄せます。')))
         image_wave_dash_row.addStretch(1)
         lay.addLayout(image_wave_dash_row)
 
@@ -3131,10 +3274,49 @@ class MainWindow(QMainWindow):
         """Legacy probe hook; section factories recreate widgets and are not idempotent."""
         return self._section_position()
 
+    # ── 設定セクション：表示言語 ────────────────────────
+
+    def _section_language(self):
+        language_plan = self._localized_plan(gui_layouts.build_language_section_plan())
+        box, lay, section_plan = self._build_section_box_layout(
+            'language',
+            '表示言語 / Language',
+            default_margins=(8, 12, 8, 8),
+            default_spacing=5,
+        )
+        row = self._make_hbox_layout_from_plan(
+            gui_layouts.build_row_layout_plan(
+                spacing=self._plan_int_value(language_plan, 'row_spacing', self._plan_int_value(section_plan, 'row_spacing', 8))
+            )
+        )
+        row.addWidget(self._dim_label(str(language_plan.get('label_text', '表示言語'))))
+        self.language_combo = QComboBox()
+        self.language_combo.setObjectName('languageCombo')
+        for key, label in UI_LANGUAGE_OPTIONS:
+            self.language_combo.addItem(self._ui_text(label), key)
+        combo_width = self._plan_int_value(language_plan, 'combo_width', 170)
+        if combo_width > 0:
+            self.language_combo.setMinimumWidth(combo_width)
+            self.language_combo.setMaximumWidth(combo_width)
+        self.language_combo.setToolTip(str(language_plan.get('combo_tooltip', 'UI表示言語を選びます。変更は次回起動時に反映されます。')))
+        self._set_language_combo_value(getattr(self, 'current_ui_language', self._initial_ui_language()))
+        self.language_combo.currentIndexChanged.connect(self.on_language_combo_changed)
+        row.addWidget(self.language_combo)
+        row.addStretch(1)
+        lay.addLayout(row)
+
+        note = QLabel(str(language_plan.get('restart_note_text', '変更は次回起動時に反映されます。')))
+        note.setObjectName(str(language_plan.get('restart_note_object_name', 'hintLabel')))
+        note.setWordWrap(True)
+        self.language_restart_note_label = note
+        self._update_language_restart_note_label(getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE))
+        lay.addWidget(note)
+        return box
+
     # ── 設定セクション：プリセット ────────────────────────
 
     def _section_preset(self):
-        preset_plan = gui_layouts.build_preset_section_plan(minimum_button_width=104)
+        preset_plan = self._localized_plan(gui_layouts.build_preset_section_plan(minimum_button_width=104))
         box, lay, section_plan = self._build_section_box_layout(
             'preset',
             'プリセット',
@@ -3233,7 +3415,7 @@ class MainWindow(QMainWindow):
     def _make_position_mode_combo(self, options, changed_slot) -> QComboBox:
         combo = QComboBox()
         for key, label in options:
-            combo.addItem(label, key)
+            combo.addItem(self._ui_text(label), key)
         combo.currentIndexChanged.connect(changed_slot)
         return combo
 
@@ -3241,26 +3423,26 @@ class MainWindow(QMainWindow):
         return self._make_position_mode_combo(GLYPH_POSITION_MODE_OPTIONS, self._on_glyph_position_mode_changed)
 
     def _add_glyph_position_control(self, row, label: str, combo: QComboBox, help_text: str) -> None:
-        row.addWidget(self._dim_label(label))
+        row.addWidget(self._dim_label(self._ui_text(label)))
         row.addWidget(combo)
-        row.addWidget(self._help_icon_button(help_text))
+        row.addWidget(self._help_icon_button(self._ui_text(help_text)))
 
     def _ensure_behavior_controls(self):
         if hasattr(self, 'open_folder_check'):
             return
-        behavior_plan = gui_layouts.build_behavior_section_plan()
+        behavior_plan = self._localized_plan(gui_layouts.build_behavior_section_plan())
         self.open_folder_check = QCheckBox(str(behavior_plan.get('open_folder_text', '完了後フォルダを開く')))
         self.open_folder_check.setChecked(self._plan_bool_value(behavior_plan, 'open_folder_checked_default', False))
         self.open_folder_check.toggled.connect(self.save_ui_state)
 
         self.kinsoku_mode_combo = QComboBox()
         for key, label in KINSOKU_MODE_OPTIONS:
-            self.kinsoku_mode_combo.addItem(label, key)
+            self.kinsoku_mode_combo.addItem(self._ui_text(label), key)
         self.kinsoku_mode_combo.currentIndexChanged.connect(self._on_kinsoku_mode_changed)
 
         self.tatechuyoko_digit_mode_combo = QComboBox()
         for key, label in TATECHUYOKO_DIGIT_MODE_OPTIONS:
-            self.tatechuyoko_digit_mode_combo.addItem(label, key)
+            self.tatechuyoko_digit_mode_combo.addItem(self._ui_text(label), key)
         self._set_combo_to_data(self.tatechuyoko_digit_mode_combo, '2')
         self.tatechuyoko_digit_mode_combo.currentIndexChanged.connect(self._on_tatechuyoko_digit_mode_changed)
 
@@ -3276,23 +3458,23 @@ class MainWindow(QMainWindow):
 
         self.wave_dash_drawing_combo = QComboBox()
         for key, label in WAVE_DASH_DRAWING_MODE_OPTIONS:
-            self.wave_dash_drawing_combo.addItem(label, key)
+            self.wave_dash_drawing_combo.addItem(self._ui_text(label), key)
         self.wave_dash_drawing_combo.currentIndexChanged.connect(self._on_wave_dash_mode_changed)
 
         self.wave_dash_position_combo = QComboBox()
         for key, label in WAVE_DASH_POSITION_MODE_OPTIONS:
-            self.wave_dash_position_combo.addItem(label, key)
+            self.wave_dash_position_combo.addItem(self._ui_text(label), key)
         self.wave_dash_position_combo.currentIndexChanged.connect(self._on_wave_dash_mode_changed)
 
         self.output_conflict_combo = QComboBox()
         for key, label in OUTPUT_CONFLICT_OPTIONS:
-            self.output_conflict_combo.addItem(label, key)
+            self.output_conflict_combo.addItem(self._ui_text(label), key)
         self.output_conflict_combo.currentIndexChanged.connect(lambda _i, self=self: self.save_ui_state())
 
     # ── 設定セクション：その他オプション ────────────────────────
 
     def _section_behavior(self):
-        behavior_plan = gui_layouts.build_behavior_section_plan()
+        behavior_plan = self._localized_plan(gui_layouts.build_behavior_section_plan())
         box, lay, _section_plan = self._build_section_box_layout(
             'behavior',
             'その他オプション',
@@ -3318,7 +3500,7 @@ class MainWindow(QMainWindow):
         return box
 
     def _section_file_viewer(self):
-        file_viewer_plan = gui_layouts.build_file_viewer_section_plan()
+        file_viewer_plan = self._localized_plan(gui_layouts.build_file_viewer_section_plan())
         box, lay, _section_plan = self._build_section_box_layout(
             'fileviewer',
             'ファイルビューワー',
@@ -3350,7 +3532,7 @@ class MainWindow(QMainWindow):
     # ── 右プレビューパネル ────────────────────────────────
 
     def _build_right_preview(self):
-        preview_panel_plan = gui_layouts.build_right_preview_panel_plan()
+        preview_panel_plan = self._localized_plan(gui_layouts.build_right_preview_panel_plan())
         panel = QWidget()
         lay = QVBoxLayout(panel)
         lay.setContentsMargins(*tuple(preview_panel_plan.get('panel_contents_margins', (0, 0, 0, 0))))
@@ -3453,7 +3635,7 @@ class MainWindow(QMainWindow):
         return panel
 
     def _build_view_toggle_bar(self):
-        toggle_plan = gui_layouts.build_view_toggle_bar_plan()
+        toggle_plan = self._localized_plan(gui_layouts.build_view_toggle_bar_plan())
         bar = QFrame()
         bar.setObjectName(str(toggle_plan.get('object_name', 'viewToggleBar')))
         bar.setFixedHeight(self._plan_int_value(toggle_plan, 'bar_height', 96))
@@ -3470,10 +3652,10 @@ class MainWindow(QMainWindow):
         # via the top button are shown there as file-viewer content.  Keep these
         # attributes absent rather than hidden buttons so legacy mode-switch code
         # naturally becomes a no-op through getattr(..., None).
-        self.view_help_btn = self._help_icon_button(self._preview_view_help_text())
-        top_lay.addWidget(self.view_help_btn)
         self._add_preview_display_toggles_to_layout(top_lay)
         top_lay.addStretch(1)
+        self.view_help_btn = self._help_icon_button(self._ui_text(self._preview_view_help_text()))
+        top_lay.addWidget(self.view_help_btn)
         outer_lay.addLayout(top_lay)
 
         sep = QFrame()
@@ -3494,7 +3676,7 @@ class MainWindow(QMainWindow):
         """右ペイン表示ツールバーへ表示系トグルを配置する。"""
         self._add_optional_widget_to_layout(lay, 'actual_size_check')
         self._add_optional_widget_to_layout(lay, 'actual_size_help_btn')
-        preview_toggle_plan = gui_layouts.build_preview_display_toggle_plan()
+        preview_toggle_plan = self._localized_plan(gui_layouts.build_preview_display_toggle_plan())
         lay.addSpacing(self._plan_int_value(preview_toggle_plan, 'toggle_spacing', 18))
         self._add_optional_widget_to_layout(lay, 'guides_check')
         self._add_optional_widget_to_layout(lay, 'guides_help_btn')
@@ -3511,13 +3693,13 @@ class MainWindow(QMainWindow):
         top = QHBoxLayout()
         top.setContentsMargins(0, 0, 0, 0)
         top.setSpacing(8)
-        self.conversion_completion_title_label = QLabel('変換完了')
+        self.conversion_completion_title_label = QLabel(self._ui_text('変換完了'))
         self.conversion_completion_title_label.setObjectName('conversionCompletionTitle')
         top.addWidget(self.conversion_completion_title_label, 0)
         top.addStretch(1)
-        self.close_conversion_completion_card_btn = QPushButton('閉じる')
+        self.close_conversion_completion_card_btn = QPushButton(self._ui_text('閉じる'))
         self.close_conversion_completion_card_btn.setObjectName('conversionCompletionCloseButton')
-        self.close_conversion_completion_card_btn.setToolTip('変換完了カードを閉じます。')
+        self.close_conversion_completion_card_btn.setToolTip(self._ui_text('変換完了カードを閉じます。'))
         self.close_conversion_completion_card_btn.clicked.connect(self._hide_conversion_completion_card)
         top.addWidget(self.close_conversion_completion_card_btn, 0)
         lay.addLayout(top)
@@ -3531,9 +3713,9 @@ class MainWindow(QMainWindow):
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(8)
-        self.card_open_results_folder_btn = QPushButton('保存先を開く')
+        self.card_open_results_folder_btn = QPushButton(self._ui_text('保存先を開く'))
         self.card_open_results_folder_btn.setObjectName('conversionCompletionActionButton')
-        self.card_open_results_folder_btn.setToolTip('変換結果が保存されたフォルダを開きます。')
+        self.card_open_results_folder_btn.setToolTip(self._ui_text('変換結果が保存されたフォルダを開きます。'))
         self.card_open_results_folder_btn.clicked.connect(self.open_results_folder_from_results)
         actions.addWidget(self.card_open_results_folder_btn, 0)
         actions.addStretch(1)
@@ -3628,27 +3810,29 @@ class MainWindow(QMainWindow):
         is_folder_batch = bool(result_payload.get('folder_batch'))
         folder_batch_stopped = bool(result_payload.get('folder_batch_stopped'))
         target_text = worker_logic._normalized_path_text(result_payload.get('open_folder_target')).strip()
+        english = self.current_ui_language_value() == 'en'
+        tr = (lambda message: studio_logic.translate_ui_text(message, 'en')) if english else (lambda message: str(message))
         if count <= 0:
             if is_folder_batch and folder_batch_stopped:
-                lines = ['フォルダ一括変換を中止しました。', '保存済みファイルはありません。']
+                lines = [tr('フォルダ一括変換を中止しました。'), tr('保存済みファイルはありません。')]
                 processed = int(result_payload.get('folder_batch_processed_count') or 0)
                 total = int(result_payload.get('folder_batch_total_count') or 0)
                 pending = int(result_payload.get('folder_batch_pending_count') or 0)
                 if total > 0:
-                    lines.append(f'処理済み: {processed} / {total} 件')
+                    lines.append(tr(f'処理済み: {processed} / {total} 件'))
                 if pending > 0:
-                    lines.append(f'未処理: {pending} 件')
+                    lines.append(tr(f'未処理: {pending} 件'))
                 if target_text:
-                    lines.append(f'出力先: {target_text}')
-                lines.append('停止要求により、以降の未処理ファイルは変換していません。')
-                lines.append('詳細は左下の「変換結果」タブにも記録しています。')
+                    lines.append(tr(f'出力先: {target_text}'))
+                lines.append(tr('停止要求により、以降の未処理ファイルは変換していません。'))
+                lines.append(tr('詳細は左下の「変換結果」タブにも記録しています。'))
                 return '\n'.join(lines)
             if bool(result_payload.get('stopped')):
-                lines = ['変換を中止しました。', '保存済みファイルはありません。']
+                lines = [tr('変換を中止しました。'), tr('保存済みファイルはありません。')]
                 if target_text:
-                    lines.append(f'出力先: {target_text}')
-                lines.append('停止要求により、変換結果は保存されませんでした。')
-                lines.append('詳細は左下の「ログ」タブにも記録しています。')
+                    lines.append(tr(f'出力先: {target_text}'))
+                lines.append(tr('停止要求により、変換結果は保存されませんでした。'))
+                lines.append(tr('詳細は左下の「ログ」タブにも記録しています。'))
                 return '\n'.join(lines)
             return ''
         parents = self._completion_card_parent_texts(paths)
@@ -3659,47 +3843,47 @@ class MainWindow(QMainWindow):
             destination = target_text
 
         if count == 1:
-            filename = studio_logic.build_result_display_name(paths[0]) or '1件'
+            filename = studio_logic.build_result_display_name(paths[0]) or ('1 file' if english else '1件')
             if is_folder_batch and folder_batch_stopped:
-                lines = ['フォルダ一括変換を中止しました。', f'保存済み: {filename}']
+                lines = [tr('フォルダ一括変換を中止しました。'), tr(f'保存済み: {filename}')]
             else:
-                lines = [f'保存しました: {filename}']
+                lines = [tr(f'保存しました: {filename}')]
             if destination:
-                lines.append(f'保存先: {destination}')
-            lines.append('保存先を開く場合は、下の［保存先を開く］を押してください。')
-            lines.append('詳細は左下の「変換結果」タブにも記録しています。')
+                lines.append(tr(f'保存先: {destination}'))
+            lines.append(tr('保存先を開く場合は、下の［保存先を開く］を押してください。'))
+            lines.append(tr('詳細は左下の「変換結果」タブにも記録しています。'))
             return '\n'.join(lines)
 
         if is_folder_batch and folder_batch_stopped:
-            lines = ['フォルダ一括変換を中止しました。', f'保存済み: {count}件']
+            lines = [tr('フォルダ一括変換を中止しました。'), tr(f'保存済み: {count}件')]
             processed = int(result_payload.get('folder_batch_processed_count') or 0)
             total = int(result_payload.get('folder_batch_total_count') or 0)
             pending = int(result_payload.get('folder_batch_pending_count') or 0)
             if total > 0:
-                lines.append(f'処理済み: {processed} / {total} 件')
+                lines.append(tr(f'処理済み: {processed} / {total} 件'))
             if pending > 0:
-                lines.append(f'未処理: {pending} 件')
+                lines.append(tr(f'未処理: {pending} 件'))
         else:
-            lines = [f'保存しました: {count}件']
+            lines = [tr(f'保存しました: {count}件')]
         if len(parents) <= 1:
             if destination:
-                lines.append(f'保存先: {destination}')
+                lines.append(tr(f'保存先: {destination}'))
         else:
-            lines.append(f'保存先: 複数フォルダ（{len(parents)}か所）')
+            lines.append(tr(f'保存先: 複数フォルダ（{len(parents)}か所）'))
             if target_text:
-                lines.append(f'基準フォルダ: {target_text}')
-            lines.append('サブフォルダ構造を保持して保存しました。')
+                lines.append(tr(f'基準フォルダ: {target_text}'))
+            lines.append(tr('サブフォルダ構造を保持して保存しました。'))
 
-        lines.append('出力ファイル:')
+        lines.append(tr('出力ファイル:'))
         item_base = target_text if len(parents) > 1 else destination
         item_texts = self._completion_card_result_item_texts(paths, base_path=item_base, max_items=5)
         for index, item_text in enumerate(item_texts, start=1):
             lines.append(f'{index}. {item_text}')
         remaining = count - len(item_texts)
         if remaining > 0:
-            lines.append(f'…ほか{remaining}件')
-        lines.append('保存先を開く場合は、下の［保存先を開く］を押してください。')
-        lines.append('詳細は左下の「変換結果」タブにも記録しています。')
+            lines.append(tr(f'…ほか{remaining}件'))
+        lines.append(tr('保存先を開く場合は、下の［保存先を開く］を押してください。'))
+        lines.append(tr('詳細は左下の「変換結果」タブにも記録しています。'))
         return '\n'.join(lines)
 
     def _meaningful_open_folder_target_text(self: MainWindow, value: object) -> str:
@@ -3857,7 +4041,7 @@ class MainWindow(QMainWindow):
         return True
 
     def _build_nav_bar(self):
-        nav_bar_plan = gui_layouts.build_nav_bar_plan()
+        nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())
         bar = QFrame()
         bar.setObjectName(str(nav_bar_plan.get('object_name', 'navBar')))
         bar.setFixedHeight(self._plan_int_value(nav_bar_plan, 'bar_height', 48))
@@ -3868,7 +4052,7 @@ class MainWindow(QMainWindow):
         return bar
 
     def _ensure_nav_reverse_control(self: MainWindow, nav_bar_plan: dict | None = None):
-        nav_bar_plan = nav_bar_plan or gui_layouts.build_nav_bar_plan()
+        nav_bar_plan = nav_bar_plan or self._localized_plan(gui_layouts.build_nav_bar_plan())
         existing = getattr(self, 'nav_reverse_check', None)
         if existing is not None:
             return existing
@@ -3886,17 +4070,20 @@ class MainWindow(QMainWindow):
         return self.nav_reverse_check
 
     def _add_nav_controls_to_layout(self, lay: QHBoxLayout, *, nav_bar_plan: dict | None = None, current_label_stretch: int = 0) -> None:
-        nav_bar_plan = nav_bar_plan or gui_layouts.build_nav_bar_plan()
+        nav_bar_plan = nav_bar_plan or self._localized_plan(gui_layouts.build_nav_bar_plan())
 
         self.current_xtc_label = QLabel(str(nav_bar_plan.get('current_xtc_label_text', '表示中: なし')))
         self.current_xtc_label.setObjectName(str(nav_bar_plan.get('current_xtc_label_object_name', 'hintLabel')))
         self.current_xtc_label.setMinimumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_min_width', 0))
         self.current_xtc_label.setMaximumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_max_width', 120))
-        lay.addWidget(self.current_xtc_label, current_label_stretch)
+        show_current_label = self._plan_bool_value(nav_bar_plan, 'current_xtc_label_visible', False)
+        self.current_xtc_label.setVisible(show_current_label)
+        if show_current_label:
+            lay.addWidget(self.current_xtc_label, current_label_stretch)
+            lay.addWidget(self._nav_section_separator(nav_bar_plan))
+            lay.addSpacing(self._plan_int_value(nav_bar_plan, 'nav_button_side_spacing', 10))
 
         self._ensure_nav_reverse_control(nav_bar_plan)
-        lay.addWidget(self._nav_section_separator(nav_bar_plan))
-        lay.addSpacing(self._plan_int_value(nav_bar_plan, 'nav_button_side_spacing', 10))
 
         self.prev_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
@@ -3949,15 +4136,19 @@ class MainWindow(QMainWindow):
         return sep
 
     def _add_preview_zoom_controls_to_layout(self, lay: QHBoxLayout, *, toggle_plan: dict | None = None) -> None:
-        toggle_plan = toggle_plan or gui_layouts.build_view_toggle_bar_plan()
+        toggle_plan = toggle_plan or self._localized_plan(gui_layouts.build_view_toggle_bar_plan())
         lay.addSpacing(self._plan_int_value(toggle_plan, 'preview_zoom_spacing', 8))
         self.preview_zoom_label = self._dim_label(str(toggle_plan.get('preview_zoom_label_text', '表示倍率')))
-        lay.addWidget(self.preview_zoom_label)
+        self.preview_zoom_label.setVisible(False)
+        if self._plan_bool_value(toggle_plan, 'preview_zoom_label_visible', False):
+            self.preview_zoom_label.setVisible(True)
+            lay.addWidget(self.preview_zoom_label)
         preview_zoom_button_object_name = str(toggle_plan.get('preview_zoom_button_object_name', 'stepBtn'))
         self.preview_zoom_down_btn = self._make_button_from_plan(
             gui_layouts.build_button_widget_plan(
                 toggle_plan.get('preview_zoom_down_text', '−'),
                 object_name=preview_zoom_button_object_name,
+                tooltip=toggle_plan.get('preview_zoom_down_tooltip', '表示倍率を下げます。'),
                 fixed_size=toggle_plan.get('preview_zoom_button_size', (24, 24)),
             ),
         )
@@ -3984,6 +4175,7 @@ class MainWindow(QMainWindow):
             gui_layouts.build_button_widget_plan(
                 toggle_plan.get('preview_zoom_up_text', '+'),
                 object_name=preview_zoom_button_object_name,
+                tooltip=toggle_plan.get('preview_zoom_up_tooltip', '表示倍率を上げます。'),
                 fixed_size=toggle_plan.get('preview_zoom_button_size', (24, 24)),
             ),
         )
@@ -3995,7 +4187,7 @@ class MainWindow(QMainWindow):
     # ── 下部パネル（ステータス + 結果/ログ）────────────────
 
     def _build_bottom_panel(self):
-        bottom_panel_plan = gui_layouts.build_bottom_panel_layout_plan()
+        bottom_panel_plan = self._localized_plan(gui_layouts.build_bottom_panel_layout_plan())
         panel = QFrame()
         panel.setObjectName(str(bottom_panel_plan.get('panel_object_name', 'bottomPanel')))
         outer_lay = QHBoxLayout(panel)
@@ -4015,7 +4207,7 @@ class MainWindow(QMainWindow):
         sl.setContentsMargins(*self._plan_int_tuple_value(bottom_panel_plan, 'status_strip_margins', (14, 0, 14, 0), expected_length=4))
         sl.setSpacing(self._plan_int_value(bottom_panel_plan, 'status_strip_spacing', 10))
 
-        status_strip_plan = gui_layouts.build_bottom_status_strip_plan()
+        status_strip_plan = self._localized_plan(gui_layouts.build_bottom_status_strip_plan())
 
         self.busy_badge = QLabel(str(status_strip_plan.get('badge_text', '待機中')))
         self.busy_badge.setObjectName(str(status_strip_plan.get('badge_object_name', 'badge')))
@@ -4066,7 +4258,7 @@ class MainWindow(QMainWindow):
         return panel
 
     def _build_results_tab(self):
-        results_tab_plan = gui_layouts.build_results_tab_plan()
+        results_tab_plan = self._localized_plan(gui_layouts.build_results_tab_plan())
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(*self._plan_int_tuple_value(results_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4))
@@ -4099,14 +4291,14 @@ class MainWindow(QMainWindow):
         results_action_lay = QHBoxLayout(self.results_action_row)
         results_action_lay.setContentsMargins(8, 5, 8, 5)
         results_action_lay.setSpacing(8)
-        self.open_results_folder_btn = QPushButton('保存先を開く')
+        self.open_results_folder_btn = QPushButton(self._ui_text('保存先を開く'))
         self.open_results_folder_btn.setObjectName('resultsActionButton')
-        self.open_results_folder_btn.setToolTip('選択中、または先頭の変換結果が保存されたフォルダを開きます。')
+        self.open_results_folder_btn.setToolTip(self._ui_text('選択中、または先頭の変換結果が保存されたフォルダを開きます。'))
         self.open_results_folder_btn.clicked.connect(self.open_results_folder_from_results)
         results_action_lay.addWidget(self.open_results_folder_btn, 0)
-        self.open_selected_result_btn = QPushButton('右ペインで確認')
+        self.open_selected_result_btn = QPushButton(self._ui_text('右ペインで確認'))
         self.open_selected_result_btn.setObjectName('resultsActionButton')
-        self.open_selected_result_btn.setToolTip('選択中、または先頭の変換結果を右ペインへ読み込みます。')
+        self.open_selected_result_btn.setToolTip(self._ui_text('選択中、または先頭の変換結果を右ペインへ読み込みます。'))
         self.open_selected_result_btn.clicked.connect(self.open_selected_result_from_results)
         results_action_lay.addWidget(self.open_selected_result_btn, 0)
         results_action_lay.addStretch(1)
@@ -4129,7 +4321,7 @@ class MainWindow(QMainWindow):
         return w
 
     def _build_log_tab(self):
-        log_tab_plan = gui_layouts.build_log_tab_plan(log_path=_resolve_session_log_path())
+        log_tab_plan = self._localized_plan(gui_layouts.build_log_tab_plan(log_path=_resolve_session_log_path()))
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(*self._plan_int_tuple_value(log_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4))
@@ -4337,18 +4529,18 @@ class MainWindow(QMainWindow):
 
     def _help_icon_button(self, text: str, *, tooltip: str | None = None, title: str | None = None) -> QPushButton:
         return gui_widget_factory.make_help_icon_button(
-            text,
-            tooltip=tooltip,
-            dialog_title=title,
+            self._ui_text(text),
+            tooltip=self._ui_text(tooltip) if tooltip is not None else None,
+            dialog_title=self._ui_text(title) if title is not None else None,
             clicked_with_button=lambda button, self=self: self._show_inline_help(button),
             no_focus_policy=Qt.NoFocus,
         )
 
     def _show_inline_help(self, button: QPushButton):
-        text = str(button.property('helpText') or '').strip()
+        text = self._ui_text(str(button.property('helpText') or '').strip())
         if not text:
             return
-        title = str(button.property('helpTitle') or '説明').strip() or '説明'
+        title = self._ui_text(str(button.property('helpTitle') or '説明').strip() or '説明')
         try:
             msg = QMessageBox(self)
             msg.setWindowTitle(title)
@@ -5440,7 +5632,10 @@ class MainWindow(QMainWindow):
         # Keep this small wrapper source-compatible with legacy regression tests
         # that assert the help text is owned by build_view_toggle_bar_plan(), while
         # still delegating to the split helper as the fallback implementation.
+        localizer = getattr(self, '_localized_plan', None)
         toggle_plan = gui_layouts.build_view_toggle_bar_plan()
+        if callable(localizer):
+            toggle_plan = localizer(toggle_plan)
         if 'help_text' in toggle_plan:
             return str(toggle_plan.get('help_text'))
         return _preview_view_help_text()
@@ -5489,7 +5684,7 @@ class MainWindow(QMainWindow):
             setter = getattr(button, 'setChecked', None)
             if callable(setter):
                 setter(checked)
-        view_tip = self._main_view_mode_help_text(normalized)
+        view_tip = self._ui_text(self._main_view_mode_help_text(normalized))
         view_help_btn = getattr(self, 'view_help_btn', None)
         tooltip_setter = getattr(view_help_btn, 'setToolTip', None)
         if callable(tooltip_setter):
@@ -5626,40 +5821,40 @@ class MainWindow(QMainWindow):
         theme_group = QActionGroup(menu)
         theme_group.setExclusive(True)
 
-        light_action = menu.addAction('白基調')
+        light_action = menu.addAction(self._ui_text('白基調'))
         light_action.setCheckable(True)
         light_action.setChecked(self.current_ui_theme != 'dark')
         light_action.triggered.connect(lambda checked: checked and self.set_ui_theme('light'))
         theme_group.addAction(light_action)
 
-        dark_action = menu.addAction('ダーク')
+        dark_action = menu.addAction(self._ui_text('ダーク'))
         dark_action.setCheckable(True)
         dark_action.setChecked(self.current_ui_theme == 'dark')
         dark_action.triggered.connect(lambda checked: checked and self.set_ui_theme('dark'))
         theme_group.addAction(dark_action)
 
         menu.addSeparator()
-        menu.addSection('その他オプション')
+        menu.addSection(self._ui_text('その他オプション'))
 
         # フォルダ自動オープンは v1.3.3.48 で廃止。
         # 保存先を開きたい場合は、変換完了カードまたは変換結果タブのボタンを使う。
 
-        panel_button_action = menu.addAction('三本線ボタンを表示')
+        panel_button_action = menu.addAction(self._ui_text('三本線ボタンを表示'))
         panel_button_action.setCheckable(True)
         panel_button_action.setChecked(bool(getattr(self, 'panel_button_visible', True)))
         panel_button_action.toggled.connect(lambda checked: self.set_panel_button_visible(bool(checked)))
 
         nav_reverse_control = self._ensure_nav_reverse_control()
-        nav_reverse_action = menu.addAction('ページ送りキー反転')
+        nav_reverse_action = menu.addAction(self._ui_text('ページ送りキー反転'))
         nav_reverse_action.setCheckable(True)
         nav_reverse_action.setChecked(bool(nav_reverse_control.isChecked()))
         nav_reverse_action.toggled.connect(lambda checked: nav_reverse_control.setChecked(bool(checked)))
 
-        conflict_menu = menu.addMenu('同名出力')
+        conflict_menu = menu.addMenu(self._ui_text('同名出力'))
         conflict_group = QActionGroup(conflict_menu)
         conflict_group.setExclusive(True)
         for key, label in OUTPUT_CONFLICT_OPTIONS:
-            action = conflict_menu.addAction(label)
+            action = conflict_menu.addAction(self._ui_text(label))
             action.setCheckable(True)
             action.setChecked(self.current_output_conflict_mode() == key)
             action.triggered.connect(lambda checked, key=key: checked and self.output_conflict_combo.setCurrentIndex(self.output_conflict_combo.findData(key)))
@@ -5775,7 +5970,7 @@ class MainWindow(QMainWindow):
             pass
         setter = getattr(preview_label, 'setText', None)
         if callable(setter):
-            setter(message)
+            setter(self._ui_text(message))
 
     def on_target_editing_finished(self: MainWindow) -> None:
         # 対象パスを手入力で確定した場合も、ファイル選択と同じくプレビューを更新する。
@@ -6003,16 +6198,16 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             try:
-                button.setText('ファイル表示中')
+                button.setText(self._ui_text('ファイル表示中'))
             except Exception:
                 pass
             try:
-                button.setToolTip('ファイルビューワーモードではXTC/XTCHを直接表示しているため、プレビュー更新は不要です。')
+                button.setToolTip(self._ui_text('ファイルビューワーモードではXTC/XTCHを直接表示しているため、プレビュー更新は不要です。'))
             except Exception:
                 pass
             self._set_preview_update_button_visual_state('viewer')
         try:
-            self._update_preview_status_label('ファイルビューワーモード: XTC/XTCHを直接表示中です')
+            self._update_preview_status_label(self._ui_text('ファイルビューワーモード: XTC/XTCHを直接表示中です'))
         except Exception:
             pass
         return True
@@ -6029,14 +6224,14 @@ class MainWindow(QMainWindow):
                 current_text = str(text_getter() or '')
             except Exception:
                 current_text = str(getattr(button, 'text_value', '') or '')
-        if current_visual != 'viewer' and current_text != 'ファイル表示中':
+        if current_visual != 'viewer' and current_text not in {'ファイル表示中', self._ui_text('ファイル表示中')}:
             return
         try:
             button.setEnabled(True)
         except Exception:
             pass
         try:
-            button.setText('プレビュー更新')
+            button.setText(self._ui_text('プレビュー更新'))
         except Exception:
             pass
         try:
@@ -6071,13 +6266,13 @@ class MainWindow(QMainWindow):
             getattr(self, '_preview_running', False)
             or getattr(self, '_target_preview_refresh_running', False)
         )
-        if running or (not button_enabled) or button_text == '生成中…':
+        if running or (not button_enabled) or button_text == '生成中…' or button_text == self._ui_text('生成中…'):
             try:
                 button.setEnabled(False if running else button_enabled)
             except Exception:
                 pass
             try:
-                button.setText('生成中…' if running else button_text)
+                button.setText(self._ui_text('生成中…') if running else self._ui_text(button_text))
             except Exception:
                 pass
             self._set_preview_update_button_visual_state('refreshing')
@@ -6090,7 +6285,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             try:
-                button.setText('● プレビュー更新')
+                button.setText('● ' + self._ui_text('プレビュー更新'))
             except Exception:
                 pass
             try:
@@ -6105,7 +6300,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            button.setText(button_text or 'プレビュー更新')
+            button.setText(self._ui_text(button_text or 'プレビュー更新'))
         except Exception:
             pass
         try:
@@ -6126,7 +6321,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            button.setText('● プレビュー更新')
+            button.setText('● ' + self._ui_text('プレビュー更新'))
         except Exception:
             pass
         self._set_preview_update_button_visual_state('pending')
@@ -6420,11 +6615,11 @@ class MainWindow(QMainWindow):
             self._update_preview_status_label(placeholder)
             return
         self._mark_preview_update_button_pending()
-        self._update_preview_status_label(studio_logic.build_preview_status_message('dirty'))
+        self._update_preview_status_label(studio_logic.build_preview_status_message('dirty', language=self.current_ui_language_value()))
 
     def _update_preview_status_label(self: MainWindow, text: object) -> None:
         if hasattr(self, 'preview_status_label'):
-            label_text = str(text or '').strip()
+            label_text = self._ui_text(str(text or '').strip())
             try:
                 self.preview_status_label.setText(label_text)
             except Exception:
@@ -6461,7 +6656,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _page_number_minimum_bottom_margin(
+    def _minimum_bottom_overlay_margin(
         self: MainWindow,
         enabled_override: bool | None = None,
     ) -> int:
@@ -6475,15 +6670,26 @@ class MainWindow(QMainWindow):
                 enabled = False
         else:
             enabled = bool(enabled_override)
-        if not enabled:
-            return 0
+        progress_enabled = False
         try:
-            size = int(self.page_number_font_size_spin.value())
+            progress_enabled = bool(
+                getattr(self, 'progress_bar_check', None) is not None
+                and self.progress_bar_check.isChecked()
+            )
         except Exception:
-            size = 12
-        return max(0, size + 1)
+            progress_enabled = False
+        required = 0
+        if enabled:
+            try:
+                size = int(self.page_number_font_size_spin.value())
+            except Exception:
+                size = 12
+            required = max(required, size + 1)
+        if progress_enabled:
+            required = max(required, 10)
+        return max(0, required)
 
-    def _effective_page_number_bottom_margin(
+    def _effective_bottom_overlay_margin(
         self: MainWindow,
         margin_b: int | None = None,
         *,
@@ -6495,10 +6701,10 @@ class MainWindow(QMainWindow):
                 margin_b = int(widget.value()) if widget is not None and hasattr(widget, 'value') else 0
             except Exception:
                 margin_b = 0
-        return max(0, int(margin_b), self._page_number_minimum_bottom_margin(enabled_override))
+        return max(0, int(margin_b), self._minimum_bottom_overlay_margin(enabled_override))
 
-    def _current_page_number_bottom_margin_auto_state(self: MainWindow) -> dict[str, int | bool] | None:
-        state = getattr(self, '_page_number_bottom_margin_auto_state', None)
+    def _current_bottom_overlay_margin_auto_state(self: MainWindow) -> dict[str, int | bool] | None:
+        state = getattr(self, '_bottom_overlay_margin_auto_state', None)
         if not isinstance(state, dict) or not bool(state.get('active')):
             return None
         try:
@@ -6515,58 +6721,86 @@ class MainWindow(QMainWindow):
             return None
         return {'active': True, 'base_value': base_value, 'auto_value': auto_value}
 
-    def _restore_page_number_bottom_margin_auto_state_from_payload(self: MainWindow, payload: Mapping[str, object]) -> None:
+    def _restore_bottom_overlay_margin_auto_state_from_payload(self: MainWindow, payload: Mapping[str, object]) -> None:
         if not isinstance(payload, Mapping):
             return
         try:
-            active = worker_logic._bool_config_value(payload, 'page_number_margin_auto_active', False)
+            primary_active = worker_logic._bool_config_value(payload, 'bottom_overlay_margin_auto_active', False)
+            legacy_active = worker_logic._bool_config_value(payload, 'page_number_margin_auto_active', False)
+            use_legacy = bool(not primary_active and legacy_active)
+            active = bool(primary_active or legacy_active)
         except Exception:
             active = False
+            use_legacy = False
         if not active:
             try:
-                delattr(self, '_page_number_bottom_margin_auto_state')
+                delattr(self, '_bottom_overlay_margin_auto_state')
             except Exception:
                 pass
             return
         widget = getattr(self, 'margin_b_spin', None)
         try:
             current = max(0, int(widget.value())) if widget is not None and hasattr(widget, 'value') else 0
-            base_value = max(0, worker_logic._int_config_value(payload, 'page_number_margin_auto_base_value', current))
-            auto_value = max(0, worker_logic._int_config_value(payload, 'page_number_margin_auto_value', current))
+            base_key = (
+                'page_number_margin_auto_base_value'
+                if use_legacy
+                else 'bottom_overlay_margin_auto_base_value'
+            )
+            auto_key = (
+                'page_number_margin_auto_value'
+                if use_legacy
+                else 'bottom_overlay_margin_auto_value'
+            )
+            base_value = max(0, worker_logic._int_config_value(payload, base_key, current))
+            auto_value = max(0, worker_logic._int_config_value(payload, auto_key, current))
         except Exception:
             return
         try:
-            enabled = bool(getattr(self, 'page_number_check', None) is not None and self.page_number_check.isChecked())
+            enabled = bool(
+                (getattr(self, 'page_number_check', None) is not None and self.page_number_check.isChecked())
+                or (getattr(self, 'progress_bar_check', None) is not None and self.progress_bar_check.isChecked())
+            )
         except Exception:
             enabled = False
         if enabled and current == auto_value and auto_value >= base_value:
-            setattr(self, '_page_number_bottom_margin_auto_state', {
+            setattr(self, '_bottom_overlay_margin_auto_state', {
                 'active': True,
                 'base_value': int(base_value),
                 'auto_value': int(auto_value),
             })
         else:
             try:
-                delattr(self, '_page_number_bottom_margin_auto_state')
+                delattr(self, '_bottom_overlay_margin_auto_state')
             except Exception:
                 pass
 
-    def _page_number_margin_auto_save_payload(self: MainWindow) -> dict[str, object]:
-        state = self._current_page_number_bottom_margin_auto_state()
+    def _bottom_overlay_margin_auto_save_payload(self: MainWindow) -> dict[str, object]:
+        state = self._current_bottom_overlay_margin_auto_state()
         if state is None:
+            value = self._safe_widget_value('margin_b_spin', 14)
             return {
+                'bottom_overlay_margin_auto_active': False,
+                'bottom_overlay_margin_auto_base_value': value,
+                'bottom_overlay_margin_auto_value': value,
+                # Transitional aliases for v1.4.1.1/v1.4.1.2 ini compatibility.
                 'page_number_margin_auto_active': False,
-                'page_number_margin_auto_base_value': self._safe_widget_value('margin_b_spin', 14),
-                'page_number_margin_auto_value': self._safe_widget_value('margin_b_spin', 14),
+                'page_number_margin_auto_base_value': value,
+                'page_number_margin_auto_value': value,
             }
+        base_value = int(state['base_value'])
+        auto_value = int(state['auto_value'])
         return {
+            'bottom_overlay_margin_auto_active': True,
+            'bottom_overlay_margin_auto_base_value': base_value,
+            'bottom_overlay_margin_auto_value': auto_value,
+            # Transitional aliases for v1.4.1.1/v1.4.1.2 ini compatibility.
             'page_number_margin_auto_active': True,
-            'page_number_margin_auto_base_value': int(state['base_value']),
-            'page_number_margin_auto_value': int(state['auto_value']),
+            'page_number_margin_auto_base_value': base_value,
+            'page_number_margin_auto_value': auto_value,
         }
 
-    def _clear_page_number_margin_auto_state_if_bottom_margin_was_edited(self: MainWindow) -> None:
-        state = getattr(self, '_page_number_bottom_margin_auto_state', None)
+    def _clear_bottom_overlay_margin_auto_state_if_bottom_margin_was_edited(self: MainWindow) -> None:
+        state = getattr(self, '_bottom_overlay_margin_auto_state', None)
         if not isinstance(state, dict) or not bool(state.get('active')):
             return
         widget = getattr(self, 'margin_b_spin', None)
@@ -6577,24 +6811,25 @@ class MainWindow(QMainWindow):
             return
         if current != auto_value:
             try:
-                delattr(self, '_page_number_bottom_margin_auto_state')
+                delattr(self, '_bottom_overlay_margin_auto_state')
             except Exception:
                 pass
 
-    def _sync_page_number_bottom_margin_to_ui(
+    def _sync_bottom_overlay_margin_to_ui(
         self: MainWindow,
         enabled_override: bool | None = None,
     ) -> bool:
-        """Sync the visible bottom margin with the page-number requirement.
+        """Sync the visible bottom margin with lower overlay requirements.
 
-        Page-number rendering reserves at least ``font_size + 1`` pixels at the
-        bottom.  The spinbox should show that effective value too.  When the
-        page-number size grows, raise the bottom margin as before.  When the
-        size shrinks, lower the spinbox again only if the current value still
-        appears to be the value that this helper previously set automatically.
-        A larger user-set bottom margin is preserved.
+        Page numbers reserve at least ``font_size + 1`` pixels and the
+        progress bar reserves a small bottom lane.  The spinbox should show
+        the effective bottom margin too.  When an overlay requirement grows,
+        raise the bottom margin automatically.  When it shrinks, lower the
+        spinbox again only if the current value still appears to be the value
+        that this helper previously set automatically.  A larger user-set
+        bottom margin is preserved.
         """
-        required = self._page_number_minimum_bottom_margin(enabled_override)
+        required = self._minimum_bottom_overlay_margin(enabled_override)
         widget = getattr(self, 'margin_b_spin', None)
         if widget is None or not hasattr(widget, 'value') or not hasattr(widget, 'setValue'):
             return False
@@ -6603,7 +6838,7 @@ class MainWindow(QMainWindow):
         except Exception:
             current = 0
 
-        state = getattr(self, '_page_number_bottom_margin_auto_state', None)
+        state = getattr(self, '_bottom_overlay_margin_auto_state', None)
         auto_active = isinstance(state, dict) and bool(state.get('active'))
         auto_value = None
         base_value = None
@@ -6623,12 +6858,12 @@ class MainWindow(QMainWindow):
                 auto_value = None
                 base_value = None
                 try:
-                    delattr(self, '_page_number_bottom_margin_auto_state')
+                    delattr(self, '_bottom_overlay_margin_auto_state')
                 except Exception:
                     pass
 
         if required <= 0:
-            # Page numbers are OFF.  If the bottom margin still matches the
+            # Lower overlays are OFF.  If the bottom margin still matches the
             # value that this helper set automatically, restore the user's
             # pre-auto margin.  If the user has edited the margin after auto
             # expansion, keep the user value and simply clear auto-management.
@@ -6636,7 +6871,7 @@ class MainWindow(QMainWindow):
                 target = int(base_value)
                 if target == current:
                     try:
-                        delattr(self, '_page_number_bottom_margin_auto_state')
+                        delattr(self, '_bottom_overlay_margin_auto_state')
                     except Exception:
                         pass
                     return False
@@ -6656,7 +6891,7 @@ class MainWindow(QMainWindow):
                         except Exception:
                             pass
                 try:
-                    delattr(self, '_page_number_bottom_margin_auto_state')
+                    delattr(self, '_bottom_overlay_margin_auto_state')
                 except Exception:
                     pass
                 return True
@@ -6668,7 +6903,7 @@ class MainWindow(QMainWindow):
                 base_value = current
             target = required
         elif auto_active and auto_value is not None and base_value is not None:
-            # The page-number requirement shrank.  Follow it downward, but do
+            # The overlay requirement shrank.  Follow it downward, but do
             # not go below the bottom margin the user had before auto-expansion.
             target = max(base_value, required)
         else:
@@ -6676,7 +6911,7 @@ class MainWindow(QMainWindow):
 
         if target == current:
             if auto_active:
-                setattr(self, '_page_number_bottom_margin_auto_state', {
+                setattr(self, '_bottom_overlay_margin_auto_state', {
                     'active': True,
                     'base_value': int(base_value if base_value is not None else current),
                     'auto_value': int(current),
@@ -6698,7 +6933,7 @@ class MainWindow(QMainWindow):
                     block_signals(bool(blocked_old))
                 except Exception:
                     pass
-        setattr(self, '_page_number_bottom_margin_auto_state', {
+        setattr(self, '_bottom_overlay_margin_auto_state', {
             'active': True,
             'base_value': int(base_value if base_value is not None else current),
             'auto_value': int(target),
@@ -6718,7 +6953,7 @@ class MainWindow(QMainWindow):
                 values.append(0)
         if len(values) != 4:
             return (0, 0, 0, 0)
-        values[1] = self._effective_page_number_bottom_margin(values[1])
+        values[1] = self._effective_bottom_overlay_margin(values[1])
         return tuple(values)
 
     def _guide_rect_for_preview_rect(self: MainWindow, rect: QRect, page_width: int, page_height: int) -> QRect:
@@ -6872,7 +7107,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            self._update_preview_status_label('ファイルビューワーモード: XTC/XTCHを直接表示中です')
+            self._update_preview_status_label(self._ui_text('ファイルビューワーモード: XTC/XTCHを直接表示中です'))
         except Exception:
             pass
         if refresh_navigation:
@@ -6938,7 +7173,7 @@ class MainWindow(QMainWindow):
         visible_label_text = self._ui_widget_text(getattr(self, 'current_xtc_label', None))
         visible_label_normalized = _coerce_ui_message_text(visible_label_text).strip()
         visible_display_name = ''
-        if visible_label_normalized.startswith('表示中:'):
+        if visible_label_normalized.startswith(('表示中:', 'Viewing:')):
             visible_display_name = self._display_context_name_from_label_text(visible_label_normalized)
         return studio_logic.render_failure_matches_display_context(normalized, visible_display_name)
 
@@ -6961,7 +7196,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 preview_pages_visible = False
             if preview_pages_visible:
-                visible_display_name = 'プレビュー'
+                visible_display_name = 'Preview' if self.current_ui_language_value() == 'en' else 'プレビュー'
         else:
             try:
                 preview_source_active = self._normalized_device_view_source_value(
@@ -6974,7 +7209,7 @@ class MainWindow(QMainWindow):
                 visible_label_text = self._ui_widget_text(getattr(self, 'current_xtc_label', None))
                 visible_display_name = self._display_context_name_from_label_text(visible_label_text)
                 if not visible_display_name or visible_display_name == 'なし':
-                    visible_display_name = 'プレビュー'
+                    visible_display_name = 'Preview' if self.current_ui_language_value() == 'en' else 'プレビュー'
         if visible_display_name:
             return preserved_display_name == visible_display_name
         if view_mode == 'device':
@@ -7074,7 +7309,7 @@ class MainWindow(QMainWindow):
         helper = getattr(self, '_show_ui_status_message_unless_render_failure_visible', None)
         if not callable(helper):
             return False
-        normalized = _coerce_ui_message_text(message).strip()
+        normalized = self._ui_text(_coerce_ui_message_text(message).strip())
         if not normalized:
             return False
         helper_status_bar = None
@@ -7130,7 +7365,7 @@ class MainWindow(QMainWindow):
         *,
         reuse_existing_message: bool = True,
     ) -> bool:
-        normalized = _coerce_ui_message_text(message).strip()
+        normalized = self._ui_text(_coerce_ui_message_text(message).strip())
         if not normalized:
             return False
         reflected = False
@@ -7184,7 +7419,7 @@ class MainWindow(QMainWindow):
         *,
         reuse_existing_message: bool = True,
     ) -> bool:
-        normalized = _coerce_ui_message_text(message).strip()
+        normalized = self._ui_text(_coerce_ui_message_text(message).strip())
         status_bar = None
         status_bar_message_before = self._status_bar_message_text()
         if reuse_existing_message and status_bar_message_before == normalized:
@@ -7242,6 +7477,7 @@ class MainWindow(QMainWindow):
             page_count=len(pages),
             requested_limit=getattr(self, 'last_preview_requested_limit', 0),
             truncated=getattr(self, 'preview_pages_truncated', False),
+            language=self.current_ui_language_value(),
         )
         return str(status_state.get('status_message', ''))
 
@@ -7262,6 +7498,7 @@ class MainWindow(QMainWindow):
             running=getattr(self, '_preview_running', False),
             dirty=getattr(self, 'preview_dirty', False),
             widget_limit=widget_limit,
+            language=self.current_ui_language_value(),
         )
 
     def _refresh_successful_preview_render_status(self: MainWindow) -> None:
@@ -7432,7 +7669,7 @@ class MainWindow(QMainWindow):
                 progress_bar.setRange(0, 0)
                 progress_bar.setValue(0)
                 if hasattr(progress_bar, 'setFormat'):
-                    progress_bar.setFormat('更新中…')
+                    progress_bar.setFormat(self._ui_text('更新中…'))
             else:
                 safe_total = max(1, total)
                 progress_bar.setRange(0, safe_total)
@@ -7978,7 +8215,7 @@ class MainWindow(QMainWindow):
 
     def _sync_preview_zoom_control_state(self: MainWindow) -> None:
         actual_size = self._actual_size_uses_preview_zoom_calibration()
-        toggle_plan = gui_layouts.build_view_toggle_bar_plan()
+        toggle_plan = self._localized_plan(gui_layouts.build_view_toggle_bar_plan())
         zoom_control_state = studio_logic.build_preview_zoom_control_state(
             toggle_plan,
             actual_size=actual_size,
@@ -8324,7 +8561,7 @@ class MainWindow(QMainWindow):
     def _update_nav_button_texts(self: MainWindow) -> None:
         if not hasattr(self, 'prev_btn') or not hasattr(self, 'next_btn'):
             return
-        nav_bar_plan = gui_layouts.build_nav_bar_plan()
+        nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())
         prev_text = str(nav_bar_plan.get('prev_button_text', '前'))
         next_text = str(nav_bar_plan.get('next_button_text', '次'))
         if bool(getattr(self, 'nav_buttons_reversed', False)):
@@ -8449,7 +8686,7 @@ class MainWindow(QMainWindow):
             truncated=False,
         )
         nav_state_mapping = nav_state if isinstance(nav_state, Mapping) else {}
-        nav_bar_plan = gui_layouts.build_nav_bar_plan()
+        nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())
         total_label_format = nav_bar_plan.get('page_total_label_format', '/ {total}')
         fallback_total_label = total_label_format.format(total=total)
         apply_state = studio_logic.build_navigation_apply_state(
@@ -8737,7 +8974,13 @@ class MainWindow(QMainWindow):
 
     def on_page_number_setting_changed(self: MainWindow, *args: object) -> None:
         enabled_override = args[0] if args and isinstance(args[0], bool) else None
-        self._sync_page_number_bottom_margin_to_ui(enabled_override=enabled_override)
+        self._sync_bottom_overlay_margin_to_ui(enabled_override=enabled_override)
+        self._apply_viewer_display_runtime_state()
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
+
+    def on_progress_bar_setting_changed(self: MainWindow, *args: object) -> None:
+        self._sync_bottom_overlay_margin_to_ui()
         self._apply_viewer_display_runtime_state()
         self._schedule_live_preview_refresh(reset_page=False)
         self._finalize_setting_change(refresh_preview=False)
@@ -8747,7 +8990,7 @@ class MainWindow(QMainWindow):
         return self._schedule_live_preview_refresh(reset_page=False)
 
     def on_margin_changed(self: MainWindow, value: int) -> None:
-        self._clear_page_number_margin_auto_state_if_bottom_margin_was_edited()
+        self._clear_bottom_overlay_margin_auto_state_if_bottom_margin_was_edited()
         self._apply_viewer_display_runtime_state()
         refreshed = self._request_preview_refresh_after_margin_change()
         if not refreshed:
@@ -9033,6 +9276,8 @@ class MainWindow(QMainWindow):
             ruby_hide=ruby_hide,
             page_number_enabled=page_number_enabled,
             page_number_font_size=_widget_value('page_number_font_size_spin'),
+            progress_bar_enabled=self._safe_widget_checked('progress_bar_check') if self.__dict__.get('progress_bar_check') is not None else None,
+            progress_bar_position=self._safe_combo_data('progress_bar_position_combo', 'center') if self.__dict__.get('progress_bar_position_combo') is not None else None,
             line_spacing=_widget_value('line_spacing_spin'),
             margin_t=_widget_value('margin_t_spin'),
             margin_b=_widget_value('margin_b_spin'),
@@ -9208,7 +9453,10 @@ class MainWindow(QMainWindow):
 
     def _default_preset_display_name(self: MainWindow, key: str) -> str:
         default_payload = DEFAULT_PRESET_DEFINITIONS.get(key) or {}
-        return str(default_payload.get('button_text') or default_payload.get('name') or key or 'プリセット').strip()
+        return studio_logic.localized_preset_display_name_text(
+            default_payload.get('button_text') or default_payload.get('name') or key or 'プリセット',
+            self.current_ui_language_value(),
+        ).strip()
 
     def _normalize_preset_display_name(self: MainWindow, value: object, *, fallback: str) -> str:
         text = str(value or '').strip()
@@ -9266,7 +9514,7 @@ class MainWindow(QMainWindow):
 
 
     def _preset_display_name(self: MainWindow, p: PresetDefinition) -> str:
-        return studio_logic.build_preset_display_name(p)
+        return studio_logic.build_preset_display_name(p, self.current_ui_language_value())
 
     def _preset_summary_plain_text(
         self: MainWindow,
@@ -9284,6 +9532,7 @@ class MainWindow(QMainWindow):
             output_format_labels=OUTPUT_FORMAT_LABELS,
             summary_tag=summary_tag,
             include_name_line=include_name_line,
+            language=self.current_ui_language_value(),
         )
 
     def _preset_summary_text(
@@ -9302,6 +9551,7 @@ class MainWindow(QMainWindow):
             output_format_labels=OUTPUT_FORMAT_LABELS,
             summary_tag=summary_tag,
             include_name_line=include_name_line,
+            language=self.current_ui_language_value(),
         )
 
     def _preset_side_summary_text(self: MainWindow, summary: object) -> str:
@@ -9568,7 +9818,7 @@ class MainWindow(QMainWindow):
         with _bulk_block_signals(self.preset_combo):
             self.preset_combo.clear()
             for key, p in self.preset_definitions.items():
-                self.preset_combo.addItem(p['button_text'], key)
+                self.preset_combo.addItem(self._preset_display_name(p), key)
             if current_key:
                 idx = self.preset_combo.findData(current_key)
                 if idx >= 0:
@@ -9855,26 +10105,26 @@ class MainWindow(QMainWindow):
         default_name: str,
     ) -> tuple[str, str | None]:
         dialog = QDialog(self)
-        dialog.setWindowTitle('プリセット名称変更')
+        dialog.setWindowTitle(self._ui_text('プリセット名称変更'))
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(8)
 
-        label = QLabel('現在選択中のプリセット表示名を変更します。')
+        label = QLabel(self._ui_text('現在選択中のプリセット表示名を変更します。'))
         layout.addWidget(label)
 
         edit = QLineEdit(current_name)
         edit.selectAll()
         layout.addWidget(edit)
 
-        hint = QLabel(f'既定名: {default_name}')
+        hint = QLabel(f'{self._ui_text("既定名:")} {default_name}')
         hint.setObjectName('dimLabel')
         layout.addWidget(hint)
 
         row = QHBoxLayout()
-        reset_btn = QPushButton('既定名に戻す')
+        reset_btn = QPushButton(self._ui_text('既定名に戻す'))
         ok_btn = QPushButton('OK')
-        cancel_btn = QPushButton('キャンセル')
+        cancel_btn = QPushButton(self._ui_text('キャンセル'))
         row.addWidget(reset_btn)
         row.addStretch(1)
         row.addWidget(ok_btn)
@@ -10095,11 +10345,11 @@ class MainWindow(QMainWindow):
 
     def _selected_output_dir_label_text(self: MainWindow) -> str:
         selected = worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', ''))
-        return selected or 'ソースファイルと同じフォルダ'
+        return selected or self._ui_text('ソースファイルと同じフォルダ')
 
     def _announce_selected_output_dir(self: MainWindow, timeout: int = 5000) -> None:
         self._show_ui_status_message_unless_render_failure_visible(
-            f'保存先: {self._selected_output_dir_label_text()}',
+            f'{self._ui_text("保存先:")} {self._selected_output_dir_label_text()}',
             timeout,
         )
 
@@ -10371,10 +10621,12 @@ class MainWindow(QMainWindow):
             profile.name,
             worker_logic._int_config_value({'font_size': self._safe_widget_value('font_size_spin', 26)}, 'font_size', 26),
             worker_logic._int_config_value({'line_spacing': self._safe_widget_value('line_spacing_spin', 44)}, 'line_spacing', 44),
+            self.current_ui_language_value(),
         )
         selected_output_dir = worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', ''))
         if selected_output_dir:
-            message = f'{message} / 保存先: {selected_output_dir}'
+            folder_label = 'Save folder' if self.current_ui_language_value() == 'en' else '保存先'
+            message = f'{message} / {folder_label}: {selected_output_dir}'
         self._show_ui_status_message_unless_render_failure_visible(message, None)
 
     def _safe_line_edit_text(self: MainWindow, name: str, default: str = '') -> str:
@@ -10399,6 +10651,8 @@ class MainWindow(QMainWindow):
             'ruby_hide': self._safe_widget_checked('ruby_hide_check', bool(defaults['ruby_hide'])),
             'page_number_enabled': self._safe_widget_checked('page_number_check', bool(defaults.get('page_number_enabled', False))),
             'page_number_font_size': self._safe_widget_value('page_number_font_size_spin', int(defaults.get('page_number_font_size', 12))),
+            'progress_bar_enabled': self._safe_widget_checked('progress_bar_check', bool(defaults.get('progress_bar_enabled', False))),
+            'progress_bar_position': self._safe_combo_data('progress_bar_position_combo', str(defaults.get('progress_bar_position', 'center'))),
             'line_spacing': self._safe_widget_value('line_spacing_spin', defaults['line_spacing']),
             'margin_t': self._safe_widget_value('margin_t_spin', defaults['margin_t']),
             'margin_b': self._safe_widget_value('margin_b_spin', defaults['margin_b']),
@@ -10506,6 +10760,7 @@ class MainWindow(QMainWindow):
             calibration_pct=int(self.calib_spin.value()),
             nav_buttons_reversed=self.nav_reverse_check.isChecked(),
             preview_page_limit=self.preview_page_limit_spin.value() if hasattr(self, 'preview_page_limit_spin') else DEFAULT_PREVIEW_PAGE_LIMIT,
+            ui_language=self.current_ui_language_value(),
         )
         payload = settings_controller.build_settings_save_payload(
             current_settings=self.current_settings_dict(),
@@ -10518,7 +10773,7 @@ class MainWindow(QMainWindow):
             allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
             default_preview_page_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
         )
-        payload.update(self._page_number_margin_auto_save_payload())
+        payload.update(self._bottom_overlay_margin_auto_save_payload())
         payload['preview_zoom_pct'] = self._normalize_preview_zoom_pct()
         return payload
 
@@ -10786,11 +11041,11 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'current_xtc_label'):
             return
         text = _coerce_ui_message_text(display_name, 'なし').strip() or 'なし'
-        self.current_xtc_label.setText(studio_logic.build_displaying_document_label(text, fallback='なし'))
+        self.current_xtc_label.setText(studio_logic.build_displaying_document_label(text, fallback='なし', language=self.current_ui_language_value()))
 
     def _set_current_xtc_display_name_with_fallback(self: MainWindow, display_name: object = None) -> bool:
         text = _coerce_ui_message_text(display_name, 'なし').strip() or 'なし'
-        expected_label = studio_logic.build_displaying_document_label(text, fallback='なし')
+        expected_label = studio_logic.build_displaying_document_label(text, fallback='なし', language=self.current_ui_language_value())
         try:
             self._set_current_xtc_display_name(display_name)
         except Exception:
@@ -11051,7 +11306,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             try:
-                self.run_btn.setText('変換中…' if running else '▶  変換実行')
+                self.run_btn.setText(self._ui_text('変換中…') if running else self._ui_text('▶  変換実行'))
             except Exception:
                 pass
         for name in ('folder_batch_btn', 'folder_batch_action'):
@@ -11078,7 +11333,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            self._clear_results_view(studio_logic.build_running_results_summary())
+            self._clear_results_view(studio_logic.build_running_results_summary(self.current_ui_language_value()))
         except Exception:
             pass
         try:
@@ -11089,7 +11344,7 @@ class MainWindow(QMainWindow):
         target_count = len(self._supported_targets_for_path(str(settings.get('target', ''))))
         try:
             self._append_log_without_status_best_effort(
-                studio_logic.build_start_log_message(self.current_output_format(), target_count),
+                studio_logic.build_start_log_message(self.current_output_format(), target_count, self.current_ui_language_value()),
             )
         except Exception:
             pass
@@ -11101,16 +11356,16 @@ class MainWindow(QMainWindow):
                 pass
         if hasattr(self, 'progress_label'):
             try:
-                self.progress_label.setText('変換中…')
+                self.progress_label.setText(self._ui_text('変換中…'))
             except Exception:
                 pass
         if hasattr(self, 'busy_badge'):
             try:
-                self.busy_badge.setText('変換中')
+                self.busy_badge.setText(self._ui_text('変換中'))
             except Exception:
                 pass
         try:
-            self._show_ui_status_message_with_reflection_or_direct_fallback('変換中…', None)
+            self._show_ui_status_message_with_reflection_or_direct_fallback(self._ui_text('変換中…'), None)
         except Exception:
             pass
         if hasattr(self, 'bottom_tabs'):
@@ -11127,9 +11382,9 @@ class MainWindow(QMainWindow):
         status_message: object = None,
         status_timeout: int | None = None,
     ) -> bool:
-        normalized_message = _coerce_ui_message_text(message)
-        normalized_badge_text = _coerce_ui_message_text(badge_text)
-        status_text = normalized_message if status_message is None else _coerce_ui_message_text(status_message)
+        normalized_message = self._ui_text(_coerce_ui_message_text(message))
+        normalized_badge_text = self._ui_text(_coerce_ui_message_text(badge_text))
+        status_text = normalized_message if status_message is None else self._ui_text(_coerce_ui_message_text(status_message))
         terminal_visible = False
         if hasattr(self, 'progress_bar'):
             try:
@@ -11235,7 +11490,7 @@ class MainWindow(QMainWindow):
         context = self._resolved_result_load_context()
         resolved_path = context.get('resolved_path') if self._payload_bool_value(context, 'has_path', False) else None
         if not worker_logic._normalized_path_text(resolved_path).strip():
-            fallback_state = results_controller.build_results_view_state(converted_files, summary_lines)
+            fallback_state = results_controller.build_results_view_state(converted_files, summary_lines, language=self.current_ui_language_value())
             entries = list(fallback_state.get('entries', []))
             initial_index = studio_logic.payload_optional_int_value(fallback_state, 'initial_index')
             if initial_index is not None and 0 <= initial_index < len(entries):
@@ -11264,7 +11519,7 @@ class MainWindow(QMainWindow):
         prefix: object,
         message: object,
     ) -> str:
-        return studio_logic.build_conversion_failure_summary_text(prefix, message)
+        return studio_logic.build_conversion_failure_summary_text(prefix, message, self.current_ui_language_value())
 
     def _apply_conversion_failure_ui(
         self: MainWindow,
@@ -11449,7 +11704,7 @@ class MainWindow(QMainWindow):
         if not self._is_active_conversion_run_token(run_token):
             return
         try:
-            self._append_log_without_status_best_effort(_coerce_ui_message_text(text, '').rstrip())
+            self._append_log_without_status_best_effort(self._ui_text(_coerce_ui_message_text(text, '').rstrip()))
         except Exception:
             APP_LOGGER.exception('workerログのUI反映に失敗しました')
 
@@ -11473,7 +11728,7 @@ class MainWindow(QMainWindow):
         if not self._is_active_conversion_run_token(run_token):
             return
         try:
-            self.on_conversion_error(_coerce_ui_message_text(message, '不明なエラー'))
+            self.on_conversion_error(self._ui_text(_coerce_ui_message_text(message, '不明なエラー')))
         except Exception:
             APP_LOGGER.exception('workerエラーシグナルのUI反映に失敗しました')
 
@@ -11568,7 +11823,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'progress_label'):
                 self.progress_label.setText(log_message)
             if hasattr(self, 'busy_badge'):
-                self.busy_badge.setText('停止中')
+                self.busy_badge.setText(self._ui_text('停止中'))
             self._show_ui_status_message_with_reflection_or_direct_fallback(log_message, 5000)
         except Exception:
             APP_LOGGER.exception('停止要求後の進捗表示停止に失敗しました')
@@ -11665,7 +11920,7 @@ class MainWindow(QMainWindow):
         fallback: object = None,
     ) -> str:
         try:
-            context = results_controller.build_results_apply_context(paths, summary_lines)
+            context = results_controller.build_results_apply_context(paths, summary_lines, language=self.current_ui_language_value())
             summary_text = _coerce_ui_message_text(context.get('summary_text')).strip()
             if summary_text:
                 return summary_text
@@ -12181,6 +12436,7 @@ class MainWindow(QMainWindow):
             converted_files,
             open_folder_target=payload.get('open_folder_target', ''),
             stopped=payload.get('stopped', False),
+            language=self.current_ui_language_value(),
         )
         return studio_logic.merge_unique_message_values(base_lines, guidance_lines)
 
@@ -12201,7 +12457,7 @@ class MainWindow(QMainWindow):
         if enriched_lines == base_lines:
             return False
         entry_count = len(results_controller.coerce_result_path_list(converted_files))
-        summary_text = results_controller.build_completion_summary_text(enriched_lines, entry_count)
+        summary_text = results_controller.build_completion_summary_text(enriched_lines, entry_count, language=self.current_ui_language_value())
         updated = bool(self._set_results_summary_text_with_fallback(summary_text))
         try:
             self._sync_results_action_buttons_state()
@@ -12469,7 +12725,7 @@ class MainWindow(QMainWindow):
                     pass
 
     def _progress_status_text(self: MainWindow, current: int, total: int, message: object) -> str:
-        return studio_logic.build_progress_status_text(current, total, message)
+        return studio_logic.build_progress_status_text(current, total, message, self.current_ui_language_value())
 
     def update_conversion_progress(self: MainWindow, current: int, total: int, message: str) -> None:
         stop_requested = False
@@ -12482,7 +12738,7 @@ class MainWindow(QMainWindow):
         except Exception:
             stop_requested = bool(self.__dict__.get('_conversion_stop_requested', False))
         if stop_requested:
-            text = '停止要求を受け付けました。現在の変換単位が終わりしだい停止します。'
+            text = self._ui_text('停止要求を受け付けました。現在の変換単位が終わりしだい停止します。')
             if hasattr(self, 'progress_bar'):
                 try:
                     self.progress_bar.setRange(0, 1)
@@ -12496,7 +12752,7 @@ class MainWindow(QMainWindow):
                     pass
             if hasattr(self, 'busy_badge'):
                 try:
-                    self.busy_badge.setText('停止中')
+                    self.busy_badge.setText(self._ui_text('停止中'))
                 except Exception:
                     pass
             try:
@@ -12783,7 +13039,7 @@ class MainWindow(QMainWindow):
             self._set_results_current_index_with_fallback(normalized_index)
 
     def populate_results(self: MainWindow, paths: list[object], summary_lines: list[str] | None = None) -> None:
-        context = results_controller.build_results_apply_context(paths, summary_lines)
+        context = results_controller.build_results_apply_context(paths, summary_lines, language=self.current_ui_language_value())
         self._apply_results_entries_to_ui(
             context.get('entries', []),
             context.get('summary_text', ''),
@@ -13221,7 +13477,7 @@ class MainWindow(QMainWindow):
     def _reset_xtc_page_input(self: MainWindow, total_pages: object, current_page: object = 0) -> None:
         if not hasattr(self, 'page_input'):
             return
-        nav_bar_plan = gui_layouts.build_nav_bar_plan()
+        nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())
         page_input_state = studio_logic.build_page_input_apply_state(
             total_pages=total_pages,
             current_page=current_page,
@@ -13458,6 +13714,7 @@ class MainWindow(QMainWindow):
             title_text,
             detail,
             preserved,
+            language=self.current_ui_language_value(),
         )
 
     def _handle_xtc_render_failure(self: MainWindow, exc: Exception, *, refresh_navigation: bool = True) -> None:
@@ -13597,6 +13854,7 @@ class MainWindow(QMainWindow):
             path_text,
             display_name,
             self._result_item_paths(),
+            language=self.current_ui_language_value(),
         )
         self._apply_loaded_xtc_ui_context(context)
 
@@ -13659,10 +13917,11 @@ class MainWindow(QMainWindow):
             target,
             detail,
             preserved,
+            language=self.current_ui_language_value(),
         )
 
     def _apply_loaded_xtc_bytes_success(self: MainWindow) -> None:
-        self._apply_loaded_xtc_ui_context(results_controller.build_loaded_xtc_bytes_success_context())
+        self._apply_loaded_xtc_ui_context(results_controller.build_loaded_xtc_bytes_success_context(language=self.current_ui_language_value()))
 
     def open_xtc_file(self: MainWindow) -> None:
         path, _ = self._get_open_file_name_with_status_fallback(
@@ -13918,15 +14177,63 @@ class MainWindow(QMainWindow):
     # ── ヘルプ ─────────────────────────────────────────────
 
     def show_help_dialog(self: MainWindow) -> None:
-        help_message = '使い方ダイアログを開けませんでした。'
+        help_message = self._ui_text('使い方ダイアログを開けませんでした。')
         try:
             dlg = QDialog(self)
-            dlg.setWindowTitle('使い方')
+            dlg.setWindowTitle(self._ui_text('使い方'))
             dlg.resize(640, 500)
             lay = QVBoxLayout(dlg)
             tv = QTextEdit(dlg)
             tv.setReadOnly(True)
-            tv.setPlainText("""\
+            if self._normalize_ui_language(getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE), DEFAULT_UI_LANGUAGE) == 'en':
+                help_text = """\
+[Basic workflow]
+1. Use "Open File" to choose a source file, and "Save To..." to choose an output folder when needed.
+2. Use "Batch Convert Folder" when converting multiple files together.
+3. Adjust the settings in the left and center panes.
+4. Use "Refresh Preview" when you want to regenerate the preview manually.
+5. Check the text appearance in the right preview pane.
+6. Press "▶ Convert" to save .xtc / .xtch files.
+7. After conversion, you can inspect XTC / XTCH output in the right pane.
+
+[Preview]
+- Right pane: check how the current settings will look. When you open an XTC/XTCH file, it is shown in the same pane with page navigation.
+- Use Prev/Next or the page number field to move through pages.
+- In the gear menu, "Reverse page keys" swaps the page-key direction and Prev/Next feel.
+
+[Right-pane toolbar]
+- "Actual Size" approximates the real device size on your PC display.
+- When Actual Size is enabled, the right-pane zoom control works as actual-size adjustment.
+- Adjust it while comparing the on-screen size with a ruler or the real device.
+- "Guides" overlays margin and non-display-area guide lines.
+
+[Output and device settings]
+- Device selection is in the Output section.
+- Selecting a device sets the resolution automatically. Use Custom for manual width/height.
+
+[File Viewer]
+- Use "Open XTC/XTCH" to load an existing .xtc / .xtch file into the right pane.
+
+[Presets]
+- Choose a preset from the combo box and press "Load Preset".
+- Press "Save Preset" to overwrite the selected preset with current settings.
+- Presets also store the line-rule mode.
+
+[Bottom panel]
+- Click an item in the Results tab to load it into the right pane.
+- Use the Log tab to inspect conversion details.
+
+[Display settings]
+- Use the gear menu to switch between Light and Dark themes.
+- The same menu can show or hide the hamburger button.
+
+[Notes]
+- The Stop button is enabled only during conversion.
+- Existing-file behavior is available from Gear > Other Options > Existing File.
+- After conversion, the Results tab shows a summary of saved files and errors.
+"""
+            else:
+                help_text = """\
 【基本的な流れ】
 1. 上部の「ファイルを開く」で変換対象を選び、「保存先を選ぶ」で保存先を選びます。
 2. 複数ファイルをまとめて変換するときは「フォルダ一括変換」を使います。
@@ -13971,9 +14278,10 @@ class MainWindow(QMainWindow):
 ・停止ボタンは変換中のみ有効です。
 ・同名ファイルがある場合の動作は、右上の歯車メニュー内「その他オプション > 同名出力」で選べます。
 ・変換後は「変換結果」タブの先頭に保存件数やエラー件数の概要を表示します。
-""")
+"""
+            tv.setPlainText(help_text)
             lay.addWidget(tv)
-            close_btn = QPushButton('閉じる')
+            close_btn = QPushButton(self._ui_text('閉じる'))
             close_btn.clicked.connect(dlg.accept)
             lay.addWidget(close_btn)
             dlg.exec()

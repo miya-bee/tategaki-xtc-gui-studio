@@ -57,6 +57,13 @@ THREE_PANE_SPLITTER_KEYS = (
     MAIN_THREE_PANE_SPLITTER_SIZES_KEY,
 )
 DEFAULT_PREVIEW_PAGE_LIMIT = 20
+
+UI_LANGUAGE_OPTIONS = [
+    ('ja', 'Japanese'),
+    ('en', 'English'),
+]
+UI_LANGUAGE_LABELS = {key: label for key, label in UI_LANGUAGE_OPTIONS}
+DEFAULT_UI_LANGUAGE = 'ja'
 RESULT_TAB_INDEX = 0
 LOG_TAB_INDEX = 1
 SUPPORTED_INPUT_SUFFIXES = core.SUPPORTED_INPUT_SUFFIXES
@@ -79,6 +86,8 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'ruby_hide': False,
     'page_number_enabled': False,
     'page_number_font_size': 12,
+    'progress_bar_enabled': False,
+    'progress_bar_position': 'center',
     'line_spacing': 44,
     'margin_t': 12,
     'margin_b': 14,
@@ -108,12 +117,17 @@ DEFAULT_UI_SETTINGS: dict[str, object] = {
     'nav_buttons_reversed': False,
     'open_folder': True,
     'output_conflict': 'rename',
+    'bottom_overlay_margin_auto_active': False,
+    'bottom_overlay_margin_auto_base_value': 14,
+    'bottom_overlay_margin_auto_value': 14,
+    # Transitional aliases for v1.4.1.1/v1.4.1.2 ini compatibility.
     'page_number_margin_auto_active': False,
     'page_number_margin_auto_base_value': 14,
     'page_number_margin_auto_value': 14,
     'target': '',
     'main_view_mode': 'font',
     'bottom_tab_index': 0,
+    'ui_language': DEFAULT_UI_LANGUAGE,
 }
 
 DEFAULT_SETTINGS_VALUES: dict[str, object] = {
@@ -190,7 +204,7 @@ DEFAULT_PRESET_DEFINITIONS = {
 
 PRESET_FIELDS = [
     'profile', 'width', 'height', 'font_file',
-    'font_size', 'ruby_size', 'ruby_hide', 'page_number_enabled', 'page_number_font_size', 'line_spacing',
+    'font_size', 'ruby_size', 'ruby_hide', 'page_number_enabled', 'page_number_font_size', 'progress_bar_enabled', 'progress_bar_position', 'line_spacing',
     'margin_t', 'margin_b', 'margin_r', 'margin_l',
     'night_mode', 'dither', 'threshold', 'kinsoku_mode',
     'tatechuyoko_digit_mode',
@@ -211,6 +225,12 @@ TATECHUYOKO_DIGIT_MODE_OPTIONS = [
     ('none', '無し'),
 ]
 TATECHUYOKO_DIGIT_MODE_LABELS = {key: label for key, label in TATECHUYOKO_DIGIT_MODE_OPTIONS}
+
+PROGRESS_BAR_POSITION_OPTIONS = [
+    ('center', '下中央'),
+    ('left', '下左'),
+]
+PROGRESS_BAR_POSITION_LABELS = {key: label for key, label in PROGRESS_BAR_POSITION_OPTIONS}
 GLYPH_POSITION_MODE_OPTIONS = [
     ('up_strong', '上補正強'),
     ('up_weak', '上補正弱'),

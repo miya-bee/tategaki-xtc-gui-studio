@@ -39,6 +39,8 @@ class WorkerConversionSettings(TypedDict, total=False):
     ruby_hide: ConfigScalar
     page_number_enabled: ConfigScalar
     page_number_font_size: ConfigScalar
+    progress_bar_enabled: ConfigScalar
+    progress_bar_position: str
     line_spacing: ConfigScalar
     margin_t: ConfigScalar
     margin_b: ConfigScalar
@@ -261,6 +263,18 @@ __all__ = [
 ]
 
 
+def _normalize_progress_bar_position(value: object, default: str = 'center') -> str:
+    text = str(value or default or 'center').strip().lower()
+    aliases = {
+        'center': {'center', 'centre', 'middle', 'bottom_center', 'bottom-centre', '下中央', '中央'},
+        'left': {'left', 'bottom_left', 'bottom-left', '下左', '左'},
+    }
+    for key, values in aliases.items():
+        if text in values:
+            return key
+    return text if text in {'center', 'left'} else 'center'
+
+
 def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
     return ConversionArgs(
         width=_int_config_value(cfg, 'width', 480),
@@ -271,6 +285,8 @@ def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
         page_number_enabled=_bool_config_value(cfg, 'page_number_enabled', False),
         page_number_font_size=_int_config_value(cfg, 'page_number_font_size', 12),
         page_number_font_file=_str_config_value(cfg, 'font_file', ''),
+        progress_bar_enabled=_bool_config_value(cfg, 'progress_bar_enabled', False),
+        progress_bar_position=_normalize_progress_bar_position(_str_config_value(cfg, 'progress_bar_position', 'center')),
         line_spacing=_int_config_value(cfg, 'line_spacing', 44),
         margin_t=_int_config_value(cfg, 'margin_t', 12),
         margin_b=_int_config_value(cfg, 'margin_b', 14),

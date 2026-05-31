@@ -3775,10 +3775,12 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
     ruby_hide = _mapping_get_bool(args, 'ruby_hide', False)
     page_number_enabled = _mapping_get_bool(args, 'page_number_enabled', False)
     page_number_font_size = _mapping_get_int(args, 'page_number_font_size', 12)
+    progress_bar_enabled = _mapping_get_bool(args, 'progress_bar_enabled', False)
+    progress_bar_position = str(args.get('progress_bar_position', 'center') or 'center')
     output_format = _normalize_output_format(args.get('output_format', 'xtc'))
     max_pages = max(1, _mapping_get_int(args, 'max_pages', PREVIEW_PAGE_LIMIT))
 
-    common = (mode, width, height, dither, threshold, night_mode, ruby_hide, page_number_enabled, page_number_font_size, output_format, max_pages)
+    common = (mode, width, height, dither, threshold, night_mode, ruby_hide, page_number_enabled, page_number_font_size, progress_bar_enabled, progress_bar_position, output_format, max_pages)
     if mode == 'image':
         file_b64 = args.get('file_b64')
         digest = hashlib.sha1(file_b64.encode('utf-8')).hexdigest() if isinstance(file_b64, str) and file_b64 else '<default-gradient>'
@@ -3925,6 +3927,8 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
             page_number_enabled=_mapping_get_bool(_args, 'page_number_enabled', False),
             page_number_font_size=_mapping_get_int(_args, 'page_number_font_size', 12),
             page_number_font_file=str(font_value or ''),
+            progress_bar_enabled=_mapping_get_bool(_args, 'progress_bar_enabled', False),
+            progress_bar_position=str(_args.get('progress_bar_position', 'center') or 'center'),
             line_spacing=_mapping_get_int(_args, 'line_spacing', 44),
             margin_t=_mapping_get_int(_args, 'margin_t', 12),
             margin_b=_mapping_get_int(_args, 'margin_b', 14),
@@ -3978,9 +3982,12 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
         encoded_pages = []
         for idx, image in enumerate(page_images, 1):
             _emit_progress(progress_cb, idx - 1, total_pages, f'プレビュー画像を整えています… ({idx - 1}/{total_pages} ページ)')
-            overlay = globals().get('apply_page_number_overlay_to_canvas')
-            if callable(overlay):
-                image = overlay(image, preview_args, idx, total_pages)
+            bottom_overlay = globals().get('apply_bottom_overlays_to_canvas')
+            if callable(bottom_overlay):
+                image = bottom_overlay(image, preview_args, idx, total_pages)
+            # The split-module sync always provides apply_bottom_overlays_to_canvas.
+            # Avoid falling back to the old independent page-number/progress-bar
+            # calls here, because that path cannot share the page-number avoid_rect.
             processed = _apply_preview_postprocess(
                 image,
                 mode=mode,

@@ -55,6 +55,20 @@ def _page_number_overlay_enabled(args: ConversionArgs | None) -> bool:
     return bool(args is not None and getattr(args, 'page_number_enabled', False))
 
 
+def _progress_bar_overlay_enabled(args: ConversionArgs | None) -> bool:
+    return bool(args is not None and getattr(args, 'progress_bar_enabled', False))
+
+
+def _progress_bar_overlay_position(args: ConversionArgs | None) -> str:
+    raw_value = getattr(args, 'progress_bar_position', 'center') if args is not None else 'center'
+    value = str(raw_value or 'center').strip().lower()
+    return value if value in {'center', 'left'} else 'center'
+
+
+def _progress_bar_overlay_reserve_margin(args: ConversionArgs | None) -> int:
+    return 10 if _progress_bar_overlay_enabled(args) else 0
+
+
 def _page_number_overlay_font_size(args: ConversionArgs | None) -> int:
     try:
         value = int(getattr(args, 'page_number_font_size', 12) if args is not None else 12)
@@ -98,29 +112,30 @@ def _measure_page_number_text(draw: Any, text: str, font: Any) -> tuple[int, int
             return 0, 0, size, 10
 
 
-def apply_page_number_overlay_to_canvas(canvas: Image.Image, args: ConversionArgs | None, page_index: int, total_pages: int) -> Image.Image:
-    """Draw ``current/total`` at the bottom-right of a prepared page canvas.
+def _page_number_overlay_layout(
+    canvas: Image.Image,
+    args: ConversionArgs | None,
+    page_index: int,
+    total_pages: int,
+) -> tuple[str, Any, int, int, tuple[int, int, int, int]] | None:
+    """Return the page-number draw payload and occupied rectangle.
 
-    The overlay is intentionally applied after text-page margin clipping and before
-    XTC/XTCH thresholding, so it survives the existing output pipeline.  The
-    ConversionArgs validator already reserves at least ``font_size + 1`` pixels of
-    bottom margin when page numbering is enabled.
+    The rectangle is used by the shared bottom-overlay layout guard so progress
+    bars do not overwrite the right-aligned page number when both overlays are
+    enabled.  Coordinates are inclusive and include a small safety padding.
     """
     if not _page_number_overlay_enabled(args):
-        return canvas
+        return None
     try:
         current = int(page_index)
         total = int(total_pages)
     except Exception:
-        return canvas
+        return None
     if current <= 0 or total <= 0:
-        return canvas
+        return None
     text = f'{current}/{total}'
-    work = canvas if canvas.mode == 'L' else canvas.convert('L')
-    if work is canvas:
-        work = canvas.copy()
-    width, height = work.size
-    draw = ImageDraw.Draw(work)
+    width, height = canvas.size
+    draw = ImageDraw.Draw(canvas)
     font = _load_page_number_overlay_font(args)
     left, top, right, bottom = _measure_page_number_text(draw, text, font)
     text_w = max(1, right - left)
@@ -138,8 +153,160 @@ def apply_page_number_overlay_to_canvas(canvas: Image.Image, args: ConversionArg
     x = max(0, width - margin_r - text_w - max(1, font_size // 6))
     y = bottom_band_top + max(0, (height - bottom_band_top - text_h) // 2) - top
     y = max(0, min(height - text_h, y))
+    pad = max(2, font_size // 6)
+    rect = (
+        max(0, x + left - pad),
+        max(0, y + top - pad),
+        min(width - 1, x + right + pad),
+        min(height - 1, y + bottom + pad),
+    )
+    return text, font, x, y, rect
+
+
+def _bottom_overlay_rects_overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+    return not (a[2] < b[0] or b[2] < a[0] or a[3] < b[1] or b[3] < a[1])
+
+
+def _fit_progress_bar_to_bottom_overlay_safe_area(
+    *,
+    x: int,
+    bar_width: int,
+    center_y: int,
+    canvas_width: int,
+    marker_height: int,
+    avoid_rect: tuple[int, int, int, int] | None,
+) -> tuple[int, int]:
+    """Fit the progress bar so it does not occupy the page-number rectangle."""
+    min_width = 8
+    bar_width = max(1, min(int(bar_width), max(1, int(canvas_width))))
+    x = max(0, min(int(x), max(0, canvas_width - bar_width)))
+    if avoid_rect is None or canvas_width <= 0:
+        return x, bar_width
+    marker_top = max(0, center_y - marker_height // 2)
+    marker_bottom = marker_top + marker_height - 1
+    bar_rect = (x, marker_top, x + bar_width - 1, marker_bottom)
+    if not _bottom_overlay_rects_overlap(bar_rect, avoid_rect):
+        return x, bar_width
+
+    gap = 3
+    left_max_end = max(-1, avoid_rect[0] - gap - 1)
+    available_width = left_max_end + 1
+    if available_width >= min_width:
+        fitted_width = min(bar_width, available_width)
+        fitted_x = min(x, max(0, left_max_end - fitted_width + 1))
+        fitted_x = max(0, fitted_x)
+        return fitted_x, max(min_width, min(fitted_width, canvas_width - fitted_x))
+
+    right_start = min(canvas_width, avoid_rect[2] + gap + 1)
+    right_width = canvas_width - right_start
+    if right_width >= min_width:
+        fitted_width = min(bar_width, right_width)
+        return right_start, fitted_width
+
+    return x, max(1, min(bar_width, canvas_width - x))
+
+
+def apply_page_number_overlay_to_canvas(canvas: Image.Image, args: ConversionArgs | None, page_index: int, total_pages: int) -> Image.Image:
+    """Draw ``current/total`` at the bottom-right of a prepared page canvas."""
+    if not _page_number_overlay_enabled(args):
+        return canvas
+    work = canvas if canvas.mode == 'L' else canvas.convert('L')
+    if work is canvas:
+        work = canvas.copy()
+    layout = _page_number_overlay_layout(work, args, page_index, total_pages)
+    if layout is None:
+        return work
+    text, font, x, y, _rect = layout
+    draw = ImageDraw.Draw(work)
     draw.text((x, y), text, fill=0, font=font)
     return work
+
+def apply_progress_bar_overlay_to_canvas(
+    canvas: Image.Image,
+    args: ConversionArgs | None,
+    page_index: int,
+    total_pages: int,
+    *,
+    avoid_rect: tuple[int, int, int, int] | None = None,
+) -> Image.Image:
+    """Draw a compact reading progress bar at the bottom of a prepared page canvas."""
+    if not _progress_bar_overlay_enabled(args):
+        return canvas
+    try:
+        current = int(page_index)
+        total = int(total_pages)
+    except Exception:
+        return canvas
+    if current <= 0 or total <= 0:
+        return canvas
+    ratio = max(0.0, min(1.0, float(current) / float(total)))
+    work = canvas if canvas.mode == 'L' else canvas.convert('L')
+    if work is canvas:
+        work = canvas.copy()
+    width, height = work.size
+    draw = ImageDraw.Draw(work)
+    try:
+        margin_b = max(0, int(getattr(args, 'margin_b', 10) if args is not None else 10))
+    except Exception:
+        margin_b = 10
+    try:
+        margin_l = max(0, int(getattr(args, 'margin_l', 0) if args is not None else 0))
+    except Exception:
+        margin_l = 0
+    bar_width = max(8, int(round(width * 0.40)))
+    track_height = 1
+    progress_height = 3
+    marker_height = 5
+    reserve = max(1, min(height, max(margin_b, _progress_bar_overlay_reserve_margin(args))))
+    bottom_band_top = max(0, height - reserve)
+    center_y = bottom_band_top + max(0, (height - bottom_band_top) // 2)
+    center_y = max(0, min(height - 1, center_y))
+    position = _progress_bar_overlay_position(args)
+    if position == 'left':
+        x = max(0, margin_l)
+    else:
+        x = max(0, (width - bar_width) // 2)
+    x, bar_width = _fit_progress_bar_to_bottom_overlay_safe_area(
+        x=x,
+        bar_width=bar_width,
+        center_y=center_y,
+        canvas_width=width,
+        marker_height=marker_height,
+        avoid_rect=avoid_rect,
+    )
+    x_end = x + bar_width - 1
+    marker_x = x + int(round((bar_width - 1) * ratio))
+    marker_x = max(x, min(x_end, marker_x))
+    progress_top = max(0, center_y - progress_height // 2)
+    progress_bottom = min(height - 1, progress_top + progress_height - 1)
+    marker_top = max(0, center_y - marker_height // 2)
+    marker_bottom = min(height - 1, marker_top + marker_height - 1)
+    draw.line([(x, center_y), (x_end, center_y)], fill=0, width=track_height)
+    draw.rectangle([x, progress_top, marker_x, progress_bottom], fill=0)
+    draw.line([(marker_x, marker_top), (marker_x, marker_bottom)], fill=0, width=1)
+    return work
+
+
+def apply_bottom_overlays_to_canvas(canvas: Image.Image, args: ConversionArgs | None, page_index: int, total_pages: int) -> Image.Image:
+    """Apply bottom overlays in a collision-safe order.
+
+    The progress bar is laid out first while reserving the page-number rectangle;
+    the page number is then drawn last so it remains the priority overlay.
+    """
+    if not (_page_number_overlay_enabled(args) or _progress_bar_overlay_enabled(args)):
+        return canvas
+    work = canvas if canvas.mode == 'L' else canvas.convert('L')
+    if work is canvas:
+        work = canvas.copy()
+    page_layout = _page_number_overlay_layout(work, args, page_index, total_pages)
+    avoid_rect = page_layout[4] if page_layout is not None else None
+    work = apply_progress_bar_overlay_to_canvas(work, args, page_index, total_pages, avoid_rect=avoid_rect)
+    if page_layout is not None:
+        draw = ImageDraw.Draw(work)
+        text, font, x, y, _rect = page_layout
+        draw.text((x, y), text, fill=0, font=font)
+    return work
+
 
 def _prepare_canvas_image(img: Image.Image, w: int, h: int) -> Image.Image:
     if img.mode == 'L' and img.size == (w, h):
@@ -316,7 +483,7 @@ def canvas_image_to_xt_bytes(background: Image.Image, w: int, h: int, args: Conv
     page_current = getattr(args, '_page_number_current', None)
     page_total = getattr(args, '_page_number_total', None)
     if page_current is not None and page_total is not None:
-        canvas = apply_page_number_overlay_to_canvas(canvas, args, page_current, page_total)
+        canvas = apply_bottom_overlays_to_canvas(canvas, args, page_current, page_total)
     return _prepared_canvas_to_xth_bytes(canvas, w, h, args) if _normalize_output_format(getattr(args, 'output_format', 'xtc')) == 'xtch' else _prepared_canvas_to_xtg_bytes(canvas, w, h, args)
 
 

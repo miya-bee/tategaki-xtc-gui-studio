@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Protocol
 
+import tategakiXTC_gui_studio_logic as studio_logic
 from tategakiXTC_folder_batch_executor import (
     FolderBatchCancelCallback,
     FolderBatchConvertCallback,
@@ -50,6 +51,18 @@ class FolderBatchDialogProtocol(Protocol):
 class FolderBatchControllerRun:
     dialog_result: object
     execution_result: FolderBatchExecutionResult
+
+
+def _ui_text(text: object, language: str | None = None) -> str:
+    return studio_logic.translate_ui_text(text, studio_logic.normalize_ui_language(language, 'ja'))
+
+
+def _ui_message(text: object, language: str | None = None) -> str:
+    normalized = studio_logic.normalize_ui_language(language, 'ja')
+    raw = str(text if text is not None else '')
+    if normalized != 'en' or '\n' not in raw:
+        return studio_logic.translate_ui_text(raw, normalized)
+    return '\n'.join(studio_logic.translate_ui_text(line, normalized) for line in raw.splitlines())
 
 
 def _safe_dependency_text(item: dict[str, object], key: str) -> str:
@@ -169,6 +182,7 @@ def folder_batch_dialog_kwargs(
     *,
     output_format: str,
     supported_suffixes: Iterable[str] | None = None,
+    language: str | None = None,
 ) -> dict[str, object]:
     kwargs: dict[str, object] = {
         'output_format': output_format,
@@ -180,6 +194,8 @@ def folder_batch_dialog_kwargs(
     }
     if supported_suffixes is not None:
         kwargs['supported_suffixes'] = tuple(supported_suffixes)
+    if language is not None:
+        kwargs['language'] = language
     return kwargs
 
 
@@ -258,7 +274,7 @@ def run_folder_batch_plan_with_callbacks(
                 _safe_log_callback_warning(log_cb, '実行後UI更新', exc)
     if information_cb is not None:
         try:
-            information_cb('フォルダ一括変換', '\n'.join(result.summary_lines()))
+            information_cb(_ui_text('フォルダ一括変換'), _ui_message('\n'.join(result.summary_lines())))
         except Exception as exc:
             _safe_log_callback_warning(log_cb, '完了通知', exc)
     return result
@@ -281,6 +297,7 @@ def open_folder_batch_dialog_and_execute(
     after_execute_cb: FolderBatchAfterExecuteCallback | None = None,
     dialog_cls: Callable[..., FolderBatchDialogProtocol] | None = None,
     accepted_value: int = 1,
+    language: str | None = None,
 ) -> FolderBatchControllerRun | None:
     """Open the folder-batch dialog and execute the accepted plan.
 
@@ -300,29 +317,30 @@ def open_folder_batch_dialog_and_execute(
             defaults,
             output_format=output_format,
             supported_suffixes=supported_suffixes,
+            language=language,
         ),
     )
     try:
         reply = dialog.exec()
     except Exception as exc:
         if warning_cb is not None:
-            warning_cb('フォルダ一括変換', f'ダイアログを開けませんでした: {exc}')
+            warning_cb(_ui_text('フォルダ一括変換', language), f"{_ui_text('ダイアログを開けませんでした', language)}: {exc}")
         return None
     if reply != accepted_value:
         return None
     dialog_result = dialog.result_options()
     if dialog_result is None:
         if warning_cb is not None:
-            warning_cb('フォルダ一括変換', '変換条件を取得できませんでした。')
+            warning_cb(_ui_text('フォルダ一括変換', language), _ui_text('変換条件を取得できませんでした。', language))
         return None
     plan = getattr(dialog_result, 'plan', None)
     if plan is None:
         if warning_cb is not None:
-            warning_cb('フォルダ一括変換', '変換計画を取得できませんでした。')
+            warning_cb(_ui_text('フォルダ一括変換', language), _ui_text('変換計画を取得できませんでした。', language))
         return None
     if not folder_batch_plan_can_execute(plan):
         if warning_cb is not None:
-            warning_cb('フォルダ一括変換', describe_folder_batch_no_work(plan))
+            warning_cb(_ui_text('フォルダ一括変換', language), _ui_message(describe_folder_batch_no_work(plan), language))
         return None
     missing_dependencies = missing_dependencies_for_folder_batch_plan(
         plan,
@@ -331,15 +349,15 @@ def open_folder_batch_dialog_and_execute(
     if missing_dependencies:
         if warning_cb is not None:
             warning_cb(
-                'フォルダ一括変換',
-                format_folder_batch_missing_dependency_message(missing_dependencies),
+                _ui_text('フォルダ一括変換', language),
+                _ui_message(format_folder_batch_missing_dependency_message(missing_dependencies), language),
             )
         return None
     try:
         save_folder_batch_result_defaults(settings, dialog_result)
     except Exception as exc:
         if warning_cb is not None:
-            warning_cb('フォルダ一括変換', f'前回設定の保存に失敗しました。変換は続行します: {exc}')
+            warning_cb(_ui_text('フォルダ一括変換', language), _ui_text(f'前回設定の保存に失敗しました。変換は続行します: {exc}', language))
     try:
         execution_result = run_folder_batch_plan_with_callbacks(
             plan,
@@ -353,7 +371,7 @@ def open_folder_batch_dialog_and_execute(
         )
     except Exception as exc:
         if warning_cb is not None:
-            warning_cb('フォルダ一括変換', f'フォルダ一括変換を実行できませんでした: {exc}')
+            warning_cb(_ui_text('フォルダ一括変換', language), _ui_text(f'フォルダ一括変換を実行できませんでした: {exc}', language))
         return None
     return FolderBatchControllerRun(
         dialog_result=dialog_result,
