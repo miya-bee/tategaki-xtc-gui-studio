@@ -1,0 +1,4 @@
+.hidden { display: none; }
+.pagebreak { page-break-before: always; }
+.note { margin-left: 1em; }
+.strongish { font-weight: 700; }
