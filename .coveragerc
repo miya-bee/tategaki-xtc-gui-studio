@@ -25,6 +25,10 @@ source =
     tategakiXTC_gui_studio_logging
     tategakiXTC_gui_studio_startup
     tategakiXTC_gui_studio_constants
+    tategakiXTC_gui_styles
+    tategakiXTC_gui_help_texts
+    tategakiXTC_gui_preset_helpers
+    tategakiXTC_gui_completion_helpers
     tategakiXTC_gui_studio_xtc_io
     tategakiXTC_gui_studio_widgets
     tategakiXTC_gui_studio_worker

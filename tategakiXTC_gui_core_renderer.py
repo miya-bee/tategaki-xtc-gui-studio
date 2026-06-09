@@ -1976,6 +1976,35 @@ def _protected_token_group_length(tokens: Sequence[str], start_idx: int) -> int:
     )
 
 
+def _leading_line_head_forbidden_chars(text: str, max_len: int = 8) -> tuple[str, ...]:
+    """Return the leading run of line-head-forbidden characters of ``text``
+    (closing brackets, punctuation, prolonged-sound marks, small kana, ...).
+
+    These characters must never start a wrapped column.  When the preceding text
+    lives in a *different* run (e.g. a ruby word or a bold span immediately
+    before a closing bracket), the per-run line-break logic cannot see them.
+    Exposing this leading group lets the previous run extend its layout hints so
+    a body character can be pulled forward (追い出し), keeping the closing bracket
+    off the next column head.
+
+    A character-level scan is intentional: these tokens are used only to bias the
+    previous run's break decision and are never drawn, so tokenisation (and its
+    extra call-count cost on the cached fast path) is unnecessary.  Every
+    line-head-forbidden mark is a single character, so the result matches the
+    tokeniser for the leading forbidden run.
+    """
+    out: list[str] = []
+    limit = max(0, int(max_len))
+    for ch in str(text or ''):
+        if len(out) >= limit:
+            break
+        if ch in LINE_HEAD_FORBIDDEN_CHARS:
+            out.append(ch)
+        else:
+            break
+    return tuple(out)
+
+
 @lru_cache(maxsize=512)
 def _build_single_token_vertical_layout_hints(token: str) -> VerticalLayoutHints:
     _refresh_core_globals()
@@ -2255,12 +2284,21 @@ def _choose_vertical_layout_action_with_hints(hints: VerticalLayoutHints, idx: i
         if slots_left == 1 and current_not_top and line_end_forbidden:
             result = 'advance'
         elif slots_left == 1 and current_not_top and idx + 1 < token_count:
-            if mode == 'standard' and hints['continuous_pair_with_next'][idx]:
+            # Never advance the *current* token to keep a following tail together
+            # when the current token is itself line-head-forbidden: doing so would
+            # move that forbidden mark (e.g. a closing bracket ``」`` that exactly
+            # fills the last cell of a ``「あ」`` group) onto the next column head.
+            head_forbidden_here = hints['line_head_forbidden'][idx]
+            if mode == 'standard' and not head_forbidden_here and hints['continuous_pair_with_next'][idx]:
                 result = 'advance'
-            elif mode == 'standard' and hints['would_orphan_short_tail_after_break'][idx]:
+            elif mode == 'standard' and not head_forbidden_here and hints['would_orphan_short_tail_after_break'][idx]:
                 result = 'advance'
             elif hints['hanging_punctuation'][idx + 1] and not line_end_forbidden:
-                if mode == 'standard' and hints['would_start_forbidden_after_hang_pair'][idx]:
+                # Do not hang punctuation when doing so would leave a closing
+                # bracket or other line-head-forbidden token at the next
+                # column head.  This is a basic line-head kinsoku rule, so keep
+                # it active for both simple and standard modes.
+                if hints['would_start_forbidden_after_hang_pair'][idx]:
                     result = 'advance'
                 else:
                     result = 'hang_pair'
@@ -2431,12 +2469,21 @@ def _choose_vertical_layout_action(tokens: Sequence[str], idx: int, curr_y: int,
         return 'advance'
     if slots_left == 1 and curr_y > margin_t and idx + 1 < len(tokens):
         next_token = tokens[idx + 1]
-        if mode == 'standard' and _is_continuous_punctuation_pair(token, next_token):
+        # A line-head-forbidden current token (e.g. the closing ``」`` that exactly
+        # fills the last cell of a ``「あ」`` group) must not be advanced to keep a
+        # following tail together: that would move the forbidden mark to the next
+        # column head.
+        head_forbidden_here = _is_line_head_forbidden(token)
+        if mode == 'standard' and not head_forbidden_here and _is_continuous_punctuation_pair(token, next_token):
             return 'advance'
-        if mode == 'standard' and _would_orphan_short_tail_after_break(tokens, idx):
+        if mode == 'standard' and not head_forbidden_here and _would_orphan_short_tail_after_break(tokens, idx):
             return 'advance'
         if _is_hanging_punctuation(next_token) and not _is_line_end_forbidden(token):
-            if mode == 'standard' and _would_start_forbidden_after_hang_pair(tokens, idx):
+            # Do not hang punctuation when doing so would leave a closing
+            # bracket or other line-head-forbidden token at the next column
+            # head.  This basic line-head kinsoku rule applies to both simple
+            # and standard modes.
+            if _would_start_forbidden_after_hang_pair(tokens, idx):
                 return 'advance'
             return 'hang_pair'
         if _is_line_head_forbidden(next_token):
@@ -4627,6 +4674,12 @@ class _VerticalPageRenderer:
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
+            # Cross-run kinsoku: layout_hints may be extended with the leading
+            # line-head-forbidden tokens of the following run so the break
+            # decision can pull a body character forward.  Those virtual tokens
+            # are not drawn by this run, so never hang across the real boundary.
+            if action == 'hang_pair' and idx + 1 >= token_count:
+                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
@@ -4731,6 +4784,12 @@ class _VerticalPageRenderer:
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
+            # Cross-run kinsoku: layout_hints may be extended with the leading
+            # line-head-forbidden tokens of the following run so the break
+            # decision can pull a body character forward.  Those virtual tokens
+            # are not drawn by this run, so never hang across the real boundary.
+            if action == 'hang_pair' and idx + 1 >= token_count:
+                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
@@ -4838,6 +4897,12 @@ class _VerticalPageRenderer:
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
+            # Cross-run kinsoku: layout_hints may be extended with the leading
+            # line-head-forbidden tokens of the following run so the break
+            # decision can pull a body character forward.  Those virtual tokens
+            # are not drawn by this run, so never hang across the real boundary.
+            if action == 'hang_pair' and idx + 1 >= token_count:
+                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
@@ -4947,6 +5012,12 @@ class _VerticalPageRenderer:
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
+            # Cross-run kinsoku: layout_hints may be extended with the leading
+            # line-head-forbidden tokens of the following run so the break
+            # decision can pull a body character forward.  Those virtual tokens
+            # are not drawn by this run, so never hang across the real boundary.
+            if action == 'hang_pair' and idx + 1 >= token_count:
+                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
@@ -5093,6 +5164,12 @@ class _VerticalPageRenderer:
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
+            # Cross-run kinsoku: layout_hints may be extended with the leading
+            # line-head-forbidden tokens of the following run so the break
+            # decision can pull a body character forward.  Those virtual tokens
+            # are not drawn by this run, so never hang across the real boundary.
+            if action == 'hang_pair' and idx + 1 >= token_count:
+                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
@@ -5235,6 +5312,12 @@ class _VerticalPageRenderer:
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
+            # Cross-run kinsoku: layout_hints may be extended with the leading
+            # line-head-forbidden tokens of the following run so the break
+            # decision can pull a body character forward.  Those virtual tokens
+            # are not drawn by this run, so never hang across the real boundary.
+            if action == 'hang_pair' and idx + 1 >= token_count:
+                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
@@ -5381,6 +5464,12 @@ class _VerticalPageRenderer:
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
+            # Cross-run kinsoku: layout_hints may be extended with the leading
+            # line-head-forbidden tokens of the following run so the break
+            # decision can pull a body character forward.  Those virtual tokens
+            # are not drawn by this run, so never hang across the real boundary.
+            if action == 'hang_pair' and idx + 1 >= token_count:
+                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
@@ -5529,6 +5618,12 @@ class _VerticalPageRenderer:
                 kinsoku_mode=kinsoku_mode,
                 action_cache=action_cache,
             )
+            # Cross-run kinsoku: layout_hints may be extended with the leading
+            # line-head-forbidden tokens of the following run so the break
+            # decision can pull a body character forward.  Those virtual tokens
+            # are not drawn by this run, so never hang across the real boundary.
+            if action == 'hang_pair' and idx + 1 >= token_count:
+                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
@@ -5585,7 +5680,7 @@ class _VerticalPageRenderer:
     def draw_text_run(self: _VerticalPageRenderer, text: str, run_font: Any, *, wrap_indent_chars: int = 0, segment_infos: list[SegmentInfo] | None = None,
                       ruby_overlay_groups: list[RubyOverlayGroup] | None = None, overlay_cells: list[OverlayCell] | None = None,
                       is_bold: bool = False, is_italic: bool = False, segment_info_needs_base_len: bool = True,
-                      segment_info_needs_cell_text: bool = True) -> None:
+                      segment_info_needs_cell_text: bool = True, trailing_layout_tokens: Sequence[str] = ()) -> None:
         """Draw a single text run into the current page or subsequent columns.
 
         This method performs glyph-level wrapping, records per-segment placement into
@@ -5628,6 +5723,11 @@ class _VerticalPageRenderer:
         else:
             tokens = tokenize_vertical_text(text, tatechuyoko_digit_mode)
             layout_hints = build_layout_hints(tokens)
+        # Cross-run kinsoku: extend the layout hints (but not the drawn tokens)
+        # with the following run's leading line-head-forbidden tokens so the
+        # break decision can pull a body character forward.
+        if trailing_layout_tokens:
+            layout_hints = build_layout_hints(tuple(tokens) + tuple(trailing_layout_tokens))
         capture_mask = (
             (4 if segment_infos is not None else 0)
             | (2 if ruby_overlay_groups is not None else 0)
@@ -5821,7 +5921,22 @@ class _VerticalPageRenderer:
             for repeated_text in repeated_medium_texts:
                 repeated_tokens = tokenize_vertical_text(repeated_text, tatechuyoko_digit_mode)
                 local_run_layout_cache_set(repeated_text, (repeated_tokens, build_layout_hints_cached(repeated_tokens)))
-        for run in runs or ():
+        # Cross-run kinsoku: for every run, precompute the leading
+        # line-head-forbidden tokens (closing brackets / punctuation) of the next
+        # drawable run.  The current run extends its layout hints with them so a
+        # body character can be pulled forward and the bracket never starts the
+        # next column, even when the bracket lives in a separate ruby/bold run.
+        runs_seq = list(runs or ())
+        run_count = len(runs_seq)
+        next_leading_forbidden: list[tuple[str, ...]] = [()] * run_count
+        carry_leading: tuple[str, ...] = ()
+        for back_index in range(run_count - 1, -1, -1):
+            next_leading_forbidden[back_index] = carry_leading
+            back_run = runs_seq[back_index]
+            back_text = back_run.get('text', '') if back_run else ''
+            if back_text:
+                carry_leading = _leading_line_head_forbidden_chars(back_text)
+        for run_index, run in enumerate(runs_seq):
             raise_if_cancelled(should_cancel)
             if not run:
                 continue
@@ -5829,6 +5944,10 @@ class _VerticalPageRenderer:
             seg_text = get_value('text', '')
             if not seg_text:
                 continue
+            trailing_layout_tokens = next_leading_forbidden[run_index]
+            # Only forward the cross-run kinsoku hint when there actually is a
+            # following forbidden group, so the common call stays compact.
+            trailing_kw = {'trailing_layout_tokens': trailing_layout_tokens} if trailing_layout_tokens else {}
             ruby = get_value('ruby', '')
             emphasis = get_value('emphasis', '')
             side_line = get_value('side_line', '')
@@ -5860,6 +5979,10 @@ class _VerticalPageRenderer:
                     local_run_layout_cache_set(seg_text, (tokens, layout_hints))
                 else:
                     tokens, layout_hints = cached_run_layout
+                # Cross-run kinsoku: extend hints (not drawn tokens) with the next
+                # run's leading forbidden group.  The base hints stay in the cache.
+                if trailing_layout_tokens:
+                    layout_hints = build_layout_hints_cached(tuple(tokens) + trailing_layout_tokens)
                 if run_mode == 0:
                     draw_text_run_plain(
                         tokens,
@@ -5928,6 +6051,7 @@ class _VerticalPageRenderer:
                     wrap_indent_chars=wrap_indent_chars,
                     is_bold=is_bold,
                     is_italic=is_italic,
+                    **trailing_kw,
                 )
                 continue
             if run_mode == 4:
@@ -5939,6 +6063,7 @@ class _VerticalPageRenderer:
                     ruby_overlay_groups=ruby_overlay_groups,
                     is_bold=is_bold,
                     is_italic=is_italic,
+                    **trailing_kw,
                 )
                 if ruby_overlay_groups:
                     draw_split_ruby_groups(ruby_overlay_groups, ruby, is_bold=is_bold, is_italic=is_italic)
@@ -5952,6 +6077,7 @@ class _VerticalPageRenderer:
                     overlay_cells=overlay_cells,
                     is_bold=is_bold,
                     is_italic=is_italic,
+                    **trailing_kw,
                 )
                 if overlay_cells:
                     if overlay_mode & 2:
@@ -5969,6 +6095,7 @@ class _VerticalPageRenderer:
                 overlay_cells=overlay_cells,
                 is_bold=is_bold,
                 is_italic=is_italic,
+                **trailing_kw,
             )
             if ruby_overlay_groups:
                 draw_split_ruby_groups(ruby_overlay_groups, ruby, is_bold=is_bold, is_italic=is_italic)

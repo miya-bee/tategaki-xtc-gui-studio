@@ -190,7 +190,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
 
     def test_help_text_points_same_name_output_to_gear_menu(self):
-        content = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        content = Path('tategakiXTC_gui_help_texts.py').read_text(encoding='utf-8')
         self.assertIn('右上の歯車メニュー内「その他オプション > 同名出力」', content)
 
     def test_studio_import_does_not_create_logs_until_configured(self):

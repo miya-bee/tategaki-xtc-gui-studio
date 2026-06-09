@@ -23,7 +23,7 @@ class GuiRubyHideLayoutRegressionTest(unittest.TestCase):
 
 
     def test_ruby_hide_label_color_matches_checkbox_text_styles(self) -> None:
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        source = Path('tategakiXTC_gui_styles.py').read_text(encoding='utf-8')
         self.assertIn('QCheckBox { color: #35506A; spacing: 6px; }', source)
         self.assertIn('QLabel#checkboxTextLabel { color: #35506A; }', source)
         self.assertIn('QCheckBox { color: #A8C8E0; spacing: 6px; }', source)

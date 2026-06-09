@@ -79,7 +79,7 @@ class FolderBatchExecutionResult:
 
     @property
     def attempted_count(self) -> int:
-        return self.success_count + self.failed_count
+        return self.success_count + self.failed_count + self.cancelled_count
 
     @property
     def processed_count(self) -> int:

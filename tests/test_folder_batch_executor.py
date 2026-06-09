@@ -337,6 +337,31 @@ class FolderBatchExecutorTests(unittest.TestCase):
             self.assertTrue(any(line.startswith('[STOP] 成功 1 件') for line in logs))
             self.assertTrue(any('未処理 1 件' in line for line in logs))
 
+    def test_cancelled_current_file_is_not_counted_as_pending_after_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / 'input'
+            out = Path(tmpdir) / 'out'
+            root.mkdir()
+            for name in ('a.txt', 'b.txt', 'c.txt'):
+                (root / name).write_text(name, encoding='utf-8')
+            plan = build_folder_batch_plan(root, out)
+
+            def converter(src: Path, dst: Path, item: object) -> None:
+                if src.name == 'b.txt':
+                    raise core.ConversionCancelled('stop during current file')
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_text('ok', encoding='utf-8')
+
+            result = execute_folder_batch_plan(plan, converter)
+
+            self.assertTrue(result.stopped)
+            self.assertEqual(result.success_count, 1)
+            self.assertEqual(result.cancelled_count, 1)
+            self.assertEqual(result.attempted_count, 2)
+            self.assertEqual(result.stopped_pending_count, 1)
+            self.assertIn('未処理: 1 件', result.summary_lines())
+
+
     def test_stopped_pending_count_ignores_preplanned_skips(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / 'input'

@@ -1,53 +1,31 @@
-# Python caches
+# Python / cache
 __pycache__/
 *.py[cod]
-*$py.class
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+coverage-report.txt
+htmlcov/
 
-# Virtual environments
+# Local environments
 .venv/
 venv/
 .tox/
 .nox/
 
-# Coverage
-.coverage
-coverage.xml
-coverage-report.txt
-.coverage.*
-htmlcov/
+# Editor / OS noise
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Local application/runtime outputs
-logs/
-dist/
-release_build/
+# App-local settings and logs
 tategakiXTC_gui_studio.ini
-dummy.xtc
-dummy_preview.epub
-
-# Local work notes and temporary files
-*.rootcopy
-work_clean*_md.md
-CONTINUATION_PROGRESS*.md
-handoff*.md
-引継ぎ*.md
-引き継ぎ書*.md
-引き継ぎ追記*.md
-
-# Local archive/build artifacts
-*.zip
-*.7z
-*.tar
-*.tgz
-*.gz
-*.bz2
-*.xz
-*.whl
-
-
-# Test and parallel helper outputs
+logs/
 *.log
 *.out
 *.err
@@ -55,6 +33,18 @@ handoff*.md
 *.prof
 *.pid
 *.lock
+*.tmp
+*.partial
+*.overwritebak
+*.bak
+*.orig
+*.rej
+
+# Local test helper outputs
+pytest*.out
+test*.out
+fullpytest.log
+part.log
 test_full_log*.txt
 test_fail_index*.txt
 test_failure_index*.txt
@@ -66,16 +56,33 @@ pt_*.exit
 pt*.log
 pt*.exit
 
-# Editor / OS noise
-.idea/
-.vscode/
-.DS_Store
-Thumbs.db
-desktop.ini
-*.tmp
-*.partial
-*.overwritebak
-*.bak
-*.orig
-*.rej
-*~
+# Local release/archive artifacts
+*.zip
+*.7z
+*.tar
+*.tgz
+*.gz
+*.bz2
+*.xz
+*.whl
+dist/
+release_build/
+
+# Internal handoff / work memo files
+*.rootcopy
+*handoff*.md
+*Handoff*.md
+*HANDOFF*.md
+handoff*.md
+引継ぎ*.md
+引き継ぎ書*.md
+引き継ぎ追記*.md
+work_clean*_md.md
+regression_audit_bugfix*.md
+work_instructions_from_changelog_*.md
+code_split_preparation_roadmap_bugfix*.md
+split_refactor_progress_bugfix*.md
+CONTINUATION_PROGRESS*.md
+
+# GitHub Actions workflow files are tracked in the repository.
+# build_release_zip.py still excludes .github/ from public release zips.

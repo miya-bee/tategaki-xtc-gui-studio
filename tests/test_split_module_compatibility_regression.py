@@ -108,6 +108,8 @@ class SplitModuleCompatibilityRegressionTests(unittest.TestCase):
         self.assertIs(studio._coerce_preview_base64_text, studio_preview_helpers._coerce_preview_base64_text)
         self.assertIs(studio.MainWindow._coerce_preview_data_url, studio_preview_helpers._coerce_preview_data_url)
         self.assertIs(studio.MainWindow._coerce_preview_base64_text, studio_preview_helpers._coerce_preview_base64_text)
+        self.assertIs(studio._preview_page_limit_value, studio_preview_helpers._preview_page_limit_value)
+        self.assertIs(studio._preview_widget_limit_value, studio_preview_helpers._preview_widget_limit_value)
 
     def test_gui_studio_reexports_desktop_public_names(self):
         studio = load_studio_module(force_reload=True)
@@ -333,10 +335,15 @@ class SplitModuleCompatibilityRegressionTests(unittest.TestCase):
         source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
         helper_source = Path('tategakiXTC_gui_studio_preview_helpers.py').read_text(encoding='utf-8')
         self.assertIn('from tategakiXTC_gui_studio_preview_helpers import', source)
-        self.assertNotIn('def _coerce_preview_data_url(', source)
-        self.assertNotIn('def _coerce_preview_base64_text(', source)
-        self.assertIn('def _coerce_preview_data_url(', helper_source)
-        self.assertIn('def _coerce_preview_base64_text(', helper_source)
+        for symbol in (
+            '_coerce_preview_data_url',
+            '_coerce_preview_base64_text',
+            '_preview_page_limit_value',
+            '_preview_widget_limit_value',
+        ):
+            with self.subTest(symbol=symbol):
+                self.assertNotIn(f'def {symbol}(', source)
+                self.assertIn(f'def {symbol}(', helper_source)
 
     def test_gui_studio_keeps_desktop_helper_implementation_out_of_entry_module(self):
         source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
@@ -367,6 +374,21 @@ class SplitModuleCompatibilityRegressionTests(unittest.TestCase):
         self.assertIn('def _main_view_mode_status_text(', helper_source)
         self.assertNotIn('def _normalized_main_view_mode(mode: object)', source)
         self.assertNotIn('def _preview_view_help_text() -> str', source)
+
+
+    def test_gui_studio_preset_helper_implementation_is_split_from_entry_module(self):
+        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        helper_source = Path('tategakiXTC_gui_preset_helpers.py').read_text(encoding='utf-8')
+        self.assertIn('from tategakiXTC_gui_preset_helpers import', source)
+        self.assertIn('return selected_preset_key_from_combo(', source)
+        self.assertIn('return preset_combo_entries(', source)
+        self.assertIn('return preset_side_summary_text(', source)
+        self.assertIn('def selected_preset_key_from_combo(', helper_source)
+        self.assertIn('def preset_combo_entries(', helper_source)
+        self.assertIn('def preset_side_summary_text(', helper_source)
+        self.assertNotIn('def selected_preset_key_from_combo(', source)
+        self.assertNotIn('def preset_side_summary_text(summary: object)', source)
+        self.assertNotIn('from PySide6', helper_source)
 
 
     def test_gui_studio_settings_helper_implementation_is_split_from_entry_module(self):

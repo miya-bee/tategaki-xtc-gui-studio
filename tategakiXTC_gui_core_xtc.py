@@ -275,14 +275,17 @@ def apply_progress_bar_overlay_to_canvas(
         avoid_rect=avoid_rect,
     )
     x_end = x + bar_width - 1
-    marker_x = x + int(round((bar_width - 1) * ratio))
+    # Tategaki books progress from right to left.  Keep the thin full track
+    # visible across the whole bar, but draw the thick read portion from the
+    # right edge toward the left so it matches vertical Japanese page flow.
+    marker_x = x_end - int(round((bar_width - 1) * ratio))
     marker_x = max(x, min(x_end, marker_x))
     progress_top = max(0, center_y - progress_height // 2)
     progress_bottom = min(height - 1, progress_top + progress_height - 1)
     marker_top = max(0, center_y - marker_height // 2)
     marker_bottom = min(height - 1, marker_top + marker_height - 1)
     draw.line([(x, center_y), (x_end, center_y)], fill=0, width=track_height)
-    draw.rectangle([x, progress_top, marker_x, progress_bottom], fill=0)
+    draw.rectangle([marker_x, progress_top, x_end, progress_bottom], fill=0)
     draw.line([(marker_x, marker_top), (marker_x, marker_bottom)], fill=0, width=1)
     return work
 

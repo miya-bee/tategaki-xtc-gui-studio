@@ -113,6 +113,92 @@ class LayoutRegressionTests(unittest.TestCase):
         )
         self.assertEqual(action, 'draw')
 
+    def test_leading_line_head_forbidden_chars_scans_only_the_forbidden_prefix(self):
+        import tategakiXTC_gui_core_renderer as renderer
+        self.assertEqual(renderer._leading_line_head_forbidden_chars('」』だね'), ('」', '』'))
+        self.assertEqual(renderer._leading_line_head_forbidden_chars('。」あ'), ('。', '」'))
+        self.assertEqual(renderer._leading_line_head_forbidden_chars('本文'), ())
+        self.assertEqual(renderer._leading_line_head_forbidden_chars(''), ())
+        self.assertEqual(len(renderer._leading_line_head_forbidden_chars('」' * 20)), 8)
+
+    def test_line_head_forbidden_token_is_not_advanced_to_protect_a_short_tail(self):
+        # ``」`` exactly fills the last cell of a ``「あ」`` group.  The short-tail
+        # orphan guard must not advance it (that would put ``」`` on the next
+        # column head).  The body character before a tail is still advanced.
+        tokens = ['「', 'あ', '」', 'あ', '、']
+        self.assertEqual(
+            core._choose_vertical_layout_action(
+                tokens, 2, 70, 10, 105, 10, 20, kinsoku_mode='standard'),
+            'draw',
+        )
+        hints = core._build_vertical_layout_hints(tuple(tokens))
+        self.assertEqual(
+            core._choose_vertical_layout_action_with_hints(
+                hints, 2, 1, True, kinsoku_mode='standard'),
+            'draw',
+        )
+        # Regression guard: a real body character before a compact punctuation
+        # tail is still pulled forward.
+        self.assertEqual(
+            core._choose_vertical_layout_action(
+                ['す', 'か', '？', '」', '、', '「'], 0, 70, 10, 105, 10, 20, kinsoku_mode='standard'),
+            'advance',
+        )
+
+    def test_quoted_clause_among_punctuation_never_starts_a_column_with_a_bracket(self):
+        args = dict(
+            width=300, height=760, font_size=22, ruby_size=11,
+            margin_l=12, margin_r=12, margin_t=14, margin_b=14,
+            line_spacing=26, output_format='xtc', kinsoku_mode='standard',
+        )
+        for n in range(0, 40):
+            text = 'あ' * n + 'あ、あ。あ「あ」あ、あ。' * 3
+            blocks = [{'kind': 'paragraph', 'runs': [{'text': text}]}]
+            heads = self._closing_brackets_at_column_head(blocks, args)
+            self.assertEqual(heads, [], msg=f'closing bracket at column head: n={n} -> {heads}')
+
+    def _closing_brackets_at_column_head(self, blocks, args):
+        """Render blocks and return any closing-bracket glyph drawn at a column top."""
+        import tategakiXTC_gui_core_renderer as renderer
+        from tests.image_golden_cases import render_page_blocks_case
+        closing = core.CLOSING_BRACKET_CHARS
+        margin_t = args['margin_t']
+        captured = []
+        original = renderer.draw_char_tate
+
+        def spy(draw, token, pos, font, f_size, **kwargs):
+            if token and token[0] in closing and pos[1] == margin_t:
+                captured.append((token, pos))
+            return original(draw, token, pos, font, f_size, **kwargs)
+
+        with mock.patch.object(renderer, 'draw_char_tate', side_effect=spy):
+            render_page_blocks_case(args, blocks, page_mode='strip')
+        return captured
+
+    def test_closing_bracket_run_after_ruby_run_never_starts_a_column(self):
+        # The closing brackets live in a separate (plain) run, right after a ruby
+        # word.  Sweeping the leading offset forces the bracket run to land at
+        # every column boundary; none of them may start a wrapped column.
+        args = dict(
+            width=260, height=190, font_size=24, ruby_size=12,
+            margin_l=12, margin_r=12, margin_t=12, margin_b=12,
+            line_spacing=28, output_format='xtc',
+        )
+        for boundary in ('ruby', 'bold', 'plain'):
+            for tail in ('」', '」』', '）」', '。」』'):
+                for n in range(0, 16):
+                    first = {'text': 'あ' * n + ('会話' if boundary == 'ruby' else '本文の会話')}
+                    if boundary == 'ruby':
+                        first['ruby'] = 'かいわ'
+                    elif boundary == 'bold':
+                        first['bold'] = True
+                    blocks = [{'kind': 'paragraph', 'runs': [first, {'text': tail + 'だね。'}]}]
+                    heads = self._closing_brackets_at_column_head(blocks, args)
+                    self.assertEqual(
+                        heads, [],
+                        msg=f'closing bracket at column head: boundary={boundary} tail={tail} n={n} -> {heads}',
+                    )
+
     def test_blank_separated_paragraph_after_pagebreak_consumes_remaining_blank_columns(self):
         font_path = resolve_test_font_path()
         args = core.ConversionArgs(

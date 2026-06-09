@@ -886,6 +886,14 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertTrue(core._is_after_effective_column_top(11, 10, 0))
         self.assertTrue(core._would_start_forbidden_after_hang_pair(['あ', '、', '」'], 0))
         self.assertFalse(core._would_start_forbidden_after_hang_pair(['あ', '、'], 0))
+        self.assertEqual(
+            core._choose_vertical_layout_action(['本', '文', '本', '文', '本', '文', '「', '一', 'ー', '」', 'で', 'あ', 'る', '。'], 0, 2, 0, 10, 0, 1),
+            'draw',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['本', '文', '本', '文', '本', '文', '「', '一', 'ー', '」', 'で', 'あ', 'る', '。'], 0, 5, 0, 10, 0, 1),
+            'draw',
+        )
         for pair in (['、', '。'], ['。', '、'], ['、', '、'], ['。', '。']):
             with self.subTest(two_token_pair=pair):
                 two_token_hints = core._build_vertical_layout_hints(pair)
@@ -910,6 +918,44 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         self.assertEqual(
             core._choose_vertical_layout_action(['A', '、', '」'], 0, 45, 10, 100, 10, 20, kinsoku_mode='standard'),
             'advance',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['A', '、', '」'], 0, 45, 10, 100, 10, 20, kinsoku_mode='simple'),
+            'advance',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['A', '。', '」'], 0, 45, 10, 100, 10, 20, kinsoku_mode='simple'),
+            'advance',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['A', '。', '」'], 0, 45, 10, 122, 10, 20, kinsoku_mode='standard'),
+            'advance',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['A', '」', '』'], 0, 45, 10, 100, 10, 20, kinsoku_mode='standard'),
+            'advance',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['A', '、', '」', '』'], 0, 45, 10, 100, 10, 20, kinsoku_mode='simple'),
+            'advance',
+        )
+        # Regress v1.4.1.9's over-eager line-head guard: it advanced at
+        # the first body token and left large blank gaps when a forbidden token
+        # existed merely at idx + slots_left.  The layout should keep drawing
+        # until the real protected group boundary is reached.
+        ragged_tokens = list('本文本文本文「一ー」である。')
+        self.assertEqual(
+            core._choose_vertical_layout_action(ragged_tokens, 0, 2, 0, 10, 0, 1, kinsoku_mode='standard'),
+            'draw',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(ragged_tokens, 0, 4, 0, 10, 0, 1, kinsoku_mode='standard'),
+            'draw',
+        )
+        ragged_hints = core._build_vertical_layout_hints(ragged_tokens)
+        self.assertEqual(
+            core._choose_vertical_layout_action_with_hints(ragged_hints, 0, 3, True, kinsoku_mode='standard'),
+            'draw',
         )
         self.assertEqual(
             core._choose_vertical_layout_action(['す', 'か', '？', '」', '、', '「'], 0, 45, 10, 100, 10, 20, kinsoku_mode='standard'),
@@ -944,6 +990,11 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
             (['）'], 10, 10, 100, 10, 20, 'off'),
             (['!', '?'], 45, 10, 100, 10, 20, 'standard'),
             (['A', '、', '」'], 45, 10, 100, 10, 20, 'standard'),
+            (['A', '、', '」'], 45, 10, 100, 10, 20, 'simple'),
+            (['A', '。', '」'], 45, 10, 100, 10, 20, 'simple'),
+            (['A', '、', '」'], 45, 10, 122, 10, 20, 'simple'),
+            (['A', '。', '」'], 45, 10, 122, 10, 20, 'standard'),
+            (['A', 'B', '、', '」'], 23, 10, 122, 10, 20, 'simple'),
             (['、', '。'], 45, 10, 100, 10, 20, 'standard'),
             (['す', 'か', '？', '」', '、', '「'], 45, 10, 100, 10, 20, 'standard'),
             (['（', '」', '。'], 40, 10, 100, 10, 20, 'standard'),

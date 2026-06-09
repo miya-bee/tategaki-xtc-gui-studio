@@ -110,6 +110,7 @@ UI_TRANSLATIONS_EN: dict[str, str] = {
     '左パネルの表示/非表示': 'Show/hide the left panel',
     '使い方の流れ': 'How to use',
     '表示設定': 'Display settings',
+    '外観': 'Appearance',
     '上部ボタンの使い分け': 'Top button guide',
     '出力先': 'Output',
     '組版': 'Typesetting',

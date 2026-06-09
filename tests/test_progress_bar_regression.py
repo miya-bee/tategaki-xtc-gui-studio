@@ -60,15 +60,16 @@ class ProgressBarRegressionTests(unittest.TestCase):
         rendered = core.apply_progress_bar_overlay_to_canvas(image, args, 2, 4)
 
         # width 140 -> bar width 56, centered at x=42..97.
-        # page 2/4 -> marker is near the middle at x=70.
+        # page 2/4 -> marker is near the middle at x=69.  Tategaki reading
+        # progress grows from right to left, so the right side is thick/read.
         self.assertEqual(rendered.getpixel((42, 85)), 0)  # track start
         self.assertEqual(rendered.getpixel((97, 85)), 0)  # track end
-        self.assertEqual(rendered.getpixel((50, 84)), 0)  # thick read progress upper row
-        self.assertEqual(rendered.getpixel((50, 86)), 0)  # thick read progress lower row
-        self.assertEqual(rendered.getpixel((90, 84)), 255)  # unread side is only the thin center track
-        self.assertEqual(rendered.getpixel((90, 86)), 255)
-        self.assertEqual(rendered.getpixel((70, 83)), 0)  # current-position marker top
-        self.assertEqual(rendered.getpixel((70, 87)), 0)  # current-position marker bottom
+        self.assertEqual(rendered.getpixel((90, 84)), 0)  # thick read progress upper row
+        self.assertEqual(rendered.getpixel((90, 86)), 0)  # thick read progress lower row
+        self.assertEqual(rendered.getpixel((50, 84)), 255)  # unread side is only the thin center track
+        self.assertEqual(rendered.getpixel((50, 86)), 255)
+        self.assertEqual(rendered.getpixel((69, 83)), 0)  # current-position marker top
+        self.assertEqual(rendered.getpixel((69, 87)), 0)  # current-position marker bottom
         pixels = set(rendered.crop((42, 80, 98, 90)).getdata())
         self.assertLessEqual(pixels, {0, 255})
 
@@ -88,6 +89,27 @@ class ProgressBarRegressionTests(unittest.TestCase):
         self.assertGreater(len(xs), 0)
         self.assertGreaterEqual(min(xs), 12)
         self.assertLess(min(xs), 20)
+
+
+    def test_progress_bar_overlay_read_portion_grows_from_right_to_left(self) -> None:
+        args = core.ConversionArgs(
+            width=140,
+            height=90,
+            margin_b=0,
+            progress_bar_enabled=True,
+            progress_bar_position='center',
+        )
+        image = Image.new('L', (args.width, args.height), 255)
+        rendered = core.apply_progress_bar_overlay_to_canvas(image, args, 1, 4)
+
+        # width 140 -> bar width 56, centered at x=42..97.
+        # page 1/4 -> marker is at x=83 and the thick read area is 83..97.
+        self.assertEqual(rendered.getpixel((90, 84)), 0)
+        self.assertEqual(rendered.getpixel((90, 86)), 0)
+        self.assertEqual(rendered.getpixel((50, 84)), 255)
+        self.assertEqual(rendered.getpixel((50, 86)), 255)
+        self.assertEqual(rendered.getpixel((83, 83)), 0)
+        self.assertEqual(rendered.getpixel((83, 87)), 0)
 
 
     def test_bottom_overlay_layout_keeps_progress_bar_out_of_page_number_rect(self) -> None:

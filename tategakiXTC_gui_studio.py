@@ -9,7 +9,6 @@ PySide6 ベースの縦書き XTC 変換ツール。
 
 import base64
 import math
-import re
 from collections import OrderedDict
 import logging
 import locale
@@ -66,6 +65,34 @@ _DEVICE_PREVIEW_PAGE_QIMAGE_CACHE_LIMIT = 8
 _FONT_PREVIEW_PAGE_PIXMAP_CACHE_LIMIT = 8
 _SETTINGS_PREVIEW_REFRESH_DELAY_MS = 350
 _AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX = 20
+
+
+def _log_dir_accepts_log_file(candidate: Path) -> bool:
+    """Return whether a directory can actually create a log file.
+
+    Some readonly deployments can have an existing ``logs/`` directory, so
+    mkdir(success) is not enough.  Probe a tiny file before selecting the app
+    local log folder; otherwise fall back to the temporary log folder and keep
+    the GUI startable.
+    """
+
+    probe = candidate / f'.tategaki_log_write_test_{os.getpid()}'
+    try:
+        with probe.open('w', encoding='utf-8') as fp:
+            fp.write('')
+    except Exception:
+        try:
+            probe.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return False
+    try:
+        probe.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return True
+
+
 def _resolve_log_dir() -> Path:
     global ACTIVE_LOG_DIR
     if isinstance(ACTIVE_LOG_DIR, Path):
@@ -74,6 +101,8 @@ def _resolve_log_dir() -> Path:
     for candidate in (LOG_DIR, FALLBACK_LOG_DIR):
         try:
             candidate.mkdir(parents=True, exist_ok=True)
+            if not _log_dir_accepts_log_file(candidate):
+                raise PermissionError(f'ログ保存先へ書き込めません: {candidate}')
         except Exception as exc:
             last_error = exc
             continue
@@ -82,6 +111,27 @@ def _resolve_log_dir() -> Path:
     if last_error is not None:
         raise last_error
     raise RuntimeError('ログ保存先を作成できませんでした。')
+
+
+def _new_session_log_path(log_dir: Path) -> Path:
+    return log_dir / f'tategakiXTC_gui_studio_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+
+
+def _session_log_path_for_display() -> Path:
+    """Return a log path safe to show in the UI without raising.
+
+    ``_resolve_session_log_path`` re-resolves the log directory and intentionally
+    raises when neither the app ``logs/`` folder nor the temporary fallback is
+    writable.  When the app has fallen back to stderr-only logging, building the
+    log tab must not crash, so degrade to the active (or default) log directory
+    for display purposes only.
+    """
+
+    try:
+        return _resolve_session_log_path()
+    except Exception:
+        APP_LOGGER.exception('ログ保存先の解決に失敗しました。既定のログフォルダを表示します。')
+        return ACTIVE_LOG_DIR or LOG_DIR
 
 
 def _resolve_session_log_path() -> Path:
@@ -93,34 +143,60 @@ def _resolve_session_log_path() -> Path:
     return SESSION_LOG_PATH
 
 
+def _try_create_session_file_handler(
+    log_dir: Path,
+    formatter: logging.Formatter,
+) -> tuple[logging.FileHandler | None, Path | None, Exception | None]:
+    global ACTIVE_LOG_DIR, SESSION_LOG_PATH
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        if not _log_dir_accepts_log_file(log_dir):
+            raise PermissionError(f'ログ保存先へ書き込めません: {log_dir}')
+        active_log_dir = log_dir
+        session_log_path = _new_session_log_path(active_log_dir)
+        _cleanup_old_session_logs(active_log_dir, active_log_path=session_log_path)
+        file_handler = logging.FileHandler(session_log_path, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+    except Exception as exc:
+        return None, None, exc
+    ACTIVE_LOG_DIR = log_dir
+    SESSION_LOG_PATH = session_log_path
+    return file_handler, session_log_path, None
+
 
 def _configure_app_logging() -> logging.Logger:
+    global ACTIVE_LOG_DIR, SESSION_LOG_PATH
     logger = logging.getLogger(APP_LOGGER_NAME)
     if getattr(logger, '_tategaki_configured', False):
         return logger
 
-    session_log_path = _resolve_session_log_path()
-    active_log_dir = _resolve_log_dir()
-    _cleanup_old_session_logs(active_log_dir, active_log_path=session_log_path)
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-
-    file_handler = logging.FileHandler(session_log_path, encoding='utf-8')
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
 
     stream_handler = logging.StreamHandler(sys.stderr)
     stream_handler.setLevel(logging.INFO)
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
+    file_handler: logging.FileHandler | None = None
+    session_log_path: Path | None = None
+    log_error: Exception | None = None
+    for candidate in (LOG_DIR, FALLBACK_LOG_DIR):
+        file_handler, session_log_path, log_error = _try_create_session_file_handler(candidate, formatter)
+        if file_handler is not None:
+            logger.addHandler(file_handler)
+            break
+
     logger.propagate = False
     logger._tategaki_configured = True
-    if active_log_dir != LOG_DIR:
-        logger.warning('既定のログフォルダを作成できなかったため、一時フォルダへ退避します: %s', active_log_dir)
-    logger.info('ログ初期化: %s', session_log_path)
+    active_log_dir = ACTIVE_LOG_DIR
+    if file_handler is None:
+        logger.warning('ログファイルを作成できなかったため、標準エラー出力のみで続行します: %s', log_error)
+    elif active_log_dir != LOG_DIR:
+        logger.warning('既定のログフォルダへ書き込めなかったため、一時フォルダへ退避します: %s', active_log_dir)
+    logger.info('ログ初期化: %s', session_log_path if session_log_path is not None else 'stderr-only')
     return logger
 
 
@@ -198,11 +274,37 @@ from tategakiXTC_gui_studio_desktop import (
 from tategakiXTC_gui_studio_preview_helpers import (
     _coerce_preview_base64_text,
     _coerce_preview_data_url,
+    _manual_preview_required_status_message as _manual_preview_required_status_message_for_limit,
+    _preview_page_limit_value,
+    _preview_widget_limit_value,
 )
 
 from tategakiXTC_gui_studio_path_helpers import (
     _supported_targets_for_path,
     _default_output_name_for_target,
+)
+
+from tategakiXTC_gui_styles import (
+    dark_stylesheet,
+    light_stylesheet,
+)
+from tategakiXTC_gui_help_texts import (
+    usage_help_text,
+)
+
+from tategakiXTC_gui_preset_helpers import (
+    normalize_preset_display_name,
+    preset_combo_entries,
+    preset_display_name_settings_key,
+    preset_settings_prefix,
+    preset_side_summary_text,
+    selected_preset_key_from_combo,
+)
+
+from tategakiXTC_gui_completion_helpers import (
+    build_conversion_completion_card_message,
+    completion_card_parent_texts,
+    completion_card_result_item_texts,
 )
 
 from tategakiXTC_gui_studio_view_helpers import (
@@ -271,11 +373,6 @@ from tategakiXTC_gui_studio_constants import (
     RESULT_TAB_INDEX,
     LOG_TAB_INDEX,
     SUPPORTED_INPUT_SUFFIXES,
-    UI_ASSETS_DIR,
-    SPIN_UP_ICON,
-    SPIN_DOWN_ICON,
-    SPIN_UP_ICON_DARK,
-    SPIN_DOWN_ICON_DARK,
     TEXT_OR_MARKDOWN_LABEL,
     FONT_REQUIRED_SUFFIXES,
     DeviceProfile,
@@ -3739,28 +3836,7 @@ class MainWindow(QMainWindow):
                 pass
 
     def _completion_card_parent_texts(self: MainWindow, paths: object) -> list[str]:
-        parents: list[str] = []
-        seen: set[str] = set()
-        for value in results_controller.coerce_result_path_list(paths):
-            path_text = worker_logic._normalized_path_text(value).strip()
-            if not path_text:
-                continue
-            try:
-                if worker_logic._is_windows_like_path(path_text):
-                    parent = ntpath.dirname(ntpath.normpath(path_text))
-                else:
-                    parent = str(Path(path_text).parent)
-            except Exception:
-                parent = ''
-            parent = worker_logic._normalized_path_text(parent).strip()
-            if not parent:
-                continue
-            key = parent.replace('\\', '/').casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            parents.append(parent)
-        return parents
+        return completion_card_parent_texts(paths)
 
     def _completion_card_result_item_texts(
         self: MainWindow,
@@ -3770,121 +3846,18 @@ class MainWindow(QMainWindow):
         max_items: int = 5,
     ) -> list[str]:
         """変換完了カードへ表示する出力ファイルの短い一覧を返す。"""
-        normalized_paths = results_controller.coerce_result_path_list(paths)
-        base_text = worker_logic._normalized_path_text(base_path).strip()
-        items: list[str] = []
-        for value in normalized_paths[:max(0, int(max_items))]:
-            path_text = worker_logic._normalized_path_text(value).strip()
-            if not path_text:
-                continue
-            display_text = ''
-            try:
-                if base_text and worker_logic._is_windows_like_path(path_text):
-                    path_norm = ntpath.normpath(path_text)
-                    base_norm = ntpath.normpath(base_text)
-                    rel = ntpath.relpath(path_norm, base_norm)
-                    if rel and rel != '.' and not rel.startswith('..'):
-                        display_text = rel
-                elif base_text:
-                    path_obj = Path(path_text)
-                    base_obj = Path(base_text)
-                    try:
-                        display_text = str(path_obj.relative_to(base_obj))
-                    except Exception:
-                        display_text = ''
-            except Exception:
-                display_text = ''
-            if not display_text:
-                display_text = studio_logic.build_result_display_name(path_text) or path_text
-            items.append(display_text)
-        return items
+        return completion_card_result_item_texts(paths, base_path=base_path, max_items=max_items)
 
     def _build_conversion_completion_card_message(
         self: MainWindow,
         converted_files: object,
         result: Mapping[str, object] | None = None,
     ) -> str:
-        paths = results_controller.coerce_result_path_list(converted_files)
-        count = len(paths)
-        result_payload = result or {}
-        is_folder_batch = bool(result_payload.get('folder_batch'))
-        folder_batch_stopped = bool(result_payload.get('folder_batch_stopped'))
-        target_text = worker_logic._normalized_path_text(result_payload.get('open_folder_target')).strip()
-        english = self.current_ui_language_value() == 'en'
-        tr = (lambda message: studio_logic.translate_ui_text(message, 'en')) if english else (lambda message: str(message))
-        if count <= 0:
-            if is_folder_batch and folder_batch_stopped:
-                lines = [tr('フォルダ一括変換を中止しました。'), tr('保存済みファイルはありません。')]
-                processed = int(result_payload.get('folder_batch_processed_count') or 0)
-                total = int(result_payload.get('folder_batch_total_count') or 0)
-                pending = int(result_payload.get('folder_batch_pending_count') or 0)
-                if total > 0:
-                    lines.append(tr(f'処理済み: {processed} / {total} 件'))
-                if pending > 0:
-                    lines.append(tr(f'未処理: {pending} 件'))
-                if target_text:
-                    lines.append(tr(f'出力先: {target_text}'))
-                lines.append(tr('停止要求により、以降の未処理ファイルは変換していません。'))
-                lines.append(tr('詳細は左下の「変換結果」タブにも記録しています。'))
-                return '\n'.join(lines)
-            if bool(result_payload.get('stopped')):
-                lines = [tr('変換を中止しました。'), tr('保存済みファイルはありません。')]
-                if target_text:
-                    lines.append(tr(f'出力先: {target_text}'))
-                lines.append(tr('停止要求により、変換結果は保存されませんでした。'))
-                lines.append(tr('詳細は左下の「ログ」タブにも記録しています。'))
-                return '\n'.join(lines)
-            return ''
-        parents = self._completion_card_parent_texts(paths)
-        destination = ''
-        if len(parents) <= 1:
-            destination = parents[0] if parents else target_text
-        elif target_text:
-            destination = target_text
-
-        if count == 1:
-            filename = studio_logic.build_result_display_name(paths[0]) or ('1 file' if english else '1件')
-            if is_folder_batch and folder_batch_stopped:
-                lines = [tr('フォルダ一括変換を中止しました。'), tr(f'保存済み: {filename}')]
-            else:
-                lines = [tr(f'保存しました: {filename}')]
-            if destination:
-                lines.append(tr(f'保存先: {destination}'))
-            lines.append(tr('保存先を開く場合は、下の［保存先を開く］を押してください。'))
-            lines.append(tr('詳細は左下の「変換結果」タブにも記録しています。'))
-            return '\n'.join(lines)
-
-        if is_folder_batch and folder_batch_stopped:
-            lines = [tr('フォルダ一括変換を中止しました。'), tr(f'保存済み: {count}件')]
-            processed = int(result_payload.get('folder_batch_processed_count') or 0)
-            total = int(result_payload.get('folder_batch_total_count') or 0)
-            pending = int(result_payload.get('folder_batch_pending_count') or 0)
-            if total > 0:
-                lines.append(tr(f'処理済み: {processed} / {total} 件'))
-            if pending > 0:
-                lines.append(tr(f'未処理: {pending} 件'))
-        else:
-            lines = [tr(f'保存しました: {count}件')]
-        if len(parents) <= 1:
-            if destination:
-                lines.append(tr(f'保存先: {destination}'))
-        else:
-            lines.append(tr(f'保存先: 複数フォルダ（{len(parents)}か所）'))
-            if target_text:
-                lines.append(tr(f'基準フォルダ: {target_text}'))
-            lines.append(tr('サブフォルダ構造を保持して保存しました。'))
-
-        lines.append(tr('出力ファイル:'))
-        item_base = target_text if len(parents) > 1 else destination
-        item_texts = self._completion_card_result_item_texts(paths, base_path=item_base, max_items=5)
-        for index, item_text in enumerate(item_texts, start=1):
-            lines.append(f'{index}. {item_text}')
-        remaining = count - len(item_texts)
-        if remaining > 0:
-            lines.append(tr(f'…ほか{remaining}件'))
-        lines.append(tr('保存先を開く場合は、下の［保存先を開く］を押してください。'))
-        lines.append(tr('詳細は左下の「変換結果」タブにも記録しています。'))
-        return '\n'.join(lines)
+        return build_conversion_completion_card_message(
+            converted_files,
+            result,
+            ui_language=self.current_ui_language_value(),
+        )
 
     def _meaningful_open_folder_target_text(self: MainWindow, value: object) -> str:
         if not isinstance(value, (str, bytes, bytearray, os.PathLike)):
@@ -4321,7 +4294,8 @@ class MainWindow(QMainWindow):
         return w
 
     def _build_log_tab(self):
-        log_tab_plan = self._localized_plan(gui_layouts.build_log_tab_plan(log_path=_resolve_session_log_path()))
+        session_log_path_display = _session_log_path_for_display()
+        log_tab_plan = self._localized_plan(gui_layouts.build_log_tab_plan(log_path=session_log_path_display))
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(*self._plan_int_tuple_value(log_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4))
@@ -4334,7 +4308,7 @@ class MainWindow(QMainWindow):
         label.setObjectName(str(log_tab_plan.get('path_label_object_name', 'logPathLabel')))
         top.addWidget(label, 0)
 
-        self.log_path_edit = QLineEdit(str(log_tab_plan.get('log_path', str(_resolve_session_log_path()))))
+        self.log_path_edit = QLineEdit(str(log_tab_plan.get('log_path', str(session_log_path_display))))
         log_path_read_only = self._plan_bool_value(log_tab_plan, 'log_path_edit_read_only', True)
         self.log_path_edit.setReadOnly(log_path_read_only)
         top.addWidget(self.log_path_edit, 1)
@@ -4630,998 +4604,10 @@ class MainWindow(QMainWindow):
                 pass
 
     def _light_stylesheet(self) -> str:
-        stylesheet = """
-        /* ── ベース ── */
-        QMainWindow, QWidget {
-            background: #F4F7FB;
-            color: #243648;
-            font-family: 'Meiryo', 'Yu Gothic UI', sans-serif;
-            font-size: 15px;
-        }
-
-        /* ── トップバー ── */
-        QFrame#topBar {
-            background: #FFFFFF;
-            border: none;
-        }
-        QFrame#vSep { background: #D5E0EB; }
-        QFrame#topSep { background: #DDE6EF; border: none; max-height: 1px; }
-        QFrame#leftSettingsBottomSep { background: #DDE6EF; border: none; max-height: 1px; }
-        QFrame#bottomPanelSep { background: #DDE6EF; border: none; max-height: 1px; }
-
-        QLabel#appVersionSubtle {
-            background: transparent;
-            border: none;
-            padding: 0px 2px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #5A7794;
-            letter-spacing: 0px;
-        }
-
-        QLineEdit#targetEdit {
-            background: #FFFFFF;
-            border: 1px solid #C9D6E3;
-            border-radius: 8px;
-            padding: 6px 10px;
-            color: #2B4056;
-        }
-        QLineEdit#targetEdit:focus { border-color: #77AEEB; }
-
-        QPushButton#topBtn {
-            background: #FFFFFF;
-            border: 1px solid #C8D6E5;
-            border-radius: 8px;
-            padding: 5px 10px;
-            color: #335A82;
-            font-size: 14px;
-        }
-        QPushButton#topBtn:hover { background: #EEF5FC; }
-
-        QPushButton#runBtn {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #4F8FEF, stop:1 #69B8FF);
-            border: none;
-            border-radius: 8px;
-            color: #F9FCFF;
-            font-weight: 700;
-            font-size: 15px;
-            letter-spacing: 0.3px;
-        }
-        QPushButton#runBtn:hover { background: #5B9CF4; }
-        QPushButton#runBtn:disabled { background: #D5DEE8; color: #7C8B99; }
-
-        QPushButton#stopBtn {
-            background: #FFF5F2;
-            border: 1px solid #EDC2BA;
-            border-radius: 8px;
-            color: #C15A48;
-            font-size: 14px;
-        }
-        QPushButton#stopBtn:hover { background: #FFEAE4; }
-        QPushButton#stopBtn:disabled {
-            background: #EEF2F6;
-            color: #9AA7B3;
-            border-color: #D6DEE6;
-        }
-
-        QPushButton#iconBtn {
-            background: #FFFFFF;
-            border: 1px solid #C8D6E5;
-            border-radius: 8px;
-            color: #7B95AC;
-            font-size: 18px;
-            font-weight: 700;
-        }
-        QPushButton#iconBtn:hover { background: #EEF5FC; color: #3E607F; }
-
-        /* ── 設定パネル ── */
-        QScrollBar:vertical {
-            background: #E9EFF5;
-            width: 10px;
-            border-radius: 5px;
-        }
-        QScrollBar::handle:vertical {
-            background: #C6D4E2;
-            min-height: 24px;
-            border-radius: 5px;
-        }
-        QScrollBar::handle:vertical:hover { background: #B5C7D8; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-
-        QGroupBox#settingsSection {
-            background: #FFFFFF;
-            border: 1px solid #D6E0EA;
-            border-radius: 10px;
-            margin-top: 0;
-            padding-top: 14px;
-            font-size: 14px;
-            font-weight: 700;
-            color: #6D89A6;
-            letter-spacing: 0.8px;
-            text-transform: uppercase;
-        }
-        QGroupBox#settingsSection::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            padding: 0 8px;
-            left: 10px;
-            top: 6px;
-            background: #FFFFFF;
-        }
-
-        QLabel#dimLabel { color: #5E7893; font-size: 14px; }
-        QLabel#hintLabel { color: #788FA4; font-size: 13px; }
-        QLabel#resultsPlaceholderLabel { color: #9BAABB; font-size: 13px; }
-        QLabel#resultsPlaceholderLabel[placeholderState="empty"] { color: #AAB7C4; }
-        QLabel#resultsPlaceholderLabel[placeholderState="content"] { color: #24577E; font-size: 13px; font-weight: 600; }
-        QFrame#resultsActionRow { background: #EEF6FC; border: 1px solid #C9DDED; border-radius: 8px; }
-        QPushButton#resultsActionButton { background: #FFFFFF; border: 1px solid #9CBAD4; border-radius: 8px; padding: 4px 10px; color: #234D70; font-weight: 700; }
-        QPushButton#resultsActionButton:hover { background: #F6FBFF; border-color: #6F9FC8; }
-        QPushButton#resultsActionButton:disabled { color: #A5B4C1; border-color: #D5E0E8; background: #F6F8FA; }
-        QFrame#conversionCompletionCard { background: #FFF9E8; border: 1px solid #F0CF76; border-radius: 10px; margin: 6px 8px 0 8px; }
-        QLabel#conversionCompletionTitle { color: #6F4B00; font-size: 15px; font-weight: 800; background: transparent; }
-        QLabel#conversionCompletionMessage { color: #4A3A12; font-size: 13px; background: transparent; }
-        QPushButton#conversionCompletionActionButton, QPushButton#conversionCompletionCloseButton { background: #FFFFFF; border: 1px solid #D8B95D; border-radius: 8px; padding: 4px 10px; color: #6F4B00; font-weight: 700; }
-        QPushButton#conversionCompletionActionButton:hover, QPushButton#conversionCompletionCloseButton:hover { background: #FFF3CC; border-color: #C99D2E; }
-        QPushButton#conversionCompletionActionButton:disabled { color: #B6A77E; border-color: #E8DBB1; background: #F8F4E8; }
-        QLabel#presetSummaryLabel { color: #275C9A; font-size: 15px; font-weight: 400; }
-        QLabel#subNoteLabel { color: #4F6982; font-size: 12px; line-height: 1.35em; }
-        QLabel#flowGuideTitle { color: #1F3D5A; font-size: 13px; font-weight: 700; }
-        QLabel#flowGuideText { color: #3E5771; font-size: 12px; }
-        QLabel#viewRoleLabel { color: #163B63; font-size: 13px; font-weight: 700; }
-        QPushButton#miniHelpBtn { background: #EAF3FB; color: #1C4D7C; border: 1px solid #8FB0CD; border-radius: 10px; font-size: 12px; font-weight: 700; padding: 0; }
-        QPushButton#miniHelpBtn:hover { background: #DCECF9; border-color: #6F96BB; }
-        QPushButton#miniHelpBtn:pressed { background: #CFE3F4; }
-
-        /* ── 左ペインの密度調整 ── */
-        QWidget#leftSettingsContainer QGroupBox#settingsSection {
-            border-radius: 9px;
-            padding-top: 12px;
-        }
-        QWidget#leftSettingsContainer QGroupBox#settingsSection::title {
-            left: 8px;
-            top: 5px;
-            padding: 0 6px;
-        }
-        QWidget#leftSettingsContainer QLabel#dimLabel { font-size: 13px; }
-        QWidget#leftSettingsContainer QLabel#hintLabel { font-size: 12px; }
-        QWidget#leftSettingsContainer QLabel#subNoteLabel { font-size: 11px; }
-        QWidget#leftSettingsContainer QLabel#flowGuideTitle { font-size: 12px; }
-        QWidget#leftSettingsContainer QLabel#flowGuideText { font-size: 11px; }
-        QFrame#flowGuide { background: #EDF4FB; border: 1px solid #C7D8E8; border-radius: 10px; }
-        QWidget#viewRoleBox { background: transparent; }
-        QWidget#leftSettingsContainer QLabel#presetSummaryLabel { font-size: 14px; font-weight: 400; }
-        QWidget#leftSettingsContainer QComboBox,
-        QWidget#leftSettingsContainer QSpinBox,
-        QWidget#leftSettingsContainer QLineEdit {
-            padding: 3px 7px;
-            min-height: 18px;
-            border-radius: 7px;
-        }
-        QWidget#leftSettingsContainer QComboBox::drop-down { width: 18px; }
-        QWidget#leftSettingsContainer QSpinBox[compactField="true"] {
-            padding: 2px 6px;
-            min-height: 16px;
-            max-height: 24px;
-            border-radius: 6px;
-        }
-        QWidget#leftSettingsContainer QCheckBox { spacing: 4px; }
-        QWidget#leftSettingsContainer QCheckBox::indicator { width: 14px; height: 14px; }
-        QWidget#leftSettingsContainer QPushButton#smallBtn {
-            padding: 3px 10px;
-            min-height: 18px;
-            border-radius: 7px;
-        }
-        QWidget#leftSettingsContainer QPushButton#stepBtn {
-            border-radius: 5px;
-            font-size: 15px;
-        }
-
-        QComboBox {
-            background: #FFFFFF;
-            border: 1px solid #C9D6E3;
-            border-radius: 8px;
-            padding: 5px 8px;
-            color: #2B4056;
-        }
-        QComboBox:hover { border-color: #9ABFE4; }
-        QComboBox::drop-down { border: none; width: 22px; }
-        QComboBox::down-arrow {
-            image: none;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 6px solid #6B86A0;
-        }
-        QComboBox QAbstractItemView {
-            background: #FFFFFF;
-            border: 1px solid #C9D6E3;
-            selection-background-color: #DCEBFA;
-            color: #2B4056;
-        }
-
-        QSpinBox {
-            background: #FFFFFF;
-            border: 1px solid #C9D6E3;
-            border-radius: 8px;
-            padding: 5px 8px;
-            color: #2B4056;
-            min-height: 22px;
-        }
-        QSpinBox:hover { border-color: #9ABFE4; }
-        QSpinBox:focus { border-color: #77AEEB; }
-        QSpinBox::up-button, QSpinBox::down-button { width: 0; }
-        QSpinBox[showSpinButtons="true"] {
-            padding-right: 23px;
-            border-color: #7D9FBE;
-        }
-        QSpinBox[showSpinButtons="true"]::up-button,
-        QSpinBox[showSpinButtons="true"]::down-button {
-            width: 24px;
-            background: #E5EEF8;
-            border-left: 1px solid #6F93B6;
-            border-right: 1px solid #AEC6DD;
-        }
-        QSpinBox[showSpinButtons="true"]::up-button:hover,
-        QSpinBox[showSpinButtons="true"]::down-button:hover {
-            background: #D6E5F5;
-        }
-        QSpinBox[showSpinButtons="true"]::up-button:pressed,
-        QSpinBox[showSpinButtons="true"]::down-button:pressed {
-            background: #C8DCF1;
-        }
-        QSpinBox[showSpinButtons="true"]::up-button {
-            subcontrol-origin: border;
-            subcontrol-position: top right;
-            border-top-right-radius: 7px;
-            border-bottom: 1px solid #6F93B6;
-        }
-        QSpinBox[showSpinButtons="true"]::down-button {
-            subcontrol-origin: border;
-            subcontrol-position: bottom right;
-            border-bottom-right-radius: 7px;
-        }
-        QSpinBox[showSpinButtons="true"]::up-arrow {
-            image: url({SPIN_UP_ICON});
-            width: 14px;
-            height: 10px;
-        }
-        QSpinBox[showSpinButtons="true"]::down-arrow {
-            image: url({SPIN_DOWN_ICON});
-            width: 14px;
-            height: 10px;
-        }
-        QSpinBox[miniSpinButtons="true"] {
-            padding-right: 12px;
-        }
-        QSpinBox[miniSpinButtons="true"]::up-button,
-        QSpinBox[miniSpinButtons="true"]::down-button {
-            width: 12px;
-        }
-        QSpinBox[miniSpinButtons="true"]::up-arrow,
-        QSpinBox[miniSpinButtons="true"]::down-arrow {
-            width: 7px;
-            height: 5px;
-        }
-
-        QCheckBox { color: #35506A; spacing: 6px; }
-        QLabel#checkboxTextLabel { color: #35506A; }
-        QCheckBox::indicator {
-            width: 16px; height: 16px;
-            border: 1px solid #AFC1D2;
-            border-radius: 4px;
-            background: #FFFFFF;
-        }
-        QCheckBox::indicator:hover { border-color: #77AEEB; }
-        QCheckBox::indicator:checked {
-            background-color: #5B9BED;
-            border: 1px solid #4C8FE3;
-        }
-
-        QPushButton#smallBtn {
-            background: #FFFFFF;
-            border: 1px solid #C8D6E5;
-            border-radius: 8px;
-            padding: 5px 12px;
-            color: #355A80;
-            font-size: 14px;
-            min-height: 20px;
-        }
-        QPushButton#smallBtn:hover { background: #EEF5FC; }
-        QPushButton#smallBtn[previewState="pending"] {
-            background: #FFF1DF;
-            border: 1px solid #F0A84F;
-            color: #8A4D00;
-            font-weight: 700;
-        }
-        QPushButton#smallBtn[previewState="pending"]:hover { background: #FFE5C2; }
-        QPushButton#smallBtn[previewState="refreshing"],
-        QPushButton#smallBtn[previewState="refreshing"]:disabled {
-            background: #F59E0B;
-            border: 1px solid #D97706;
-            color: #FFFFFF;
-            font-weight: 700;
-        }
-        QPushButton#smallBtn[previewState="viewer"],
-        QPushButton#smallBtn[previewState="viewer"]:disabled {
-            background: #EEF2F6;
-            border: 1px solid #CAD6E2;
-            color: #6F8294;
-            font-weight: 700;
-        }
-
-        QPushButton#stepBtn {
-            background: #FFFFFF;
-            border: 1px solid #C8D6E5;
-            border-radius: 6px;
-            color: #5D7EA0;
-            font-size: 16px;
-            font-weight: 700;
-        }
-        QPushButton#stepBtn:hover { background: #EEF5FC; }
-
-        QLineEdit {
-            background: #FFFFFF;
-            border: 1px solid #C9D6E3;
-            border-radius: 8px;
-            padding: 5px 9px;
-            color: #2B4056;
-        }
-        QLineEdit:focus { border-color: #77AEEB; }
-
-        /* ── プレビューパネル ── */
-        QFrame#viewToggleBar {
-            background: #F5F8FC;
-            border: none;
-        }
-        QPushButton#viewToggleBtn {
-            background: transparent;
-            border: 1px solid #C8D6E5;
-            border-radius: 8px;
-            padding: 6px 16px;
-            color: #6C86A0;
-            font-size: 15px;
-        }
-        QPushButton#viewToggleBtn:hover { background: #EEF4FB; color: #37597C; }
-        QPushButton#viewToggleBtn:checked {
-            background: #E8F1FD;
-            border: 1px solid #C3D7EE;
-            color: #23435F;
-            font-weight: 700;
-        }
-
-        /* ── ナビゲーションバー ── */
-        QFrame#navBar {
-            background: #F5F8FC;
-            border: none;
-            border-top: 1px solid #DCE5EE;
-        }
-        QPushButton#navBtn {
-            background: #FFFFFF;
-            border: 1px solid #C8D6E5;
-            border-radius: 8px;
-            padding: 5px 14px;
-            color: #355A80;
-            font-size: 14px;
-        }
-        QPushButton#navBtn:hover { background: #EEF5FC; }
-        QPushButton#navBtn:disabled { color: #A4B3C0; border-color: #D6DFE8; }
-        QFrame#navSectionSep {
-            color: #D2DEE9;
-            background: transparent;
-        }
-        QCheckBox#navToggle, QCheckBox#previewToolbarToggle {
-            color: #35506A;
-            spacing: 6px;
-            padding-right: 4px;
-        }
-        QCheckBox#navToggle::indicator, QCheckBox#previewToolbarToggle::indicator {
-            width: 34px;
-            height: 18px;
-            border: 1px solid #AFC1D2;
-            border-radius: 9px;
-            background: #FFFFFF;
-        }
-        QCheckBox#navToggle::indicator:hover, QCheckBox#previewToolbarToggle::indicator:hover { border-color: #77AEEB; }
-        QCheckBox#navToggle::indicator:checked, QCheckBox#previewToolbarToggle::indicator:checked {
-            background: #5B9BED;
-            border: 1px solid #4C8FE3;
-        }
-
-        /* ── 下部パネル ── */
-        QFrame#bottomPanel { background: #F6F9FC; border: none; }
-        QFrame#bottomPanel QTabBar::tab { min-height: 24px; padding: 4px 10px; }
-        QFrame#statusStrip { background: #FAFCFE; border: none; }
-
-        QLabel#badge {
-            background: #EDF3F8;
-            border: 1px solid #D4DFEA;
-            border-radius: 10px;
-            padding: 3px 10px;
-            font-size: 13px;
-            font-weight: 700;
-            color: #627E99;
-        }
-
-        QProgressBar {
-            background: #E7EEF5;
-            border: none;
-            border-radius: 3px;
-        }
-        QProgressBar::chunk {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #4F8FEF, stop:1 #67C0FF);
-            border-radius: 3px;
-        }
-
-        QTabWidget::pane {
-            background: #F6F9FC;
-            border: none;
-            border-top: 1px solid #DCE5EE;
-        }
-        QTabBar::tab {
-            background: #F6F9FC;
-            border: none;
-            border-top: 2px solid transparent;
-            padding: 7px 18px;
-            color: #708BA6;
-            font-size: 14px;
-        }
-        QTabBar::tab:selected {
-            color: #25435F;
-            border-top: 2px solid #6FA7E7;
-            background: #FFFFFF;
-        }
-        QTabBar::tab:hover { color: #4D6F90; }
-
-        QListWidget {
-            background: #FFFFFF;
-            border: none;
-            border-radius: 6px;
-            color: #35506A;
-            font-size: 14px;
-        }
-        QListWidget::item:hover { background: #EEF5FC; }
-        QListWidget::item:selected { background: #DCEBFA; }
-
-        QTextEdit {
-            background: #FFFFFF;
-            border: 1px solid #E0E7EF;
-            border-radius: 6px;
-            color: #5D7892;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 13px;
-            padding: 6px;
-        }
-
-        /* ── スプリッタ ── */
-        QSplitter::handle { background: #DCE5EE; }
-        QSplitter::handle:horizontal {
-            width: 6px;
-            margin: 0 2px;
-        }
-        QSplitter::handle:vertical {
-            height: 6px;
-            margin: 2px 0;
-        }
-
-        /* ── ポップアップメニュー ── */
-        QMenu#gearPopupMenu {
-            background: #FFFFFF;
-            color: #24415C;
-            border: 1px solid #C8D5E1;
-            padding: 6px;
-            border-radius: 8px;
-        }
-        QMenu#gearPopupMenu::item {
-            padding: 7px 28px 7px 12px;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        QMenu#gearPopupMenu::item:selected { background: #EAF4FF; }
-        QMenu#gearPopupMenu::indicator { width: 14px; height: 14px; }
-        QMenu#gearPopupMenu::separator { height: 1px; background: #D7E1EA; margin: 6px 4px; }
-
-        /* ── ステータスバー ── */
-        QStatusBar { background: #F6F9FC; color: #5F7992; font-size: 13px; }
-        """
-        return (stylesheet
-                .replace("{SPIN_UP_ICON}", SPIN_UP_ICON)
-                .replace("{SPIN_DOWN_ICON}", SPIN_DOWN_ICON))
+        return light_stylesheet()
 
     def _dark_stylesheet(self) -> str:
-        stylesheet = """
-        /* ── ベース ── */
-        QMainWindow, QWidget {
-            background: #0D1520;
-            color: #D8EAF8;
-            font-family: 'Meiryo', 'Yu Gothic UI', sans-serif;
-            font-size: 15px;
-        }
-
-        /* ── トップバー ── */
-        QFrame#topBar {
-            background: #111F2E;
-            border: none;
-        }
-        QFrame#vSep { background: #1E3040; }
-        QFrame#topSep { background: #1A2D3F; border: none; max-height: 1px; }
-        QFrame#leftSettingsBottomSep { background: #1A2D3F; border: none; max-height: 1px; }
-        QFrame#bottomPanelSep { background: #1A2D3F; border: none; max-height: 1px; }
-
-        QLabel#appVersionSubtle {
-            background: transparent;
-            border: none;
-            padding: 0px 2px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #7FA4C2;
-            letter-spacing: 0px;
-        }
-
-        QLineEdit#targetEdit {
-            background: #0A1520;
-            border: 1px solid #1E3040;
-            border-radius: 8px;
-            padding: 6px 10px;
-            color: #C8DFF0;
-        }
-        QLineEdit#targetEdit:focus { border-color: #3A6A9A; }
-
-        QPushButton#topBtn {
-            background: #182C3E;
-            border: 1px solid #233D55;
-            border-radius: 8px;
-            padding: 5px 10px;
-            color: #B8D4E8;
-            font-size: 14px;
-        }
-        QPushButton#topBtn:hover { background: #1E3850; }
-
-        QPushButton#runBtn {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #2A6FCC, stop:1 #1A9AE0);
-            border: none;
-            border-radius: 8px;
-            color: #F0F8FF;
-            font-weight: 700;
-            font-size: 15px;
-            letter-spacing: 0.3px;
-        }
-        QPushButton#runBtn:hover { background: #3A80DD; }
-        QPushButton#runBtn:disabled { background: #1A2D3F; color: #4A6070; }
-
-        QPushButton#stopBtn {
-            background: #2A1A1A;
-            border: 1px solid #5A2A2A;
-            border-radius: 8px;
-            color: #E07060;
-            font-size: 14px;
-        }
-        QPushButton#stopBtn:hover { background: #3A2020; }
-        QPushButton#stopBtn:disabled {
-            background: #161E26;
-            color: #3A4A54;
-            border-color: #1E2D3A;
-        }
-
-        QPushButton#iconBtn {
-            background: #182C3E;
-            border: 1px solid #233D55;
-            border-radius: 8px;
-            color: #88AABF;
-            font-size: 18px;
-            font-weight: 700;
-        }
-        QPushButton#iconBtn:hover { background: #1E3850; color: #C8E4F8; }
-
-        /* ── 設定パネル ── */
-        QScrollBar:vertical {
-            background: #0A1520;
-            width: 10px;
-            border-radius: 5px;
-        }
-        QScrollBar::handle:vertical {
-            background: #253D52;
-            min-height: 24px;
-            border-radius: 5px;
-        }
-        QScrollBar::handle:vertical:hover { background: #3A5870; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-
-        QGroupBox#settingsSection {
-            background: #101D2B;
-            border: 1px solid #1A2E40;
-            border-radius: 10px;
-            margin-top: 0;
-            padding-top: 14px;
-            font-size: 14px;
-            font-weight: 700;
-            color: #6A9AB8;
-            letter-spacing: 0.8px;
-            text-transform: uppercase;
-        }
-        QGroupBox#settingsSection::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            padding: 0 8px;
-            left: 10px;
-            top: 6px;
-            background: #101D2B;
-        }
-
-        QLabel#dimLabel { color: #7A9BB2; font-size: 14px; }
-        QLabel#hintLabel { color: #6485A0; font-size: 13px; }
-        QFrame#conversionCompletionCard { background: #2A2414; border: 1px solid #8B6C21; border-radius: 10px; margin: 6px 8px 0 8px; }
-        QLabel#conversionCompletionTitle { color: #FFD97A; font-size: 15px; font-weight: 800; background: transparent; }
-        QLabel#conversionCompletionMessage { color: #F0E2BB; font-size: 13px; background: transparent; }
-        QPushButton#conversionCompletionActionButton, QPushButton#conversionCompletionCloseButton { background: #172434; border: 1px solid #8B6C21; border-radius: 8px; padding: 4px 10px; color: #FFD97A; font-weight: 700; }
-        QPushButton#conversionCompletionActionButton:hover, QPushButton#conversionCompletionCloseButton:hover { background: #24364A; border-color: #B98A28; }
-        QPushButton#conversionCompletionActionButton:disabled { color: #827657; border-color: #4A3D1F; background: #1A1D20; }
-        QLabel#presetSummaryLabel { color: #8BB6E8; font-size: 15px; font-weight: 400; }
-        QLabel#subNoteLabel { color: #83A0BD; font-size: 12px; line-height: 1.35em; }
-        QLabel#flowGuideTitle { color: #D6E6F6; font-size: 13px; font-weight: 700; }
-        QLabel#flowGuideText { color: #A8C0D7; font-size: 12px; }
-        QLabel#viewRoleLabel { color: #E2F0FF; font-size: 13px; font-weight: 700; }
-        QPushButton#miniHelpBtn { background: #203749; color: #F1F7FE; border: 1px solid #5E7D99; border-radius: 10px; font-size: 12px; font-weight: 700; padding: 0; }
-        QPushButton#miniHelpBtn:hover { background: #28455C; border-color: #7D9BB7; }
-        QPushButton#miniHelpBtn:pressed { background: #31526D; }
-
-        /* ── 左ペインの密度調整 ── */
-        QWidget#leftSettingsContainer QGroupBox#settingsSection {
-            border-radius: 9px;
-            padding-top: 12px;
-        }
-        QWidget#leftSettingsContainer QGroupBox#settingsSection::title {
-            left: 8px;
-            top: 5px;
-            padding: 0 6px;
-        }
-        QWidget#leftSettingsContainer QLabel#dimLabel { font-size: 13px; }
-        QWidget#leftSettingsContainer QLabel#hintLabel { font-size: 12px; }
-        QWidget#leftSettingsContainer QLabel#subNoteLabel { font-size: 11px; }
-        QWidget#leftSettingsContainer QLabel#flowGuideTitle { font-size: 12px; }
-        QWidget#leftSettingsContainer QLabel#flowGuideText { font-size: 11px; }
-        QFrame#flowGuide { background: #14283B; border: 1px solid #314A62; border-radius: 10px; }
-        QWidget#viewRoleBox { background: transparent; }
-        QWidget#leftSettingsContainer QLabel#presetSummaryLabel { font-size: 14px; font-weight: 400; }
-        QWidget#leftSettingsContainer QComboBox,
-        QWidget#leftSettingsContainer QSpinBox,
-        QWidget#leftSettingsContainer QLineEdit {
-            padding: 3px 7px;
-            min-height: 18px;
-            border-radius: 7px;
-        }
-        QWidget#leftSettingsContainer QComboBox::drop-down { width: 18px; }
-        QWidget#leftSettingsContainer QSpinBox[compactField="true"] {
-            padding: 2px 6px;
-            min-height: 16px;
-            max-height: 24px;
-            border-radius: 6px;
-        }
-        QWidget#leftSettingsContainer QCheckBox { spacing: 4px; }
-        QWidget#leftSettingsContainer QCheckBox::indicator { width: 14px; height: 14px; }
-        QWidget#leftSettingsContainer QPushButton#smallBtn {
-            padding: 3px 10px;
-            min-height: 18px;
-            border-radius: 7px;
-        }
-        QWidget#leftSettingsContainer QPushButton#stepBtn {
-            border-radius: 5px;
-            font-size: 15px;
-        }
-
-        QComboBox {
-            background: #0A1520;
-            border: 1px solid #1E3040;
-            border-radius: 8px;
-            padding: 5px 8px;
-            color: #C8DFF0;
-        }
-        QComboBox:hover { border-color: #2E5070; }
-        QComboBox::drop-down { border: none; width: 22px; }
-        QComboBox::down-arrow {
-            image: none;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 6px solid #7AA0BB;
-        }
-        QComboBox QAbstractItemView {
-            background: #0F1E2C;
-            border: 1px solid #1E3040;
-            selection-background-color: #1A3D5A;
-            color: #D8EAF8;
-        }
-
-        QSpinBox {
-            background: #0A1520;
-            border: 1px solid #1E3040;
-            border-radius: 8px;
-            padding: 5px 8px;
-            color: #C8DFF0;
-            min-height: 22px;
-        }
-        QSpinBox:hover { border-color: #2E5070; }
-        QSpinBox:focus { border-color: #3A6A9A; }
-        QSpinBox::up-button, QSpinBox::down-button { width: 0; }
-        QSpinBox[showSpinButtons="true"] {
-            padding-right: 23px;
-            border-color: #6D88A4;
-        }
-        QSpinBox[showSpinButtons="true"]::up-button,
-        QSpinBox[showSpinButtons="true"]::down-button {
-            width: 24px;
-            background: #22415E;
-            border-left: 1px solid #88A7C4;
-            border-right: 1px solid #35516E;
-        }
-        QSpinBox[showSpinButtons="true"]::up-button:hover,
-        QSpinBox[showSpinButtons="true"]::down-button:hover {
-            background: #2A4A69;
-        }
-        QSpinBox[showSpinButtons="true"]::up-button:pressed,
-        QSpinBox[showSpinButtons="true"]::down-button:pressed {
-            background: #31577A;
-        }
-        QSpinBox[showSpinButtons="true"]::up-button {
-            subcontrol-origin: border;
-            subcontrol-position: top right;
-            border-top-right-radius: 7px;
-            border-bottom: 1px solid #88A7C4;
-        }
-        QSpinBox[showSpinButtons="true"]::down-button {
-            subcontrol-origin: border;
-            subcontrol-position: bottom right;
-            border-bottom-right-radius: 7px;
-        }
-        QSpinBox[showSpinButtons="true"]::up-arrow {
-            image: url({SPIN_UP_ICON_DARK});
-            width: 14px;
-            height: 10px;
-        }
-        QSpinBox[showSpinButtons="true"]::down-arrow {
-            image: url({SPIN_DOWN_ICON_DARK});
-            width: 14px;
-            height: 10px;
-        }
-        QSpinBox[miniSpinButtons="true"] {
-            padding-right: 12px;
-        }
-        QSpinBox[miniSpinButtons="true"]::up-button,
-        QSpinBox[miniSpinButtons="true"]::down-button {
-            width: 12px;
-        }
-        QSpinBox[miniSpinButtons="true"]::up-arrow,
-        QSpinBox[miniSpinButtons="true"]::down-arrow {
-            width: 7px;
-            height: 5px;
-        }
-
-        QCheckBox { color: #A8C8E0; spacing: 6px; }
-        QLabel#checkboxTextLabel { color: #A8C8E0; }
-        QCheckBox::indicator {
-            width: 16px; height: 16px;
-            border: 1px solid #2A4A60;
-            border-radius: 4px;
-            background: #0A1520;
-        }
-        QCheckBox::indicator:hover { border-color: #3A6A9A; }
-        QCheckBox::indicator:checked {
-            background-color: #2A6FCC;
-            border: 1px solid #3A80DD;
-        }
-
-        QPushButton#smallBtn {
-            background: #182C3E;
-            border: 1px solid #233D55;
-            border-radius: 8px;
-            padding: 5px 12px;
-            color: #A8C8E0;
-            font-size: 14px;
-            min-height: 20px;
-        }
-        QPushButton#smallBtn:hover { background: #1E3850; }
-        QPushButton#smallBtn[previewState="pending"] {
-            background: #4A2B10;
-            border: 1px solid #B7791F;
-            color: #FFE1B8;
-            font-weight: 700;
-        }
-        QPushButton#smallBtn[previewState="pending"]:hover { background: #5C3514; }
-        QPushButton#smallBtn[previewState="refreshing"],
-        QPushButton#smallBtn[previewState="refreshing"]:disabled {
-            background: #A16207;
-            border: 1px solid #D97706;
-            color: #FFF7ED;
-            font-weight: 700;
-        }
-        QPushButton#smallBtn[previewState="viewer"],
-        QPushButton#smallBtn[previewState="viewer"]:disabled {
-            background: #223244;
-            border: 1px solid #3D5268;
-            color: #9DB4C9;
-            font-weight: 700;
-        }
-
-        QPushButton#stepBtn {
-            background: #182C3E;
-            border: 1px solid #233D55;
-            border-radius: 6px;
-            color: #88AACC;
-            font-size: 16px;
-            font-weight: 700;
-        }
-        QPushButton#stepBtn:hover { background: #1E3850; }
-
-        QLineEdit {
-            background: #0A1520;
-            border: 1px solid #1E3040;
-            border-radius: 8px;
-            padding: 5px 9px;
-            color: #C8DFF0;
-        }
-        QLineEdit:focus { border-color: #3A6A9A; }
-
-        /* ── プレビューパネル ── */
-        QFrame#viewToggleBar {
-            background: #0F1C28;
-            border: none;
-        }
-        QPushButton#viewToggleBtn {
-            background: transparent;
-            border: 1px solid #29455D;
-            border-radius: 8px;
-            padding: 6px 16px;
-            color: #7EA4BE;
-            font-size: 15px;
-        }
-        QPushButton#viewToggleBtn:hover { background: #14283A; color: #A8C8E0; }
-        QPushButton#viewToggleBtn:checked {
-            background: #1A3550;
-            border: 1px solid #2A5070;
-            color: #E0F2FF;
-            font-weight: 700;
-        }
-
-        /* ── ナビゲーションバー ── */
-        QFrame#navBar {
-            background: #0F1C28;
-            border: none;
-            border-top: 1px solid #1A2D3F;
-        }
-        QPushButton#navBtn {
-            background: #182C3E;
-            border: 1px solid #233D55;
-            border-radius: 8px;
-            padding: 5px 14px;
-            color: #A8C8E0;
-            font-size: 14px;
-        }
-        QPushButton#navBtn:hover { background: #1E3850; }
-        QPushButton#navBtn:disabled { color: #4D6475; border-color: #172030; }
-        QFrame#navSectionSep {
-            color: #243C52;
-            background: transparent;
-        }
-        QCheckBox#navToggle, QCheckBox#previewToolbarToggle {
-            color: #A8C8E0;
-            spacing: 6px;
-            padding-right: 4px;
-        }
-        QCheckBox#navToggle::indicator, QCheckBox#previewToolbarToggle::indicator {
-            width: 34px;
-            height: 18px;
-            border: 1px solid #2A4A60;
-            border-radius: 9px;
-            background: #0A1520;
-        }
-        QCheckBox#navToggle::indicator:hover, QCheckBox#previewToolbarToggle::indicator:hover { border-color: #3A6A9A; }
-        QCheckBox#navToggle::indicator:checked, QCheckBox#previewToolbarToggle::indicator:checked {
-            background: #215EA8;
-            border: 1px solid #3A80DD;
-        }
-
-        /* ── 下部パネル ── */
-        QFrame#bottomPanel { background: #0D1824; border: none; }
-        QFrame#bottomPanel QTabBar::tab { min-height: 24px; padding: 4px 10px; }
-        QFrame#statusStrip { background: #0F1C28; border: none; }
-
-        QLabel#badge {
-            background: #182C3E;
-            border: 1px solid #1E3A50;
-            border-radius: 10px;
-            padding: 3px 10px;
-            font-size: 13px;
-            font-weight: 700;
-            color: #7AAAC0;
-        }
-
-        QProgressBar {
-            background: #0A1520;
-            border: none;
-            border-radius: 3px;
-        }
-        QProgressBar::chunk {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #2A6FCC, stop:1 #1ABBE0);
-            border-radius: 3px;
-        }
-
-        QTabWidget::pane {
-            background: #0D1824;
-            border: none;
-            border-top: 1px solid #1A2D3F;
-        }
-        QTabBar::tab {
-            background: #0D1824;
-            border: none;
-            border-top: 2px solid transparent;
-            padding: 7px 18px;
-            color: #6A8CAA;
-            font-size: 14px;
-        }
-        QTabBar::tab:selected {
-            color: #A8D4F0;
-            border-top: 2px solid #3A7AAA;
-            background: #101E2C;
-        }
-        QTabBar::tab:hover { color: #80B0D0; }
-
-        QListWidget {
-            background: #0A1520;
-            border: none;
-            border-radius: 6px;
-            color: #A8C8E0;
-            font-size: 14px;
-        }
-        QListWidget::item:hover { background: #1A2E40; }
-        QListWidget::item:selected { background: #1A3D5A; }
-
-        QTextEdit {
-            background: #080F18;
-            border: 1px solid #152434;
-            border-radius: 6px;
-            color: #8EB1C8;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 13px;
-            padding: 6px;
-        }
-
-        /* ── スプリッタ ── */
-        QSplitter::handle { background: #1A2D3F; }
-        QSplitter::handle:horizontal {
-            width: 6px;
-            margin: 0 2px;
-        }
-        QSplitter::handle:vertical {
-            height: 6px;
-            margin: 2px 0;
-        }
-        QSplitter::handle:hover { background: #2A4560; }
-
-        /* ── ポップアップメニュー ── */
-        QMenu#gearPopupMenu {
-            background: #10202F;
-            color: #D7E7F5;
-            border: 1px solid #29445C;
-            padding: 6px;
-            border-radius: 8px;
-        }
-        QMenu#gearPopupMenu::item {
-            padding: 7px 28px 7px 12px;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        QMenu#gearPopupMenu::item:selected { background: #173249; }
-        QMenu#gearPopupMenu::indicator { width: 14px; height: 14px; }
-        QMenu#gearPopupMenu::separator { height: 1px; background: #29445C; margin: 6px 4px; }
-
-        /* ── ステータスバー ── */
-        QStatusBar { background: #0D1824; color: #6E92AD; font-size: 13px; }
-        """
-        return (stylesheet
-                .replace("{SPIN_UP_ICON_DARK}", SPIN_UP_ICON_DARK)
-                .replace("{SPIN_DOWN_ICON_DARK}", SPIN_DOWN_ICON_DARK))
+        return dark_stylesheet()
 
     # ── ビュー切替 ────────────────────────────────────────
 
@@ -5816,7 +4802,7 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         menu.setObjectName('gearPopupMenu')
         menu.setToolTipsVisible(True)
-        menu.addSection('外観')
+        menu.addSection(self._ui_text('外観'))
 
         theme_group = QActionGroup(menu)
         theme_group.setExclusive(True)
@@ -6057,25 +5043,19 @@ class MainWindow(QMainWindow):
         self._mark_preview_dirty_without_auto_refresh()
 
     def _current_preview_page_limit_value(self: MainWindow) -> int:
-        limit_widget = getattr(self, 'preview_page_limit_spin', None)
-        value_getter = getattr(limit_widget, 'value', None)
-        if callable(value_getter):
-            try:
-                return max(1, int(value_getter()))
-            except Exception:
-                pass
-        return max(1, int(DEFAULT_PREVIEW_PAGE_LIMIT))
+        return _preview_page_limit_value(
+            getattr(self, 'preview_page_limit_spin', None),
+            default_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
+        )
 
     def _should_auto_live_preview_refresh(self: MainWindow) -> bool:
         return self._current_preview_page_limit_value() <= _AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX
 
     def _manual_preview_required_status_message(self: MainWindow) -> str:
-        limit = self._current_preview_page_limit_value()
-        if limit > _AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX:
-            return (
-                f'プレビュー更新が必要です（更新対象 {limit} ページのため自動更新しません）'
-            )
-        return 'プレビュー更新が必要です'
+        return _manual_preview_required_status_message_for_limit(
+            preview_limit=self._current_preview_page_limit_value(),
+            auto_refresh_max=_AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX,
+        )
 
     def _mark_preview_dirty_without_auto_refresh(self: MainWindow) -> None:
         try:
@@ -7483,21 +6463,13 @@ class MainWindow(QMainWindow):
 
     def _current_preview_render_status_message(self: MainWindow) -> str:
         pages = self._runtime_preview_pages()
-        widget_limit = 0
-        limit_widget = getattr(self, 'preview_page_limit_spin', None)
-        value_getter = getattr(limit_widget, 'value', None)
-        if callable(value_getter):
-            try:
-                widget_limit = int(value_getter())
-            except Exception:
-                widget_limit = 0
         return studio_logic.build_preview_render_status_message(
             page_count=len(pages),
             requested_limit=getattr(self, 'last_preview_requested_limit', 0),
             truncated=getattr(self, 'preview_pages_truncated', False),
             running=getattr(self, '_preview_running', False),
             dirty=getattr(self, 'preview_dirty', False),
-            widget_limit=widget_limit,
+            widget_limit=_preview_widget_limit_value(getattr(self, 'preview_page_limit_spin', None)),
             language=self.current_ui_language_value(),
         )
 
@@ -9144,22 +8116,7 @@ class MainWindow(QMainWindow):
         self.save_ui_state()
 
     def selected_preset_key(self: MainWindow) -> str | None:
-        if not hasattr(self, 'preset_combo'):
-            return None
-        key = self.preset_combo.currentData()
-        if key:
-            return str(key)
-        idx = self.preset_combo.currentIndex()
-        if idx >= 0:
-            data = self.preset_combo.itemData(idx)
-            if data:
-                return str(data)
-            text = self.preset_combo.itemText(idx).strip()
-            if text.startswith('プリセット'):
-                suffix = text.replace('プリセット', '').strip()
-                if suffix.isdigit():
-                    return f'preset_{suffix}'
-        return None
+        return selected_preset_key_from_combo(getattr(self, 'preset_combo', None))
 
     def apply_selected_preset(self: MainWindow) -> None:
         self._flush_pending_ui_changes()
@@ -9204,19 +8161,7 @@ class MainWindow(QMainWindow):
                     break
 
     def _preset_combo_entries(self: MainWindow) -> tuple[tuple[str, object], ...]:
-        combo = getattr(self, 'preset_combo', None)
-        if combo is None or not hasattr(combo, 'count'):
-            return ()
-        entries: list[tuple[str, object]] = []
-        try:
-            count = int(combo.count())
-        except Exception:
-            return ()
-        for index in range(max(0, count)):
-            item_text = combo.itemText(index) if hasattr(combo, 'itemText') else ''
-            item_data = combo.itemData(index) if hasattr(combo, 'itemData') else None
-            entries.append((str(item_text or ''), item_data))
-        return tuple(entries)
+        return preset_combo_entries(getattr(self, 'preset_combo', None))
 
     def _live_preset_widget_payload(self: MainWindow) -> PresetDefinition:
         profile_widget_present = self.__dict__.get('profile_combo') is not None or 'current_profile_key' in self.__dict__
@@ -9308,7 +8253,7 @@ class MainWindow(QMainWindow):
         )
 
     def _preset_settings_prefix(self: MainWindow, key: str) -> str:
-        return f'presets/{key}'
+        return preset_settings_prefix(key)
 
     def _normalize_preset_payload(
         self: MainWindow,
@@ -9449,18 +8394,17 @@ class MainWindow(QMainWindow):
         return normalized
 
     def _preset_display_name_settings_key(self: MainWindow, key: str) -> str:
-        return f'{self._preset_settings_prefix(key)}/display_name'
+        return preset_display_name_settings_key(key)
 
     def _default_preset_display_name(self: MainWindow, key: str) -> str:
-        default_payload = DEFAULT_PRESET_DEFINITIONS.get(key) or {}
+        default_payload = DEFAULT_PRESET_DEFINITIONS.get(key, {})
         return studio_logic.localized_preset_display_name_text(
             default_payload.get('button_text') or default_payload.get('name') or key or 'プリセット',
             self.current_ui_language_value(),
-        ).strip()
+        )
 
     def _normalize_preset_display_name(self: MainWindow, value: object, *, fallback: str) -> str:
-        text = str(value or '').strip()
-        return text or str(fallback or 'プリセット').strip() or 'プリセット'
+        return normalize_preset_display_name(value, fallback=fallback)
 
     def _load_preset_definitions(self: MainWindow) -> PresetDefinitions:
         presets = deepcopy(DEFAULT_PRESET_DEFINITIONS)
@@ -9555,31 +8499,7 @@ class MainWindow(QMainWindow):
         )
 
     def _preset_side_summary_text(self: MainWindow, summary: object) -> str:
-        """Return a taller, left-pane friendly preset specification summary."""
-        margin_pattern = re.compile(
-            r'^余白:\s*上\s*(?P<top>\S+)\s*下\s*(?P<bottom>\S+)\s*左\s*(?P<left>\S+)\s*右\s*(?P<right>\S+)\s*$'
-        )
-
-        def _append_summary_part(part: str) -> None:
-            margin_match = margin_pattern.match(part)
-            if margin_match:
-                lines.append(f'余白の上下: 上 {margin_match.group("top")} 下 {margin_match.group("bottom")}')
-                lines.append(f'余白の左右: 左 {margin_match.group("left")} 右 {margin_match.group("right")}')
-                return
-            lines.append(part)
-
-        lines: list[str] = []
-        for raw_line in str(summary or '').splitlines():
-            text = raw_line.strip()
-            if not text:
-                continue
-            parts = [part.strip() for part in text.split(' / ') if part.strip()]
-            if len(parts) > 1:
-                for part in parts:
-                    _append_summary_part(part)
-            else:
-                _append_summary_part(text)
-        return studio_logic.compact_multiline_label_text('\n'.join(lines))
+        return preset_side_summary_text(summary)
 
     def _current_settings_summary_payload(self: MainWindow, key: str | None = None) -> PresetDefinition:
         selected_key = key or self.selected_preset_key()
@@ -14185,101 +13105,11 @@ class MainWindow(QMainWindow):
             lay = QVBoxLayout(dlg)
             tv = QTextEdit(dlg)
             tv.setReadOnly(True)
-            if self._normalize_ui_language(getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE), DEFAULT_UI_LANGUAGE) == 'en':
-                help_text = """\
-[Basic workflow]
-1. Use "Open File" to choose a source file, and "Save To..." to choose an output folder when needed.
-2. Use "Batch Convert Folder" when converting multiple files together.
-3. Adjust the settings in the left and center panes.
-4. Use "Refresh Preview" when you want to regenerate the preview manually.
-5. Check the text appearance in the right preview pane.
-6. Press "▶ Convert" to save .xtc / .xtch files.
-7. After conversion, you can inspect XTC / XTCH output in the right pane.
-
-[Preview]
-- Right pane: check how the current settings will look. When you open an XTC/XTCH file, it is shown in the same pane with page navigation.
-- Use Prev/Next or the page number field to move through pages.
-- In the gear menu, "Reverse page keys" swaps the page-key direction and Prev/Next feel.
-
-[Right-pane toolbar]
-- "Actual Size" approximates the real device size on your PC display.
-- When Actual Size is enabled, the right-pane zoom control works as actual-size adjustment.
-- Adjust it while comparing the on-screen size with a ruler or the real device.
-- "Guides" overlays margin and non-display-area guide lines.
-
-[Output and device settings]
-- Device selection is in the Output section.
-- Selecting a device sets the resolution automatically. Use Custom for manual width/height.
-
-[File Viewer]
-- Use "Open XTC/XTCH" to load an existing .xtc / .xtch file into the right pane.
-
-[Presets]
-- Choose a preset from the combo box and press "Load Preset".
-- Press "Save Preset" to overwrite the selected preset with current settings.
-- Presets also store the line-rule mode.
-
-[Bottom panel]
-- Click an item in the Results tab to load it into the right pane.
-- Use the Log tab to inspect conversion details.
-
-[Display settings]
-- Use the gear menu to switch between Light and Dark themes.
-- The same menu can show or hide the hamburger button.
-
-[Notes]
-- The Stop button is enabled only during conversion.
-- Existing-file behavior is available from Gear > Other Options > Existing File.
-- After conversion, the Results tab shows a summary of saved files and errors.
-"""
-            else:
-                help_text = """\
-【基本的な流れ】
-1. 上部の「ファイルを開く」で変換対象を選び、「保存先を選ぶ」で保存先を選びます。
-2. 複数ファイルをまとめて変換するときは「フォルダ一括変換」を使います。
-3. 左側の設定を調整します。
-4. 必要に応じて上部の「プレビュー更新」で手動再描画します。
-5. 右側のフォントビューで文字の見え方を確認します。
-6. 「▶ 変換実行」を押すと .xtc / .xtch を保存します。
-7. 変換後は右ペインで XTC / XTCH を確認できます。
-
-【プレビュー】
-・右ペイン: 設定中の文字の見え方を確認します。XTC/XTCHを開くと、同じ場所でページ送りしながら確認できます。
-・ページ送りは右ペインの「前/次」ボタン、またはページ番号入力で行います。
-・歯車メニューの「ページ送りキー反転」を ON にすると、前/次 ボタンの左右配置と動作感を入れ替えられます。
-
-【右ペイン表示ツールバー】
-・「実寸近似」は PC 画面上の実機サイズに近い表示へ切り替えます。
-・実寸近似 ON 中は、右ペイン倍率のラベルが「実寸補正」に変わります。
-・実寸補正は、定規で実物と比較しながら右ペイン側で調整してください。
-・「ガイド」は余白・非描画域の補助線を表示します。
-
-【左ペインの出力・機種設定】
-・機種選択は「出力・フォント・組版」内の出力形式付近にあります。
-・機種を選ぶと解像度が自動設定されます（Custom では手動指定）。
-
-【ファイルビューワー】
-・「XTC/XTCHを開く」から既存の .xtc / .xtch ファイルを右ペインへ読み込めます。
-
-【プリセット】
-・コンボボックスで選択し「プリセット読込」で呼び出します。
-・「プリセット保存」で現在の設定を上書きします。
-・プリセットには禁則処理モードも保存されます。
-
-【下部パネル】
-・「変換結果」タブでファイルをクリックすると右ペインへ読み込みます。
-・「ログ」タブで変換の詳細を確認できます。
-
-【表示設定】
-・右上の歯車から、白基調 / ダーク の切替ができます。
-・同じ画面で、三本線ボタンの表示 / 非表示も切り替えられます。
-
-【補足】
-・停止ボタンは変換中のみ有効です。
-・同名ファイルがある場合の動作は、右上の歯車メニュー内「その他オプション > 同名出力」で選べます。
-・変換後は「変換結果」タブの先頭に保存件数やエラー件数の概要を表示します。
-"""
-            tv.setPlainText(help_text)
+            current_language = self._normalize_ui_language(
+                getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE),
+                DEFAULT_UI_LANGUAGE,
+            )
+            tv.setPlainText(usage_help_text(current_language))
             lay.addWidget(tv)
             close_btn = QPushButton(self._ui_text('閉じる'))
             close_btn.clicked.connect(dlg.accept)
@@ -14295,6 +13125,7 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(help_message, 5000)
             except Exception:
                 pass
+
 
 
 # ─────────────────────────────────────────────────────────

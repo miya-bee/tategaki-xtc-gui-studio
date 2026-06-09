@@ -12929,6 +12929,11 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         self.assertIn(('三本線ボタンを非表示にしました。', 2000), status.messages)
 
+    def test_display_settings_popup_localizes_appearance_section_source(self):
+        source = inspect.getsource(self.studio.MainWindow.show_display_settings_popup)
+        self.assertIn("menu.addSection(self._ui_text('外観'))", source)
+        self.assertNotIn("menu.addSection('外観')", source)
+
     def test_display_settings_popup_exposes_panel_button_toggle(self):
         window = self.make_window()
         window.current_ui_theme = 'light'
@@ -14324,8 +14329,10 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('self.margin_t_spin, self.margin_b_spin, self.margin_r_spin, self.margin_l_spin', source)
 
     def test_preview_update_button_has_orange_pending_and_refreshing_styles(self):
-        light_source = inspect.getsource(self.studio.MainWindow._light_stylesheet)
-        dark_source = inspect.getsource(self.studio.MainWindow._dark_stylesheet)
+        import tategakiXTC_gui_styles as gui_styles
+
+        light_source = inspect.getsource(gui_styles.light_stylesheet)
+        dark_source = inspect.getsource(gui_styles.dark_stylesheet)
 
         self.assertIn('QPushButton#smallBtn[previewState="pending"]', light_source)
         self.assertIn('QPushButton#smallBtn[previewState="refreshing"]', light_source)
@@ -17351,12 +17358,14 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('self._ui_text(text)', help_source)
         self.assertIn('dialog_title=self._ui_text(title)', help_source)
 
-    def test_main_help_dialog_has_english_branch(self):
+    def test_main_help_dialog_uses_split_english_help_text_provider(self):
         import inspect
 
         source = inspect.getsource(self.studio.MainWindow.show_help_dialog)
-        self.assertIn("== 'en'", source)
-        self.assertIn('[Basic workflow]', source)
+        help_provider_source = inspect.getsource(self.studio.usage_help_text)
+        self.assertIn('usage_help_text(current_language)', source)
+        self.assertIn("== 'en'", help_provider_source)
+        self.assertIn('[Basic workflow]', self.studio.usage_help_text('en'))
         self.assertIn('How to use', self.studio.studio_logic.translate_ui_text('使い方', 'en'))
 
     def test_build_view_toggle_bar_uses_two_rows_for_compact_preview_header(self):
@@ -17516,9 +17525,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('変換結果そのものを書き換える機能ではなく', layout_source)
 
     def test_help_dialog_describes_actual_size_and_guides_as_right_preview_toolbar(self):
-        import inspect
-
-        source = inspect.getsource(self.studio.MainWindow.show_help_dialog)
+        source = self.studio.usage_help_text('ja')
         self.assertIn('【右ペイン表示ツールバー】', source)
         self.assertIn('実寸近似 ON 中は、右ペイン倍率のラベルが「実寸補正」に変わります。', source)
         self.assertIn('【左ペインの出力・機種設定】', source)

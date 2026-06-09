@@ -53,6 +53,7 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertEqual(logic.translate_ui_text('ファイルを開く', 'en'), 'Open File')
         self.assertEqual(logic.translate_ui_text('▶  変換実行', 'English'), '▶  Convert')
         self.assertEqual(logic.translate_ui_text('表示設定', 'EN-us'), 'Display settings')
+        self.assertEqual(logic.translate_ui_text('外観', 'en'), 'Appearance')
         self.assertEqual(logic.translate_ui_text('ファイルを開く', 'ja'), 'ファイルを開く')
 
     def test_translate_ui_text_uses_compact_english_labels_for_layout(self):

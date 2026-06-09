@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from typing import Iterable
 
@@ -85,6 +86,39 @@ def _safe_text_values(widget: object) -> Iterable[tuple[str, str]]:
                 yield f'tabText[{index}]', value
 
 
+def _iter_menu_text_objects(menu: object) -> Iterable[object]:
+    """Yield a popup menu, its section/action labels, and nested submenus."""
+
+    seen: set[int] = set()
+
+    def walk(obj: object) -> Iterable[object]:
+        ident = id(obj)
+        if ident in seen:
+            return
+        seen.add(ident)
+        yield obj
+        actions_getter = getattr(obj, 'actions', None)
+        if not callable(actions_getter):
+            return
+        try:
+            actions = list(actions_getter())
+        except Exception:
+            return
+        for action in actions:
+            yield action
+            menu_getter = getattr(action, 'menu', None)
+            if not callable(menu_getter):
+                continue
+            try:
+                submenu = menu_getter()
+            except Exception:
+                submenu = None
+            if submenu is not None:
+                yield from walk(submenu)
+
+    yield from walk(menu)
+
+
 def _dependency_available(module_name: str) -> bool:
     try:
         return importlib.util.find_spec(module_name) is not None
@@ -145,8 +179,23 @@ def _run_scan_child() -> int:
             window._apply_main_view_mode_ui('device')
             window._update_language_restart_note_label('en')
 
+            # The gear/display settings popup is built lazily when opened, so
+            # it is not covered by the startup widget tree alone.  Capture the
+            # menu before exec() blocks and include section/action text in the
+            # same untranslated-Japanese scan.
+            captured_menus: list[object] = []
+
+            def _capture_menu_exec(menu: object, *_args: object, **_kwargs: object) -> None:
+                captured_menus.append(menu)
+                return None
+
+            with mock.patch.object(studio.QMenu, 'exec', _capture_menu_exec):
+                window.show_display_settings_popup()
+
             offenders: list[str] = []
-            objects = [window] + list(window.findChildren(QWidget))
+            objects: list[object] = [window] + list(window.findChildren(QWidget))
+            for menu in captured_menus:
+                objects.extend(_iter_menu_text_objects(menu))
             for widget in objects:
                 object_name_getter = getattr(widget, 'objectName', None)
                 try:
