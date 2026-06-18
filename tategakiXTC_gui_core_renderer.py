@@ -6600,6 +6600,13 @@ def _render_text_blocks_to_page_entries(blocks: Sequence[TextBlock], font_value:
             gap = block.get('blank_before', 1)
             if first_content:
                 first_content = False
+                if previous_was_blank:
+                    # Keep leading blank lines visible.  The first real text block
+                    # has no preceding drawn column, so use one fewer column than
+                    # the normal inter-paragraph blank gap: a single leading empty
+                    # line produces one visible empty column instead of being
+                    # swallowed at the document head.
+                    renderer.advance_column(max(1, max(gap, 2) - 1))
             elif renderer.has_drawn_on_page:
                 renderer.advance_column(max(gap, 2 if previous_was_blank else gap))
             previous_was_blank = False
