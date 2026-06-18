@@ -199,6 +199,62 @@ class LayoutRegressionTests(unittest.TestCase):
                         msg=f'closing bracket at column head: boundary={boundary} tail={tail} n={n} -> {heads}',
                     )
 
+    def _drawn_vertical_token_positions(self, blocks, args, watched_tokens):
+        """Render blocks and return positions for watched single-character tokens."""
+        import tategakiXTC_gui_core_renderer as renderer
+        from tests.image_golden_cases import render_page_blocks_case
+        captured = []
+        original = renderer.draw_char_tate
+
+        def spy(draw, token, pos, font, f_size, **kwargs):
+            if token in watched_tokens:
+                captured.append((token, pos))
+            return original(draw, token, pos, font, f_size, **kwargs)
+
+        with mock.patch.object(core, 'draw_char_tate', side_effect=spy), \
+                mock.patch.object(renderer, 'draw_char_tate', side_effect=spy):
+            render_page_blocks_case(args, blocks, page_mode='first')
+        return captured
+
+    def test_leading_blank_line_matches_body_blank_spacing(self):
+        args = dict(
+            width=320, height=360, font_size=24, ruby_size=12,
+            margin_l=12, margin_r=12, margin_t=12, margin_b=12,
+            line_spacing=58, output_format='xtc',
+        )
+        baseline_positions = self._drawn_vertical_token_positions(
+            [{'kind': 'paragraph', 'runs': [{'text': 'あ'}]}],
+            args,
+            {'あ'},
+        )
+        leading_blank_positions = self._drawn_vertical_token_positions(
+            [{'kind': 'blank'}, {'kind': 'paragraph', 'runs': [{'text': 'あ'}]}],
+            args,
+            {'あ'},
+        )
+        body_blank_positions = self._drawn_vertical_token_positions(
+            [
+                {'kind': 'paragraph', 'runs': [{'text': 'あ'}]},
+                {'kind': 'blank'},
+                {'kind': 'paragraph', 'runs': [{'text': 'い'}]},
+            ],
+            args,
+            {'あ', 'い'},
+        )
+
+        baseline_x = baseline_positions[0][1][0]
+        leading_blank_x = leading_blank_positions[0][1][0]
+        body_a_x = body_blank_positions[0][1][0]
+        body_i_x = body_blank_positions[1][1][0]
+
+        # A blank line inside the body leaves one empty column between the two
+        # text columns, so the second text column is two line-spacing steps away.
+        self.assertEqual(body_a_x - body_i_x, args['line_spacing'] * 2)
+        # A leading blank line has no preceding text column anchor; one leading
+        # blank line should therefore move the first text column by only one
+        # line-spacing step, not two.
+        self.assertEqual(baseline_x - leading_blank_x, args['line_spacing'])
+
     def test_blank_separated_paragraph_after_pagebreak_consumes_remaining_blank_columns(self):
         font_path = resolve_test_font_path()
         args = core.ConversionArgs(
