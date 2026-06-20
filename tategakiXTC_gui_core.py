@@ -300,6 +300,9 @@ class ConversionArgs:
     ichi_position_mode: str = "standard"
     halfwidth_digit_position_mode: str = "standard"
     halfwidth_alpha_position_mode: str = "standard"
+    latin_orientation_mode: str = "vertical"
+    opening_bracket_indent_mode: str = "none"
+    middle_dot_position_mode: str = "standard"
     tatechuyoko_symbol_position_mode: str = "standard"
     lower_closing_bracket_position_mode: str = "standard"
     wave_dash_drawing_mode: str = "rotate"
@@ -339,6 +342,13 @@ class ConversionArgs:
         self.ichi_position_mode = str(self.ichi_position_mode or 'standard')
         self.halfwidth_digit_position_mode = str(getattr(self, 'halfwidth_digit_position_mode', 'standard') or 'standard')
         self.halfwidth_alpha_position_mode = str(getattr(self, 'halfwidth_alpha_position_mode', 'standard') or 'standard')
+        self.latin_orientation_mode = str(getattr(self, 'latin_orientation_mode', 'vertical') or 'vertical').strip().lower()
+        if self.latin_orientation_mode not in {'vertical', 'horizontal'}:
+            self.latin_orientation_mode = 'vertical'
+        self.opening_bracket_indent_mode = str(getattr(self, 'opening_bracket_indent_mode', 'none') or 'none').strip().lower()
+        if self.opening_bracket_indent_mode not in {'none', 'one_char'}:
+            self.opening_bracket_indent_mode = 'none'
+        self.middle_dot_position_mode = str(getattr(self, 'middle_dot_position_mode', 'standard') or 'standard')
         self.tatechuyoko_symbol_position_mode = str(getattr(self, 'tatechuyoko_symbol_position_mode', 'standard') or 'standard')
         self.lower_closing_bracket_position_mode = str(getattr(self, 'lower_closing_bracket_position_mode', 'standard') or 'standard')
         self.wave_dash_drawing_mode = str(getattr(self, 'wave_dash_drawing_mode', 'rotate') or 'rotate')
@@ -357,6 +367,13 @@ class ConversionArgs:
             bottom_reserve = max(bottom_reserve, 10)
         if bottom_reserve > 0:
             self.margin_b = max(int(self.margin_b), bottom_reserve)
+        usable_width = self.width - self.margin_l - self.margin_r
+        usable_height = self.height - self.margin_t - self.margin_b
+        if usable_width < self.font_size or usable_height < self.font_size:
+            raise ValueError(
+                '余白が大きすぎて本文を配置できません。'
+                'マージンを減らすかページサイズ／フォントサイズを見直してください。'
+            )
         self.output_format = _normalize_output_format(getattr(self, 'output_format', 'xtc'))
 
 
@@ -1030,6 +1047,11 @@ from tategakiXTC_gui_core_renderer import (
     _tokenize_vertical_text_impl,
     _tokenize_vertical_text_cached,
     _tokenize_vertical_text,
+    _normalize_latin_orientation_mode,
+    _latin_horizontal_candidate_end,
+    _is_horizontal_latin_run_candidate,
+    _split_latin_orientation_runs,
+    _split_latin_horizontal_text_for_column,
     _is_line_head_forbidden,
     _is_line_end_forbidden,
     _is_hanging_punctuation,

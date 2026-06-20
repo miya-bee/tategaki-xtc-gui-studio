@@ -13,6 +13,30 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable, Sequence, cast
 
+
+# Circular-import guard for direct split-module imports.
+# ``tategakiXTC_gui_core`` re-exports many names from this module; when this
+# module is imported first, core may ask for those names before the real
+# definitions below have executed.  Placeholders let core finish importing;
+# the real objects are published back to core at module end.
+_SPLIT_IMPORT_PLACEHOLDER = object()
+_CORE_REEXPORT_NAMES = (
+    '_make_page_entry',
+    '_resolve_page_entry',
+    '_append_page_entries_to_spool',
+    '_write_page_entries_to_xtc',
+    '_render_text_blocks_to_xtc'
+)
+_CORE_REEXPORT_ALIASES = (
+    ('_make_page_entry', '_make_page_entry'),
+    ('_resolve_page_entry', '_resolve_page_entry'),
+    ('_append_page_entries_to_spool', '_append_page_entries_to_spool'),
+    ('_write_page_entries_to_xtc', '_write_page_entries_to_xtc'),
+    ('_render_text_blocks_to_xtc', '_render_text_blocks_to_xtc')
+)
+for _name in _CORE_REEXPORT_NAMES:
+    globals().setdefault(_name, _SPLIT_IMPORT_PLACEHOLDER)
+
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
 
@@ -240,3 +264,18 @@ def _render_text_blocks_to_xtc(blocks: Sequence[dict[str, Any]], source_path: Pa
         message_builder=_rendered_page_message,
         complete_message=_rendered_page_complete_message,
     )
+
+def _publish_core_reexports() -> None:
+    """Replace circular-import placeholders in gui_core with real split symbols."""
+    for _source_name, _core_name in _CORE_REEXPORT_ALIASES:
+        _value = globals().get(_source_name, _SPLIT_IMPORT_PLACEHOLDER)
+        if _value is _SPLIT_IMPORT_PLACEHOLDER:
+            continue
+        try:
+            setattr(_core, _core_name, _value)
+        except Exception:
+            pass
+
+
+_publish_core_reexports()
+

@@ -30,7 +30,7 @@ class ArchiveRegressionTests(unittest.TestCase):
     def test_zip_archive_conversion_does_not_require_patool(self):
         holder, archive_path = self._make_zip_archive('.zip')
         try:
-            args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+            args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
             with mock.patch.object(core, '_require_patoolib', side_effect=AssertionError('patool should not be used for zip')):
                 with mock.patch.object(core, 'load_archive_input_document', side_effect=AssertionError('valid zip should be processed directly')):
                     out_path = core.process_archive(archive_path, args)
@@ -42,7 +42,7 @@ class ArchiveRegressionTests(unittest.TestCase):
     def test_cbz_archive_conversion_does_not_require_patool(self):
         holder, archive_path = self._make_zip_archive('.cbz')
         try:
-            args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+            args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
             with mock.patch.object(core, '_require_patoolib', side_effect=AssertionError('patool should not be used for cbz')):
                 with mock.patch.object(core, 'load_archive_input_document', side_effect=AssertionError('valid cbz should be processed directly')):
                     out_path = core.process_archive(archive_path, args)
@@ -64,7 +64,7 @@ class ArchiveRegressionTests(unittest.TestCase):
             zf.writestr('dup/page.png', png1.read_bytes())
             zf.writestr('dup/page.png', png2.read_bytes())
         try:
-            args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+            args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
             out_path = core.process_archive(archive_path, args)
             header = out_path.read_bytes()[:48]
             import struct

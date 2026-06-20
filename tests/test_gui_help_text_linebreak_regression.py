@@ -26,7 +26,12 @@ class GuiHelpTextLineBreakRegressionTest(unittest.TestCase):
         self.assertIn('\nエラー:', behavior_plan['output_conflict_help_text'])
 
     def test_inline_multi_item_help_literals_use_line_breaks(self) -> None:
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        # The section-construction help literals moved into the settings-sections
+        # helper module; the startup flow guide stays in the entry module.
+        source = (
+            Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+            + Path('tategakiXTC_gui_studio_settings_sections_helpers.py').read_text(encoding='utf-8')
+        )
         expected_fragments = (
             'XTC: 2 階調（白黒）で保存します。\\nXTCH:',
             '機種: 選ぶと解像度が自動設定されます。\\nCustom:',

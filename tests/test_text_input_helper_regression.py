@@ -100,7 +100,7 @@ class TextInputHelperRegressionTests(unittest.TestCase):
         self.assertTrue(fallback.startswith('_outside_sample_'))
 
     def test_process_text_file_emits_warnings_and_progress_before_render(self):
-        args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+        args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
         document = core.TextInputDocument(
             source_path=Path('sample.txt'),
             text='x',
@@ -124,7 +124,7 @@ class TextInputHelperRegressionTests(unittest.TestCase):
         render_mock.assert_called_once()
 
     def test_process_markdown_file_emits_warnings_and_progress_before_render(self):
-        args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+        args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
         document = core.TextInputDocument(
             source_path=Path('sample.md'),
             text='x',
@@ -150,7 +150,7 @@ class TextInputHelperRegressionTests(unittest.TestCase):
 
 
     def test_process_text_and_markdown_file_skip_log_when_summary_and_warning_are_empty(self):
-        args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+        args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
         plain_doc = core.TextInputDocument(
             source_path=Path('sample.txt'),
             text='x',
@@ -185,7 +185,7 @@ class TextInputHelperRegressionTests(unittest.TestCase):
             warning_mock.assert_not_called()
 
     def test_process_text_file_and_markdown_file_honor_cancellation_before_load(self):
-        args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+        args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
         for func in (core.process_text_file, core.process_markdown_file):
             with self.assertRaises(core.ConversionCancelled):
                 func('sample.txt', 'font.ttf', args, should_cancel=lambda: True)
@@ -198,6 +198,16 @@ class TextInputHelperRegressionTests(unittest.TestCase):
                 text_value, encoding = core.read_text_file_with_fallback(path)
         self.assertEqual(text_value, '本文')
         self.assertEqual(encoding, 'utf-8')
+
+    def test_read_text_file_with_fallback_rejects_false_utf16_for_cp932_aozora_blank_lines(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'aozora.txt'
+            path.write_bytes('一\r\n\r\n二\r\n\r\n\r\n三\r\n'.encode('cp932'))
+            text_value, encoding = core.read_text_file_with_fallback(path)
+        self.assertEqual(text_value, '一\r\n\r\n二\r\n\r\n\r\n三\r\n')
+        self.assertIn(encoding, {'cp932', 'shift_jis'})
+        blocks = core._blocks_from_plain_text(text_value)
+        self.assertEqual([block.get('kind') for block in blocks[:6]], ['paragraph', 'blank', 'paragraph', 'blank', 'blank', 'paragraph'])
 
     def test_load_text_input_document_reuses_cache_until_source_changes(self):
         with tempfile.TemporaryDirectory() as td:

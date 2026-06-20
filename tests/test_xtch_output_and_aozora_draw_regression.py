@@ -18,8 +18,8 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
 
     def test_page_image_to_xt_bytes_selects_xth_for_xtch(self):
         img = Image.new('L', (4, 4), 255)
-        xtc_args = core.ConversionArgs(width=4, height=4, output_format='xtc')
-        xtch_args = core.ConversionArgs(width=4, height=4, output_format='xtch')
+        xtc_args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
+        xtch_args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtch')
 
         xtc_blob = core.page_image_to_xt_bytes(img, 4, 4, xtc_args)
         xtch_blob = core.page_image_to_xt_bytes(img, 4, 4, xtch_args)
@@ -29,7 +29,7 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
         self.assertNotEqual(xtc_blob, xtch_blob)
 
     def test_build_xtc_writes_xtch_container_header(self):
-        args = core.ConversionArgs(width=4, height=4, output_format='xtch')
+        args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtch')
         page_blob = core.page_image_to_xt_bytes(Image.new('L', (4, 4), 255), 4, 4, args)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -42,7 +42,7 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
         self.assertIn(page_blob, data)
 
     def test_build_xtc_self_verifies_written_pages_before_publish(self):
-        args = core.ConversionArgs(width=4, height=4, output_format='xtch')
+        args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtch')
         page_blob = core.page_image_to_xt_bytes(Image.new('L', (4, 4), 255), 4, 4, args)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -53,7 +53,7 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
         self.assertEqual(verified, 2)
 
     def test_build_xtc_self_verification_rejects_truncated_temp_output(self):
-        args = core.ConversionArgs(width=4, height=4, output_format='xtch')
+        args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtch')
         page_blob = core.page_image_to_xt_bytes(Image.new('L', (4, 4), 255), 4, 4, args)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -88,7 +88,7 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
                     core._atomic_replace_xt_container(out_path, writer, verifier=verifier)
 
     def test_verify_xt_container_file_rejects_trailing_garbage_after_last_page(self):
-        args = core.ConversionArgs(width=4, height=4, output_format='xtch')
+        args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtch')
         page_blob = core.page_image_to_xt_bytes(Image.new('L', (4, 4), 255), 4, 4, args)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -100,7 +100,7 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
                 core._verify_xt_container_file(out_path, 4, 4, 'xtch', expected_count=2)
 
     def test_build_xtc_does_not_replace_existing_file_when_atomic_swap_fails(self):
-        args = core.ConversionArgs(width=4, height=4, output_format='xtch')
+        args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtch')
         page_blob = core.page_image_to_xt_bytes(Image.new('L', (4, 4), 255), 4, 4, args)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -112,7 +112,7 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
             self.assertEqual(b'OLD', out_path.read_bytes())
 
     def test_xtc_spooled_pages_finalize_writes_xtch_container_header(self):
-        args = core.ConversionArgs(width=4, height=4, output_format='xtch')
+        args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtch')
         page_blob = core.page_image_to_xt_bytes(Image.new('L', (4, 4), 170), 4, 4, args)
         spool = core.XTCSpooledPages()
         try:
@@ -127,7 +127,7 @@ class XtchOutputAndAozoraDrawRegressionTests(unittest.TestCase):
             spool.cleanup()
 
     def test_xtc_spooled_pages_finalize_preserves_existing_file_when_atomic_swap_fails(self):
-        args = core.ConversionArgs(width=4, height=4, output_format='xtch')
+        args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtch')
         page_blob = core.page_image_to_xt_bytes(Image.new('L', (4, 4), 170), 4, 4, args)
         spool = core.XTCSpooledPages()
         try:

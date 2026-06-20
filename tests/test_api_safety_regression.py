@@ -19,6 +19,44 @@ class ApiSafetyRegressionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             core.ConversionArgs(margin_l=-1)
 
+    def test_conversion_args_rejects_margins_that_leave_no_text_area(self):
+        with self.assertRaisesRegex(ValueError, '本文を配置できません'):
+            core.ConversionArgs(
+                width=480,
+                height=640,
+                font_size=24,
+                ruby_size=12,
+                margin_t=350,
+                margin_b=350,
+                margin_l=12,
+                margin_r=12,
+            )
+        with self.assertRaisesRegex(ValueError, '本文を配置できません'):
+            core.ConversionArgs(
+                width=480,
+                height=640,
+                font_size=24,
+                ruby_size=12,
+                margin_t=12,
+                margin_b=12,
+                margin_l=240,
+                margin_r=240,
+            )
+
+    def test_conversion_args_accepts_normal_text_area(self):
+        args = core.ConversionArgs(
+            width=480,
+            height=640,
+            font_size=24,
+            ruby_size=12,
+            margin_t=12,
+            margin_b=12,
+            margin_l=12,
+            margin_r=12,
+        )
+        self.assertEqual(args.width - args.margin_l - args.margin_r, 456)
+        self.assertEqual(args.height - args.margin_t - args.margin_b, 616)
+
     def test_conversion_args_normalizes_output_format(self):
         args = core.ConversionArgs(output_format='xtch')
         self.assertEqual(args.output_format, 'xtch')

@@ -6,8 +6,417 @@ tategakiXTC_gui_core_renderer.py — 縦書きレンダリング / プレビュ�
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
+from dataclasses import replace as dc_replace
+import io
 import math
+import re
+
+
+# Circular-import guard for direct split-module imports.
+# ``tategakiXTC_gui_core`` re-exports many names from this module; when this
+# module is imported first, core may ask for those names before the real
+# definitions below have executed.  Placeholders let core finish importing;
+# the real objects are published back to core at module end.
+_SPLIT_IMPORT_PLACEHOLDER = object()
+_CORE_REEXPORT_NAMES = (
+    '_scaled_kutoten_offset',
+    '_glyph_position_mode',
+    '_draw_glyph_position_mode',
+    '_apply_draw_glyph_position_modes',
+    '_scaled_kutoten_offset_for_mode',
+    '_punctuation_extra_y_for_mode',
+    '_ichi_extra_y_for_mode',
+    '_halfwidth_digit_extra_y_for_mode',
+    '_tatechuyoko_symbol_extra_y_for_mode',
+    '_lower_closing_bracket_extra_y_for_mode',
+    '_small_kana_offset',
+    '_kagikakko_extra_y',
+    '_should_draw_emphasis_for_cell_cached',
+    '_should_draw_side_line_for_cell_cached',
+    '_get_side_line_pattern',
+    '_get_side_line_style',
+    '_clamp_int',
+    '_side_line_horizontal_extent',
+    '_classify_tate_draw_char',
+    'create_image_draw',
+    '_get_draw_target_image',
+    '_paste_glyph_image',
+    '_get_font_object_cache',
+    '_get_or_create_font_object_cache',
+    '_cached_resolve_cacheable_font_spec',
+    '_resolve_cacheable_font_spec',
+    '_cached_render_text_glyph_bundle',
+    '_glyph_render_cache_key',
+    '_render_text_glyph_and_mask_shared',
+    '_render_text_glyph_and_mask',
+    'draw_weighted_text',
+    '_glyph_canvas_layout',
+    '_trim_glyph_image_to_ink',
+    '_italic_extra_width',
+    '_italic_transform_layout',
+    '_build_text_glyph_image',
+    '_cached_render_text_glyph_image',
+    '_render_text_glyph_image_shared',
+    '_render_text_glyph_image',
+    '_VERTICAL_GLYPH_FALLBACK_SENTINELS',
+    '_glyph_image_signature',
+    '_cached_glyph_signature',
+    '_missing_glyph_signatures',
+    '_missing_glyph_signatures_for_font',
+    '_cached_font_has_distinct_glyph',
+    '_font_has_distinct_glyph',
+    '_should_rotate_to_horizontal_from_glyph_image',
+    '_cached_horizontal_rotation_decision',
+    '_should_rotate_to_horizontal',
+    '_should_rotate_horizontal_bracket',
+    '_is_render_spacing_char',
+    '_cached_resolve_vertical_glyph_char',
+    '_resolve_vertical_glyph_char',
+    '_cached_tate_punctuation_draw',
+    '_resolve_tate_punctuation_draw',
+    '_cached_horizontal_bracket_draw',
+    '_resolve_horizontal_bracket_draw',
+    '_cached_default_tate_draw',
+    '_resolve_default_tate_draw',
+    '_cached_tate_draw_spec',
+    '_compute_uncached_tate_draw_spec',
+    '_compute_tate_draw_spec',
+    '_compute_reference_glyph_center',
+    '_cached_reference_glyph_center',
+    '_get_reference_glyph_center',
+    '_make_font_variant',
+    '_centered_glyph_direct_offsets',
+    '_centered_glyph_image_offsets',
+    'draw_centered_glyph',
+    '_ink_centered_glyph_image_offsets',
+    '_ink_flow_centered_glyph_image_offsets',
+    '_get_ichi_visual_target_center_y',
+    'draw_ink_centered_glyph',
+    '_is_tatechuyoko_token',
+    '_is_tatechuyoko_token_for_digit_mode',
+    '_normalize_tatechuyoko_digit_mode',
+    '_tatechuyoko_digit_max_len',
+    '_tatechuyoko_layout_limits',
+    '_cached_text_bbox',
+    '_cached_text_bbox_dims',
+    '_normalize_text_bbox_result',
+    '_call_font_getbbox',
+    '_get_text_bbox',
+    '_get_text_bbox_dims',
+    '_cached_tatechuyoko_candidate_dims',
+    '_estimate_tatechuyoko_candidate_dims',
+    '_finalize_tatechuyoko_fit_size',
+    '_cached_tatechuyoko_fit_size',
+    '_resolve_tatechuyoko_fit_size',
+    '_cached_tatechuyoko_bundle',
+    '_build_tatechuyoko_bundle',
+    '_tatechuyoko_paste_offsets',
+    'draw_tatechuyoko',
+    '_should_center_ascii_glyph',
+    '_tokenize_vertical_text_impl',
+    '_tokenize_vertical_text_cached',
+    '_tokenize_vertical_text',
+    '_normalize_latin_orientation_mode',
+    '_latin_horizontal_candidate_end',
+    '_is_horizontal_latin_run_candidate',
+    '_split_latin_orientation_runs',
+    '_split_latin_horizontal_text_for_column',
+    '_is_line_head_forbidden',
+    '_is_line_end_forbidden',
+    '_is_hanging_punctuation',
+    '_is_continuous_punctuation_pair',
+    '_continuous_punctuation_run_length',
+    '_closing_punctuation_group_length',
+    '_minimum_safe_group_length',
+    '_protected_token_group_length',
+    '_build_single_token_vertical_layout_hints',
+    '_build_two_token_vertical_layout_hints',
+    '_build_three_token_vertical_layout_hints',
+    '_build_four_token_vertical_layout_hints',
+    '_build_vertical_layout_hints_cached',
+    '_build_vertical_layout_hints',
+    '_choose_vertical_layout_action_with_hints',
+    '_normalize_kinsoku_mode',
+    '_effective_vertical_layout_bottom_margin',
+    '_remaining_vertical_slots',
+    '_remaining_vertical_slots_for_current_column',
+    '_is_after_effective_column_top',
+    '_would_start_forbidden_after_hang_pair',
+    '_would_orphan_short_tail_after_break',
+    '_choose_vertical_layout_action',
+    '_double_punctuation_layout',
+    '_double_punctuation_draw_offsets',
+    '_hanging_bottom_layout',
+    '_hanging_bottom_draw_offsets',
+    '_limit_draw_y_delta_to_page',
+    '_draw_hanging_text_near_bottom',
+    '_is_lowerable_hanging_closing_bracket',
+    'draw_hanging_closing_bracket',
+    '_tate_punctuation_layout_insets',
+    '_tate_hanging_punctuation_raise',
+    '_tate_hanging_punctuation_visual_targets',
+    '_tate_hanging_punctuation_min_top_offset',
+    '_tate_hanging_punctuation_offset_y',
+    '_tate_punctuation_direct_offsets',
+    '_tate_punctuation_image_offsets',
+    '_draw_tate_punctuation_glyph',
+    '_vertical_dot_leader_count',
+    'draw_vertical_dot_leader',
+    '_vertical_wave_dash_canvas_spec',
+    '_build_vertical_wave_dash_image',
+    '_vertical_wave_dash_rotation_degrees',
+    '_wave_dash_drawing_mode',
+    '_wave_dash_position_mode',
+    '_wave_dash_extra_y_for_mode',
+    'draw_vertical_wave_dash',
+    'draw_hanging_punctuation',
+    'draw_char_tate',
+    '_build_default_preview_blocks',
+    '_resolve_preview_source_paths',
+    '_resolve_preview_source_path',
+    '_select_preview_blocks',
+    '_preview_fit_image',
+    '_preview_source_requires_font',
+    '_preview_target_requires_font',
+    '_PreviewPageLimitReached',
+    '_render_preview_pages_from_target',
+    '_render_preview_page_from_target',
+    '_apply_preview_postprocess',
+    '_encode_preview_png_base64',
+    '_mapping_get_int',
+    '_mapping_get_bool',
+    '_preview_path_signature',
+    '_preview_bundle_cache_key',
+    'clear_preview_bundle_cache',
+    '_iter_preview_bundle_pages',
+    '_normalize_preview_bundle_pages',
+    '_get_cached_preview_bundle',
+    '_store_cached_preview_bundle',
+    'generate_preview_bundle',
+    'generate_preview_base64',
+    '_has_renderable_text_blocks',
+    '_split_ruby_text_segments_cached',
+    '_split_ruby_text_segments',
+    '_ruby_parts_for_overlay_groups',
+    '_ruby_group_extra_cells_for_part',
+    '_expanded_ruby_overlay_groups_for_parts',
+    '_append_ruby_overlay_group',
+    '_build_ruby_overlay_groups',
+    '_append_overlay_cell',
+    '_effective_ruby_overlay_bottom_margin',
+    '_ruby_group_capacity_for_args',
+    '_clamp_margin_value',
+    '_hanging_punctuation_bottom_clip_allowance',
+    '_bottom_margin_clip_start_for_text_page',
+    '_apply_text_page_margin_clip',
+    '_page_label_allows_text_margin_clip',
+    '_apply_page_entry_margin_clip',
+    '_VerticalPageRenderer',
+    '_render_text_blocks_to_page_entries',
+    '_render_text_blocks_to_images',
+    '_PREVIEW_BUNDLE_CACHE'
+)
+_CORE_REEXPORT_ALIASES = (
+    ('_scaled_kutoten_offset', '_scaled_kutoten_offset'),
+    ('_glyph_position_mode', '_glyph_position_mode'),
+    ('_draw_glyph_position_mode', '_draw_glyph_position_mode'),
+    ('_apply_draw_glyph_position_modes', '_apply_draw_glyph_position_modes'),
+    ('_scaled_kutoten_offset_for_mode', '_scaled_kutoten_offset_for_mode'),
+    ('_punctuation_extra_y_for_mode', '_punctuation_extra_y_for_mode'),
+    ('_ichi_extra_y_for_mode', '_ichi_extra_y_for_mode'),
+    ('_halfwidth_digit_extra_y_for_mode', '_halfwidth_digit_extra_y_for_mode'),
+    ('_tatechuyoko_symbol_extra_y_for_mode', '_tatechuyoko_symbol_extra_y_for_mode'),
+    ('_lower_closing_bracket_extra_y_for_mode', '_lower_closing_bracket_extra_y_for_mode'),
+    ('_small_kana_offset', '_small_kana_offset'),
+    ('_kagikakko_extra_y', '_kagikakko_extra_y'),
+    ('_should_draw_emphasis_for_cell_cached', '_should_draw_emphasis_for_cell_cached'),
+    ('_should_draw_side_line_for_cell_cached', '_should_draw_side_line_for_cell_cached'),
+    ('_get_side_line_pattern', '_get_side_line_pattern'),
+    ('_get_side_line_style', '_get_side_line_style'),
+    ('_clamp_int', '_clamp_int'),
+    ('_side_line_horizontal_extent', '_side_line_horizontal_extent'),
+    ('_classify_tate_draw_char', '_classify_tate_draw_char'),
+    ('create_image_draw', 'create_image_draw'),
+    ('_get_draw_target_image', '_get_draw_target_image'),
+    ('_paste_glyph_image', '_paste_glyph_image'),
+    ('_get_font_object_cache', '_get_font_object_cache'),
+    ('_get_or_create_font_object_cache', '_get_or_create_font_object_cache'),
+    ('_cached_resolve_cacheable_font_spec', '_cached_resolve_cacheable_font_spec'),
+    ('_resolve_cacheable_font_spec', '_resolve_cacheable_font_spec'),
+    ('_cached_render_text_glyph_bundle', '_cached_render_text_glyph_bundle'),
+    ('_glyph_render_cache_key', '_glyph_render_cache_key'),
+    ('_render_text_glyph_and_mask_shared', '_render_text_glyph_and_mask_shared'),
+    ('_render_text_glyph_and_mask', '_render_text_glyph_and_mask'),
+    ('draw_weighted_text', 'draw_weighted_text'),
+    ('_glyph_canvas_layout', '_glyph_canvas_layout'),
+    ('_trim_glyph_image_to_ink', '_trim_glyph_image_to_ink'),
+    ('_italic_extra_width', '_italic_extra_width'),
+    ('_italic_transform_layout', '_italic_transform_layout'),
+    ('_build_text_glyph_image', '_build_text_glyph_image'),
+    ('_cached_render_text_glyph_image', '_cached_render_text_glyph_image'),
+    ('_render_text_glyph_image_shared', '_render_text_glyph_image_shared'),
+    ('_render_text_glyph_image', '_render_text_glyph_image'),
+    ('_VERTICAL_GLYPH_FALLBACK_SENTINELS', '_VERTICAL_GLYPH_FALLBACK_SENTINELS'),
+    ('_glyph_image_signature', '_glyph_image_signature'),
+    ('_cached_glyph_signature', '_cached_glyph_signature'),
+    ('_missing_glyph_signatures', '_missing_glyph_signatures'),
+    ('_missing_glyph_signatures_for_font', '_missing_glyph_signatures_for_font'),
+    ('_cached_font_has_distinct_glyph', '_cached_font_has_distinct_glyph'),
+    ('_font_has_distinct_glyph', '_font_has_distinct_glyph'),
+    ('_should_rotate_to_horizontal_from_glyph_image', '_should_rotate_to_horizontal_from_glyph_image'),
+    ('_cached_horizontal_rotation_decision', '_cached_horizontal_rotation_decision'),
+    ('_should_rotate_to_horizontal', '_should_rotate_to_horizontal'),
+    ('_should_rotate_horizontal_bracket', '_should_rotate_horizontal_bracket'),
+    ('_is_render_spacing_char', '_is_render_spacing_char'),
+    ('_cached_resolve_vertical_glyph_char', '_cached_resolve_vertical_glyph_char'),
+    ('_resolve_vertical_glyph_char', '_resolve_vertical_glyph_char'),
+    ('_cached_tate_punctuation_draw', '_cached_tate_punctuation_draw'),
+    ('_resolve_tate_punctuation_draw', '_resolve_tate_punctuation_draw'),
+    ('_cached_horizontal_bracket_draw', '_cached_horizontal_bracket_draw'),
+    ('_resolve_horizontal_bracket_draw', '_resolve_horizontal_bracket_draw'),
+    ('_cached_default_tate_draw', '_cached_default_tate_draw'),
+    ('_resolve_default_tate_draw', '_resolve_default_tate_draw'),
+    ('_cached_tate_draw_spec', '_cached_tate_draw_spec'),
+    ('_compute_uncached_tate_draw_spec', '_compute_uncached_tate_draw_spec'),
+    ('_compute_tate_draw_spec', '_compute_tate_draw_spec'),
+    ('_compute_reference_glyph_center', '_compute_reference_glyph_center'),
+    ('_cached_reference_glyph_center', '_cached_reference_glyph_center'),
+    ('_get_reference_glyph_center', '_get_reference_glyph_center'),
+    ('_make_font_variant', '_make_font_variant'),
+    ('_centered_glyph_direct_offsets', '_centered_glyph_direct_offsets'),
+    ('_centered_glyph_image_offsets', '_centered_glyph_image_offsets'),
+    ('draw_centered_glyph', 'draw_centered_glyph'),
+    ('_ink_centered_glyph_image_offsets', '_ink_centered_glyph_image_offsets'),
+    ('_ink_flow_centered_glyph_image_offsets', '_ink_flow_centered_glyph_image_offsets'),
+    ('_get_ichi_visual_target_center_y', '_get_ichi_visual_target_center_y'),
+    ('draw_ink_centered_glyph', 'draw_ink_centered_glyph'),
+    ('_is_tatechuyoko_token', '_is_tatechuyoko_token'),
+    ('_is_tatechuyoko_token_for_digit_mode', '_is_tatechuyoko_token_for_digit_mode'),
+    ('_normalize_tatechuyoko_digit_mode', '_normalize_tatechuyoko_digit_mode'),
+    ('_tatechuyoko_digit_max_len', '_tatechuyoko_digit_max_len'),
+    ('_tatechuyoko_layout_limits', '_tatechuyoko_layout_limits'),
+    ('_cached_text_bbox', '_cached_text_bbox'),
+    ('_cached_text_bbox_dims', '_cached_text_bbox_dims'),
+    ('_normalize_text_bbox_result', '_normalize_text_bbox_result'),
+    ('_call_font_getbbox', '_call_font_getbbox'),
+    ('_get_text_bbox', '_get_text_bbox'),
+    ('_get_text_bbox_dims', '_get_text_bbox_dims'),
+    ('_cached_tatechuyoko_candidate_dims', '_cached_tatechuyoko_candidate_dims'),
+    ('_estimate_tatechuyoko_candidate_dims', '_estimate_tatechuyoko_candidate_dims'),
+    ('_finalize_tatechuyoko_fit_size', '_finalize_tatechuyoko_fit_size'),
+    ('_cached_tatechuyoko_fit_size', '_cached_tatechuyoko_fit_size'),
+    ('_resolve_tatechuyoko_fit_size', '_resolve_tatechuyoko_fit_size'),
+    ('_cached_tatechuyoko_bundle', '_cached_tatechuyoko_bundle'),
+    ('_build_tatechuyoko_bundle', '_build_tatechuyoko_bundle'),
+    ('_tatechuyoko_paste_offsets', '_tatechuyoko_paste_offsets'),
+    ('draw_tatechuyoko', 'draw_tatechuyoko'),
+    ('_should_center_ascii_glyph', '_should_center_ascii_glyph'),
+    ('_tokenize_vertical_text_impl', '_tokenize_vertical_text_impl'),
+    ('_tokenize_vertical_text_cached', '_tokenize_vertical_text_cached'),
+    ('_tokenize_vertical_text', '_tokenize_vertical_text'),
+    ('_normalize_latin_orientation_mode', '_normalize_latin_orientation_mode'),
+    ('_latin_horizontal_candidate_end', '_latin_horizontal_candidate_end'),
+    ('_is_horizontal_latin_run_candidate', '_is_horizontal_latin_run_candidate'),
+    ('_split_latin_orientation_runs', '_split_latin_orientation_runs'),
+    ('_split_latin_horizontal_text_for_column', '_split_latin_horizontal_text_for_column'),
+    ('_is_line_head_forbidden', '_is_line_head_forbidden'),
+    ('_is_line_end_forbidden', '_is_line_end_forbidden'),
+    ('_is_hanging_punctuation', '_is_hanging_punctuation'),
+    ('_is_continuous_punctuation_pair', '_is_continuous_punctuation_pair'),
+    ('_continuous_punctuation_run_length', '_continuous_punctuation_run_length'),
+    ('_closing_punctuation_group_length', '_closing_punctuation_group_length'),
+    ('_minimum_safe_group_length', '_minimum_safe_group_length'),
+    ('_protected_token_group_length', '_protected_token_group_length'),
+    ('_build_single_token_vertical_layout_hints', '_build_single_token_vertical_layout_hints'),
+    ('_build_two_token_vertical_layout_hints', '_build_two_token_vertical_layout_hints'),
+    ('_build_three_token_vertical_layout_hints', '_build_three_token_vertical_layout_hints'),
+    ('_build_four_token_vertical_layout_hints', '_build_four_token_vertical_layout_hints'),
+    ('_build_vertical_layout_hints_cached', '_build_vertical_layout_hints_cached'),
+    ('_build_vertical_layout_hints', '_build_vertical_layout_hints'),
+    ('_choose_vertical_layout_action_with_hints', '_choose_vertical_layout_action_with_hints'),
+    ('_normalize_kinsoku_mode', '_normalize_kinsoku_mode'),
+    ('_effective_vertical_layout_bottom_margin', '_effective_vertical_layout_bottom_margin'),
+    ('_remaining_vertical_slots', '_remaining_vertical_slots'),
+    ('_remaining_vertical_slots_for_current_column', '_remaining_vertical_slots_for_current_column'),
+    ('_is_after_effective_column_top', '_is_after_effective_column_top'),
+    ('_would_start_forbidden_after_hang_pair', '_would_start_forbidden_after_hang_pair'),
+    ('_would_orphan_short_tail_after_break', '_would_orphan_short_tail_after_break'),
+    ('_choose_vertical_layout_action', '_choose_vertical_layout_action'),
+    ('_double_punctuation_layout', '_double_punctuation_layout'),
+    ('_double_punctuation_draw_offsets', '_double_punctuation_draw_offsets'),
+    ('_hanging_bottom_layout', '_hanging_bottom_layout'),
+    ('_hanging_bottom_draw_offsets', '_hanging_bottom_draw_offsets'),
+    ('_limit_draw_y_delta_to_page', '_limit_draw_y_delta_to_page'),
+    ('_draw_hanging_text_near_bottom', '_draw_hanging_text_near_bottom'),
+    ('_is_lowerable_hanging_closing_bracket', '_is_lowerable_hanging_closing_bracket'),
+    ('draw_hanging_closing_bracket', 'draw_hanging_closing_bracket'),
+    ('_tate_punctuation_layout_insets', '_tate_punctuation_layout_insets'),
+    ('_tate_hanging_punctuation_raise', '_tate_hanging_punctuation_raise'),
+    ('_tate_hanging_punctuation_visual_targets', '_tate_hanging_punctuation_visual_targets'),
+    ('_tate_hanging_punctuation_min_top_offset', '_tate_hanging_punctuation_min_top_offset'),
+    ('_tate_hanging_punctuation_offset_y', '_tate_hanging_punctuation_offset_y'),
+    ('_tate_punctuation_direct_offsets', '_tate_punctuation_direct_offsets'),
+    ('_tate_punctuation_image_offsets', '_tate_punctuation_image_offsets'),
+    ('_draw_tate_punctuation_glyph', '_draw_tate_punctuation_glyph'),
+    ('_vertical_dot_leader_count', '_vertical_dot_leader_count'),
+    ('draw_vertical_dot_leader', 'draw_vertical_dot_leader'),
+    ('_vertical_wave_dash_canvas_spec', '_vertical_wave_dash_canvas_spec'),
+    ('_build_vertical_wave_dash_image', '_build_vertical_wave_dash_image'),
+    ('_vertical_wave_dash_rotation_degrees', '_vertical_wave_dash_rotation_degrees'),
+    ('_wave_dash_drawing_mode', '_wave_dash_drawing_mode'),
+    ('_wave_dash_position_mode', '_wave_dash_position_mode'),
+    ('_wave_dash_extra_y_for_mode', '_wave_dash_extra_y_for_mode'),
+    ('draw_vertical_wave_dash', 'draw_vertical_wave_dash'),
+    ('draw_hanging_punctuation', 'draw_hanging_punctuation'),
+    ('draw_char_tate', 'draw_char_tate'),
+    ('_build_default_preview_blocks', '_build_default_preview_blocks'),
+    ('_resolve_preview_source_paths', '_resolve_preview_source_paths'),
+    ('_resolve_preview_source_path', '_resolve_preview_source_path'),
+    ('_select_preview_blocks', '_select_preview_blocks'),
+    ('_preview_fit_image', '_preview_fit_image'),
+    ('_preview_source_requires_font', '_preview_source_requires_font'),
+    ('_preview_target_requires_font', '_preview_target_requires_font'),
+    ('_PreviewPageLimitReached', '_PreviewPageLimitReached'),
+    ('_render_preview_pages_from_target', '_render_preview_pages_from_target'),
+    ('_render_preview_page_from_target', '_render_preview_page_from_target'),
+    ('_apply_preview_postprocess', '_apply_preview_postprocess'),
+    ('_encode_preview_png_base64', '_encode_preview_png_base64'),
+    ('_mapping_get_int', '_mapping_get_int'),
+    ('_mapping_get_bool', '_mapping_get_bool'),
+    ('_preview_path_signature', '_preview_path_signature'),
+    ('_preview_bundle_cache_key', '_preview_bundle_cache_key'),
+    ('clear_preview_bundle_cache', 'clear_preview_bundle_cache'),
+    ('_iter_preview_bundle_pages', '_iter_preview_bundle_pages'),
+    ('_normalize_preview_bundle_pages', '_normalize_preview_bundle_pages'),
+    ('_get_cached_preview_bundle', '_get_cached_preview_bundle'),
+    ('_store_cached_preview_bundle', '_store_cached_preview_bundle'),
+    ('generate_preview_bundle', 'generate_preview_bundle'),
+    ('generate_preview_base64', 'generate_preview_base64'),
+    ('_has_renderable_text_blocks', '_has_renderable_text_blocks'),
+    ('_split_ruby_text_segments_cached', '_split_ruby_text_segments_cached'),
+    ('_split_ruby_text_segments', '_split_ruby_text_segments'),
+    ('_ruby_parts_for_overlay_groups', '_ruby_parts_for_overlay_groups'),
+    ('_ruby_group_extra_cells_for_part', '_ruby_group_extra_cells_for_part'),
+    ('_expanded_ruby_overlay_groups_for_parts', '_expanded_ruby_overlay_groups_for_parts'),
+    ('_append_ruby_overlay_group', '_append_ruby_overlay_group'),
+    ('_build_ruby_overlay_groups', '_build_ruby_overlay_groups'),
+    ('_append_overlay_cell', '_append_overlay_cell'),
+    ('_effective_ruby_overlay_bottom_margin', '_effective_ruby_overlay_bottom_margin'),
+    ('_ruby_group_capacity_for_args', '_ruby_group_capacity_for_args'),
+    ('_clamp_margin_value', '_clamp_margin_value'),
+    ('_hanging_punctuation_bottom_clip_allowance', '_hanging_punctuation_bottom_clip_allowance'),
+    ('_bottom_margin_clip_start_for_text_page', '_bottom_margin_clip_start_for_text_page'),
+    ('_apply_text_page_margin_clip', '_apply_text_page_margin_clip'),
+    ('_page_label_allows_text_margin_clip', '_page_label_allows_text_margin_clip'),
+    ('_apply_page_entry_margin_clip', '_apply_page_entry_margin_clip'),
+    ('_VerticalPageRenderer', '_VerticalPageRenderer'),
+    ('_render_text_blocks_to_page_entries', '_render_text_blocks_to_page_entries'),
+    ('_render_text_blocks_to_images', '_render_text_blocks_to_images'),
+    ('_PREVIEW_BUNDLE_CACHE', '_PREVIEW_BUNDLE_CACHE')
+)
+for _name in _CORE_REEXPORT_NAMES:
+    globals().setdefault(_name, _SPLIT_IMPORT_PLACEHOLDER)
 
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
@@ -125,6 +534,7 @@ def _apply_draw_glyph_position_modes(draw: Any, args: Any) -> Any:
         setattr(draw, '_tategaki_ichi_position_mode', _glyph_position_mode(getattr(args, 'ichi_position_mode', 'standard')))
         setattr(draw, '_tategaki_halfwidth_digit_position_mode', _glyph_position_mode(getattr(args, 'halfwidth_digit_position_mode', 'standard')))
         setattr(draw, '_tategaki_halfwidth_alpha_position_mode', _glyph_position_mode(getattr(args, 'halfwidth_alpha_position_mode', 'standard')))
+        setattr(draw, '_tategaki_middle_dot_position_mode', _glyph_position_mode(getattr(args, 'middle_dot_position_mode', 'standard')))
         setattr(draw, '_tategaki_tatechuyoko_symbol_position_mode', _glyph_position_mode(getattr(args, 'tatechuyoko_symbol_position_mode', 'standard')))
         setattr(draw, '_tategaki_tatechuyoko_digit_mode', _normalize_tatechuyoko_digit_mode(getattr(args, 'tatechuyoko_digit_mode', '2')))
         setattr(draw, '_tategaki_lower_closing_bracket_position_mode', _glyph_position_mode(getattr(args, 'lower_closing_bracket_position_mode', 'standard')))
@@ -334,6 +744,27 @@ def _halfwidth_alpha_extra_y_for_mode(f_size: int, position_mode: str) -> int:
     )
 
 
+MIDDLE_DOT_POSITION_CHARS = frozenset({'・', '･', '·'})
+
+
+@lru_cache(maxsize=64)
+def _middle_dot_extra_y_for_mode(f_size: int, position_mode: str) -> int:
+    # 中黒はフォントにより em 内の上下位置差が出やすいため、
+    # 「一」と同じ 5 モードの上下補正を独立して持たせる。
+    return _glyph_position_extra_y_for_mode(
+        f_size,
+        position_mode,
+        weak_factor=0.12,
+        strong_factor=0.24,
+        min_weak=2,
+        min_strong=4,
+    )
+
+
+def _is_middle_dot_position_char(token: str) -> bool:
+    return isinstance(token, str) and len(token) == 1 and token in MIDDLE_DOT_POSITION_CHARS
+
+
 def _is_single_halfwidth_alpha_position_char(token: str) -> bool:
     return isinstance(token, str) and len(token) == 1 and token.isascii() and token.isalpha()
 
@@ -476,6 +907,8 @@ def _classify_tate_draw_char(char: str) -> str:
         return 'double_punct'
     if char == '一':
         return 'ichi'
+    if _is_middle_dot_position_char(char):
+        return 'middle_dot'
     if char in {'ー', '－'}:
         return 'long_vowel'
     if _is_ascii_rotated_bracket_char(char):
@@ -1885,6 +2318,195 @@ def _tokenize_vertical_text(text: str, tatechuyoko_digit_mode: object = '4') -> 
     return list(_tokenize_vertical_text_cached(str(text or ''), tatechuyoko_digit_mode))
 
 
+_LATIN_HORIZONTAL_RUN_CHARS = frozenset(
+    'abcdefghijklmnopqrstuvwxyz'
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    '0123456789'
+    '.,:;!?\'\"-/+#@&*'
+    '_=%~'
+    '’‘“”'
+)
+_LATIN_HORIZONTAL_RUN_BODY_CHARS = _LATIN_HORIZONTAL_RUN_CHARS | frozenset({' '})
+_LATIN_HORIZONTAL_RUN_START_QUOTES = frozenset({'\'', '\"', '‘', '“'})
+_LATIN_HORIZONTAL_MAX_TOTAL_CHARS = 0
+_LATIN_HORIZONTAL_MAX_WORD_CHARS = 24
+_LATIN_HORIZONTAL_URL_HOST_RE = (
+    r'(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}'
+)
+_LATIN_HORIZONTAL_URL_RE = re.compile(
+    rf'^(?:https?://)?{_LATIN_HORIZONTAL_URL_HOST_RE}'
+    r'(?::[0-9]+)?(?:[/?#].*)?$',
+    re.ASCII,
+)
+_LATIN_HORIZONTAL_URL_PREFIXES = ('http://', 'https://', 'www.')
+_LATIN_HORIZONTAL_URL_SPLIT_AFTER_CHARS = frozenset({'/', '.', '-', '_', '?', '&', '=', '#'})
+_LATIN_HORIZONTAL_KIND = 'latin_horizontal'
+_TEXT_RUN_KIND = 'text'
+
+
+def _normalize_latin_orientation_mode(mode: object) -> str:
+    normalized = str(mode or 'vertical').strip().lower()
+    return normalized if normalized in {'vertical', 'horizontal'} else 'vertical'
+
+
+def _latin_horizontal_candidate_end(text: str, start: int) -> int:
+    text_len = len(text)
+    if start >= text_len:
+        return start
+    first = text[start]
+    if first in _LATIN_HORIZONTAL_RUN_START_QUOTES:
+        if start + 1 >= text_len or not (text[start + 1].isascii() and text[start + 1].isalnum()):
+            return start
+    elif not (first.isascii() and first.isalnum()):
+        return start
+    end = start + 1
+    while end < text_len:
+        ch = text[end]
+        if ch in _LATIN_HORIZONTAL_RUN_CHARS:
+            end += 1
+            continue
+        if ch == ' ':
+            # Keep short English phrases together (e.g. Pity's akin to love.)
+            # but stop after terminal sentence punctuation and before digit-only
+            # fragments so Japanese vertical digit handling keeps priority.
+            if end > start and text[end - 1] in '.?!':
+                break
+            next_index = end + 1
+            if next_index < text_len:
+                lookahead = next_index
+                if text[lookahead] in _LATIN_HORIZONTAL_RUN_START_QUOTES:
+                    lookahead += 1
+                fragment_end = lookahead
+                while fragment_end < text_len and text[fragment_end] in _LATIN_HORIZONTAL_RUN_CHARS:
+                    fragment_end += 1
+                fragment = text[lookahead:fragment_end]
+                if fragment and any(item.isascii() and item.isalpha() for item in fragment):
+                    next_ch = text[next_index]
+                    if next_ch.isascii() and next_ch.isalnum():
+                        end += 1
+                        continue
+                    if (
+                        next_ch in _LATIN_HORIZONTAL_RUN_START_QUOTES
+                        and next_index + 1 < text_len
+                        and text[next_index + 1].isascii()
+                        and text[next_index + 1].isalnum()
+                    ):
+                        end += 1
+                        continue
+        break
+    return end
+
+
+
+def _latin_horizontal_url_probe_text(text: str) -> str:
+    candidate = str(text or '').strip()
+    candidate = candidate.strip("\'\"‘’“”")
+    # Sentence punctuation immediately after a URL is often not part of the URL
+    # itself, but keeping it in the horizontal run is still natural.  Strip it
+    # only for detection so ``https://example.com.`` is treated as URL-like.
+    return candidate.rstrip('.,;!?')
+
+
+def _is_horizontal_latin_url_candidate(text: str) -> bool:
+    probe = _latin_horizontal_url_probe_text(text)
+    if not probe or ' ' in probe:
+        return False
+    return _LATIN_HORIZONTAL_URL_RE.match(probe) is not None
+
+
+def _has_incomplete_latin_horizontal_url_prefix(text: str) -> bool:
+    probe = str(text or '').strip().strip("\'\"‘’“”").lower()
+    for prefix in _LATIN_HORIZONTAL_URL_PREFIXES:
+        if probe.startswith(prefix):
+            host_part = probe[len(prefix):]
+            return not any(ch.isascii() and ch.isalnum() for ch in host_part)
+    return False
+
+
+def _latin_horizontal_word_core(word: str) -> str:
+    return str(word or '').strip('.,:;!?\'"’‘“”-/#@&*+-_=%~')
+
+
+def _has_too_long_latin_horizontal_word(candidate: str, *, max_word_chars: int = _LATIN_HORIZONTAL_MAX_WORD_CHARS) -> bool:
+    limit = max(1, int(max_word_chars or 1))
+    for word in str(candidate or '').split(' '):
+        core = _latin_horizontal_word_core(word)
+        if core and len(core) > limit:
+            return True
+    return False
+
+
+def _is_horizontal_latin_run_candidate(text: str, *, max_chars: int = _LATIN_HORIZONTAL_MAX_TOTAL_CHARS) -> bool:
+    candidate = str(text or '')
+    if not candidate:
+        return False
+    if candidate.strip(' ') != candidate or '  ' in candidate:
+        return False
+    max_len = int(max_chars or 0)
+    if max_len > 0 and len(candidate) > max_len:
+        return False
+
+    body_chars_ok = all(ch in _LATIN_HORIZONTAL_RUN_BODY_CHARS for ch in candidate) or (
+        candidate[0] in _LATIN_HORIZONTAL_RUN_START_QUOTES
+        and all(ch in _LATIN_HORIZONTAL_RUN_BODY_CHARS for ch in candidate[1:])
+    )
+    if not body_chars_ok:
+        return False
+
+    is_url_like = _is_horizontal_latin_url_candidate(candidate)
+    if not is_url_like and _has_incomplete_latin_horizontal_url_prefix(candidate):
+        return False
+    if not is_url_like and _has_too_long_latin_horizontal_word(candidate):
+        return False
+    if is_url_like:
+        return True
+    if not any(ch.isascii() and ch.isalpha() for ch in candidate):
+        return False
+    return True
+
+
+def _split_latin_orientation_runs(text: str, mode: object = 'vertical', *, max_chars: int = _LATIN_HORIZONTAL_MAX_TOTAL_CHARS) -> tuple[tuple[str, str], ...]:
+    """Split text into ordinary and horizontal-Latin candidate runs.
+
+    Step 8 only classifies runs; drawing remains vertical-compatible.  A run is
+    horizontal-ready only when it contains at least one ASCII letter.  Digit-only
+    runs intentionally stay ordinary text so existing tatechuyoko / halfwidth
+    digit handling keeps priority.
+    """
+    source = str(text or '')
+    if not source:
+        return ()
+    if _normalize_latin_orientation_mode(mode) != 'horizontal':
+        return ((_TEXT_RUN_KIND, source),)
+
+    segments: list[tuple[str, str]] = []
+    text_buf: list[str] = []
+
+    def flush_text() -> None:
+        if text_buf:
+            segments.append((_TEXT_RUN_KIND, ''.join(text_buf)))
+            text_buf.clear()
+
+    idx = 0
+    source_len = len(source)
+    while idx < source_len:
+        end = _latin_horizontal_candidate_end(source, idx)
+        if end > idx:
+            candidate = source[idx:end]
+            if _is_horizontal_latin_run_candidate(candidate, max_chars=max_chars):
+                flush_text()
+                segments.append((_LATIN_HORIZONTAL_KIND, candidate))
+                idx = end
+                continue
+            text_buf.append(candidate)
+            idx = end
+            continue
+        text_buf.append(source[idx])
+        idx += 1
+    flush_text()
+    return tuple(segments)
+
+
 def _is_line_head_forbidden(token: str) -> bool:
     if not token:
         return False
@@ -2294,16 +2916,22 @@ def _choose_vertical_layout_action_with_hints(hints: VerticalLayoutHints, idx: i
             elif mode == 'standard' and not head_forbidden_here and hints['would_orphan_short_tail_after_break'][idx]:
                 result = 'advance'
             elif hints['hanging_punctuation'][idx + 1] and not line_end_forbidden:
+                # Do not advance a line-head-forbidden current token merely to
+                # protect the following token.  In very short columns this would
+                # move the current punctuation mark itself to the next column
+                # head, violating the more immediate line-head kinsoku rule.
+                if head_forbidden_here:
+                    result = 'hang_pair'
                 # Do not hang punctuation when doing so would leave a closing
                 # bracket or other line-head-forbidden token at the next
                 # column head.  This is a basic line-head kinsoku rule, so keep
                 # it active for both simple and standard modes.
-                if hints['would_start_forbidden_after_hang_pair'][idx]:
+                elif hints['would_start_forbidden_after_hang_pair'][idx]:
                     result = 'advance'
                 else:
                     result = 'hang_pair'
             elif hints['line_head_forbidden'][idx + 1]:
-                result = 'advance'
+                result = 'draw' if head_forbidden_here else 'advance'
             else:
                 result = 'draw'
         elif mode == 'simple':
@@ -2322,6 +2950,37 @@ def _choose_vertical_layout_action_with_hints(hints: VerticalLayoutHints, idx: i
     if action_cache is not None and cache_key is not None:
         action_cache[cache_key] = result
     return result
+
+
+def _resolve_vertical_layout_action(
+    hints: VerticalLayoutHints,
+    idx: int,
+    token_count: int,
+    slots_left: int,
+    curr_y: int,
+    margin_t: int,
+    wrap_indent_step: int,
+    kinsoku_mode: str,
+    action_cache: dict[tuple[int, int, bool], str] | None,
+) -> str:
+    """Return the next draw/advance action for one real run token.
+
+    Layout hints may contain virtual trailing tokens from the next styled run so
+    kinsoku can pull a body character forward across run boundaries.  Those
+    virtual tokens must never be consumed by the current run, so the boundary
+    ``hang_pair`` guard lives here instead of being repeated in each draw loop.
+    """
+    action = _choose_vertical_layout_action_with_hints(
+        hints,
+        idx,
+        slots_left,
+        _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
+        kinsoku_mode=kinsoku_mode,
+        action_cache=action_cache,
+    )
+    if action == 'hang_pair' and idx + 1 >= token_count:
+        return 'advance'
+    return action
 
 
 def _normalize_kinsoku_mode(mode: object) -> str:
@@ -2437,82 +3096,42 @@ def _would_orphan_short_tail_after_break(tokens: Sequence[str], idx: int) -> boo
     # column short.
     forbidden_count = 0
     has_tail_punctuation = False
+    has_non_hanging_forbidden = False
     scan_idx = tail_idx
     while scan_idx < len(tokens) and _is_line_head_forbidden(tokens[scan_idx]):
         token = tokens[scan_idx]
         if token in DOUBLE_PUNCT_TOKENS or (len(token) == 1 and token in TAIL_PUNCTUATION_CHARS):
             has_tail_punctuation = True
+        if not (len(token) == 1 and token in HANGING_PUNCTUATION_CHARS):
+            has_non_hanging_forbidden = True
         forbidden_count += 1
         if forbidden_count > 4:
             return False
         scan_idx += 1
-    return forbidden_count > 0 and has_tail_punctuation
+    return forbidden_count > 0 and has_tail_punctuation and has_non_hanging_forbidden
 
 
 def _choose_vertical_layout_action(tokens: Sequence[str], idx: int, curr_y: int, margin_t: int, height: int, margin_b: int, font_size: int, kinsoku_mode: str = 'standard') -> str:
+    """Compatibility wrapper around the cached/hinted kinsoku decider.
+
+    Keep this public-in-module API for existing tests and call sites, but make
+    ``_choose_vertical_layout_action_with_hints`` the single source of truth for
+    vertical kinsoku decisions.  This prevents preview/live paths from drifting
+    when the rule set is adjusted.
+    """
     if idx >= len(tokens):
         return 'done'
-    token = tokens[idx]
     slots_left = _remaining_vertical_slots(curr_y, height, margin_b, font_size)
-    if slots_left == 0:
+    if slots_left <= 0:
         return 'advance'
-
-    mode = _normalize_kinsoku_mode(kinsoku_mode)
-    if mode == 'off':
-        return 'draw'
-
-    if (
-        slots_left == 1
-        and curr_y > margin_t
-        and _is_line_end_forbidden(token)
-    ):
-        return 'advance'
-    if slots_left == 1 and curr_y > margin_t and idx + 1 < len(tokens):
-        next_token = tokens[idx + 1]
-        # A line-head-forbidden current token (e.g. the closing ``」`` that exactly
-        # fills the last cell of a ``「あ」`` group) must not be advanced to keep a
-        # following tail together: that would move the forbidden mark to the next
-        # column head.
-        head_forbidden_here = _is_line_head_forbidden(token)
-        if mode == 'standard' and not head_forbidden_here and _is_continuous_punctuation_pair(token, next_token):
-            return 'advance'
-        if mode == 'standard' and not head_forbidden_here and _would_orphan_short_tail_after_break(tokens, idx):
-            return 'advance'
-        if _is_hanging_punctuation(next_token) and not _is_line_end_forbidden(token):
-            # Do not hang punctuation when doing so would leave a closing
-            # bracket or other line-head-forbidden token at the next column
-            # head.  This basic line-head kinsoku rule applies to both simple
-            # and standard modes.
-            if _would_start_forbidden_after_hang_pair(tokens, idx):
-                return 'advance'
-            return 'hang_pair'
-        if _is_line_head_forbidden(next_token):
-            return 'advance'
-
-    if mode == 'simple':
-        return 'draw'
-
-    protected_group_len = _protected_token_group_length(tokens, idx)
-    if (
-        protected_group_len >= 2
-        and slots_left < protected_group_len
-        and curr_y > margin_t
-    ):
-        return 'advance'
-    if (
-        _is_line_end_forbidden(token)
-        and curr_y > margin_t
-        and idx + 1 < len(tokens)
-        and slots_left >= 2
-    ):
-        next_curr_y = curr_y + font_size + 2
-        next_action = _choose_vertical_layout_action(
-            tokens, idx + 1, next_curr_y, margin_t, height, margin_b, font_size,
-            kinsoku_mode=mode,
-        )
-        if next_action == 'advance':
-            return 'advance'
-    return 'draw'
+    hints = _build_vertical_layout_hints(tokens)
+    return _choose_vertical_layout_action_with_hints(
+        hints,
+        idx,
+        slots_left,
+        _is_after_effective_column_top(curr_y, margin_t),
+        kinsoku_mode=kinsoku_mode,
+    )
 
 
 @lru_cache(maxsize=128)
@@ -3266,6 +3885,15 @@ def draw_char_tate(draw: Any, char: str, pos_tuple: tuple[int, int], font: Any, 
         )
         return
 
+    if draw_kind == 'middle_dot':
+        middle_dot_position_mode = _draw_glyph_position_mode(draw, '_tategaki_middle_dot_position_mode')
+        draw_ink_centered_glyph(
+            draw, original_char, (curr_x, curr_y), font, f_size,
+            is_bold=is_bold, rotate_degrees=0, align_to_text_flow=True, is_italic=is_italic,
+            extra_y=0 if ruby_mode else _middle_dot_extra_y_for_mode(f_size, middle_dot_position_mode),
+        )
+        return
+
     if draw_kind == 'long_vowel':
         draw_centered(
             draw, original_char, (curr_x, curr_y), font, f_size,
@@ -3511,6 +4139,12 @@ def _select_preview_blocks(blocks: Sequence[TextBlock] | None, *, max_blocks: in
         if kind == 'blank':
             if selected:
                 selected.append(block)
+            continue
+        if kind == 'image':
+            selected.append(block)
+            nonblank_count += 1
+            if nonblank_count >= max_blocks:
+                break
             continue
         runs = block.get('runs', []) if isinstance(block, dict) else []
         if not any(str(run.get('text', '') or '') for run in runs):
@@ -3812,6 +4446,67 @@ def _preview_path_signature(path: Path) -> tuple[str, int, int]:
         return (str(path), -1, -1)
 
 
+def _preview_aozora_image_sidecar_paths(source_path: Path) -> tuple[Path, Path]:
+    return source_path.with_name(f'{source_path.stem}_img'), source_path.with_name(f'{source_path.stem}.images.json')
+
+
+def _preview_manifest_images(payload: Mapping[str, Any] | None) -> dict[str, Mapping[str, Any]]:
+    if not isinstance(payload, Mapping):
+        return {}
+    images = payload.get('images')
+    if not isinstance(images, Mapping):
+        return {}
+    return {str(key): value for key, value in images.items() if isinstance(value, Mapping)}
+
+
+def _preview_source_sidecar_signature(source_path: Path) -> tuple[object, ...]:
+    """Return a cache signature for Aozora illustration sidecars.
+
+    Preview bundle caching happens before TXT parsing. Include the sidecar manifest
+    and referenced image files here so replacing an illustration invalidates the
+    rendered preview, even when the source TXT itself is unchanged.
+    """
+    if source_path.suffix.lower() not in {'.txt', '.md', '.markdown'}:
+        return ()
+    image_dir, manifest_path = _preview_aozora_image_sidecar_paths(source_path)
+    parts: list[object] = []
+    parts.extend(_preview_path_signature(manifest_path))
+    parts.extend(_preview_path_signature(image_dir))
+
+    image_files: list[Path] = []
+    try:
+        payload = json.loads(manifest_path.read_text(encoding='utf-8'))
+    except Exception:
+        payload = None
+    manifest_image_dir = image_dir
+    manifest_entries = _preview_manifest_images(payload if isinstance(payload, Mapping) else None)
+    if isinstance(payload, Mapping):
+        payload_image_dir = payload.get('image_dir')
+        if isinstance(payload_image_dir, str) and payload_image_dir.strip():
+            candidate = Path(payload_image_dir)
+            if not candidate.is_absolute():
+                candidate = manifest_path.parent / candidate
+            manifest_image_dir = candidate
+    if manifest_entries:
+        for item in manifest_entries.values():
+            file_value = str(item.get('file', '') or '').strip()
+            if not file_value:
+                continue
+            file_path = Path(file_value)
+            if not file_path.is_absolute():
+                file_path = manifest_image_dir / file_path
+            image_files.append(file_path)
+    elif image_dir.exists():
+        try:
+            image_files.extend(sorted(path for path in image_dir.iterdir() if path.is_file())[:128])
+        except OSError:
+            pass
+
+    for image_file in sorted({path for path in image_files}, key=lambda item: str(item))[:128]:
+        parts.extend(_preview_path_signature(image_file))
+    return tuple(parts)
+
+
 def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Sequence[Path] | None = None) -> tuple[object, ...]:
     mode = str(args.get('mode', 'text') or 'text')
     width = _mapping_get_int(args, 'width', DEF_WIDTH)
@@ -3848,6 +4543,9 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
         _glyph_position_mode(args.get('ichi_position_mode', 'standard')),
         _glyph_position_mode(args.get('halfwidth_digit_position_mode', 'standard')),
         _glyph_position_mode(args.get('halfwidth_alpha_position_mode', 'standard')),
+        str(args.get('latin_orientation_mode', 'vertical') or 'vertical'),
+        str(args.get('opening_bracket_indent_mode', 'none') or 'none'),
+        _glyph_position_mode(args.get('middle_dot_position_mode', 'standard')),
         _glyph_position_mode(args.get('tatechuyoko_symbol_position_mode', 'standard')),
         _normalize_tatechuyoko_digit_mode(args.get('tatechuyoko_digit_mode', '2')),
         _glyph_position_mode(args.get('lower_closing_bracket_position_mode', 'standard')),
@@ -3855,7 +4553,10 @@ def _preview_bundle_cache_key(args: Mapping[str, object], *, preview_sources: Se
         _wave_dash_position_mode(args.get('wave_dash_position_mode', 'standard')),
     )
     source_paths = list(preview_sources) if preview_sources is not None else _resolve_preview_source_paths(target_path)
-    source_signature = tuple(_preview_path_signature(path) for path in source_paths[:max_pages])
+    source_signature = tuple(
+        (_preview_path_signature(path), _preview_source_sidecar_signature(path))
+        for path in source_paths[:max_pages]
+    )
     return common + font_part + (target_path, len(source_paths), source_signature)
 
 
@@ -3989,6 +4690,9 @@ def generate_preview_bundle(args: Mapping[str, object], progress_cb: ProgressCal
             ichi_position_mode=_glyph_position_mode(_args.get('ichi_position_mode', 'standard')),
             halfwidth_digit_position_mode=_glyph_position_mode(_args.get('halfwidth_digit_position_mode', 'standard')),
             halfwidth_alpha_position_mode=_glyph_position_mode(_args.get('halfwidth_alpha_position_mode', 'standard')),
+            latin_orientation_mode=str(_args.get('latin_orientation_mode', 'vertical') or 'vertical'),
+            opening_bracket_indent_mode=str(_args.get('opening_bracket_indent_mode', 'none') or 'none'),
+            middle_dot_position_mode=_glyph_position_mode(_args.get('middle_dot_position_mode', 'standard')),
             tatechuyoko_symbol_position_mode=_glyph_position_mode(_args.get('tatechuyoko_symbol_position_mode', 'standard')),
             tatechuyoko_digit_mode=_normalize_tatechuyoko_digit_mode(_args.get('tatechuyoko_digit_mode', '2')),
             lower_closing_bracket_position_mode=_glyph_position_mode(_args.get('lower_closing_bracket_position_mode', 'standard')),
@@ -4083,10 +4787,92 @@ def _has_renderable_text_blocks(blocks: Sequence[Mapping[str, Any]], should_canc
         _raise_if_cancelled(should_cancel)
         if block.get('kind') == 'blank':
             continue
+        if block.get('kind') == 'image' and block.get('image_path'):
+            return True
         runs = block.get('runs', [])
         if any(run.get('text', '') for run in runs):
             return True
     return False
+
+
+def _contains_image_blocks(blocks: Sequence[Mapping[str, Any]], should_cancel: Callable[[], bool] | None = None) -> bool:
+    for block in blocks:
+        _raise_if_cancelled(should_cancel)
+        if block.get('kind') == 'image':
+            return True
+    return False
+
+
+@lru_cache(maxsize=256)
+def _inspect_embedded_image_bytes(img_data: bytes, width: int, height: int, margin_l: int, margin_r: int, margin_t: int, margin_b: int, font_size: int) -> tuple[bool, int, int]:
+    """Classify embedded illustration as full-page or inline using EPUB thresholds."""
+    _refresh_core_globals()
+    with Image.open(io.BytesIO(img_data)) as s_img:
+        img_w, img_h = s_img.size
+    if img_w <= 0 or img_h <= 0:
+        return False, img_w, img_h
+
+    content_w = max(1, width - margin_l - margin_r)
+    content_h = max(1, height - margin_t - margin_b)
+    area_ratio = (img_w * img_h) / float(content_w * content_h)
+    w_ratio = img_w / float(content_w)
+    h_ratio = img_h / float(content_h)
+
+    if area_ratio >= 0.18:
+        return True, img_w, img_h
+    if h_ratio >= 0.38:
+        return True, img_w, img_h
+    if w_ratio >= 0.55 and h_ratio >= 0.12:
+        return True, img_w, img_h
+    if w_ratio >= 0.42 and h_ratio >= 0.24:
+        return True, img_w, img_h
+    if area_ratio >= 0.11 and (h_ratio >= 0.20 or w_ratio >= 0.45):
+        return True, img_w, img_h
+
+    if area_ratio <= 0.07 and h_ratio <= 0.22 and w_ratio <= 0.55:
+        return False, img_w, img_h
+
+    return img_h >= max(180, min(260, font_size * 6)) and area_ratio >= 0.09, img_w, img_h
+
+
+def _make_inline_embedded_image(s_img: Image.Image, args: ConversionArgs) -> Image.Image | None:
+    _refresh_core_globals()
+    img_w, img_h = s_img.size
+    if img_w <= 0 or img_h <= 0:
+        return None
+    cell_w = max(4, args.font_size - 4)
+    cell_h = max(4, args.font_size - 2)
+    scale = min(cell_w / float(img_w), cell_h / float(img_h))
+    new_w = max(1, int(round(img_w * scale)))
+    new_h = max(1, int(round(img_h * scale)))
+    if s_img.mode != 'L':
+        s_img = s_img.convert('L')
+    return s_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+
+@lru_cache(maxsize=256)
+def _prepare_inline_embedded_image_bytes(img_data: bytes, font_size: int, night_mode: bool) -> tuple[int, int, bytes] | None:
+    _refresh_core_globals()
+    with Image.open(io.BytesIO(img_data)) as s_img:
+        temp_args = ConversionArgs(font_size=font_size)
+        inline_img = _make_inline_embedded_image(s_img, temp_args)
+    if inline_img is None:
+        return None
+    if night_mode:
+        inline_img = ImageOps.invert(inline_img)
+    return inline_img.width, inline_img.height, inline_img.tobytes()
+
+
+def _read_image_block_bytes(block: Mapping[str, Any]) -> tuple[str, bytes | None]:
+    source = str(block.get('image_path') or block.get('image_src') or block.get('image_id') or '').strip()
+    image_path = str(block.get('image_path') or '').strip()
+    if not image_path:
+        return source, None
+    try:
+        return image_path, Path(image_path).read_bytes()
+    except Exception as exc:
+        LOGGER.warning('挿絵画像を読み込めませんでした (%s): %s', image_path, exc)
+        return image_path, None
 
 
 @lru_cache(maxsize=2048)
@@ -4185,6 +4971,92 @@ def _split_ruby_text_segments(rt_text: str, segment_lengths: Sequence[int], segm
     return list(_split_ruby_text_segments_cached(str(rt_text or ''), segment_lengths_tuple, segment_capacities_tuple))
 
 
+def _ruby_parts_for_overlay_groups(grouped: Sequence[Mapping[str, Any]], rt_text: str, args: ConversionArgs) -> list[str]:
+    """Return ruby text parts using the same page/column split as drawing."""
+    if not rt_text or not grouped:
+        return []
+    ruby_text = str(rt_text or '')
+    total_segments = len(grouped)
+    if total_segments == 1:
+        return [ruby_text]
+    segment_lengths = [int(group.get('base_len', 1) or 1) for group in grouped]
+    segment_capacities = [
+        _ruby_group_capacity_for_args(group, idx, total_segments, args)
+        for idx, group in enumerate(grouped)
+    ]
+    return _split_ruby_text_segments(ruby_text, segment_lengths, segment_capacities=segment_capacities)
+
+
+def _ruby_group_extra_cells_for_part(group: Mapping[str, Any], ruby_part: str, args: ConversionArgs) -> int:
+    """Return body cells needed for only clearly overlong ruby parts.
+
+    v1.5.0.5 compared physical ruby height against the base block directly,
+    which also caught very common two-kanji/four-kana ruby such as
+    ``吾輩《わがはい》``.  That changed ordinary ruby-heavy pages broadly and
+    invalidated golden images.  Keep the overlap guard conservative: reserve
+    extra body cells only when the ruby text is more than twice the base length
+    and still physically overflows the base block.
+    """
+    ruby_text = str(ruby_part or '')
+    if not ruby_text:
+        return 0
+    try:
+        base_len = max(1, int(group.get('base_len', 1) or 1))
+    except Exception:
+        base_len = 1
+    ruby_len = len(ruby_text)
+    # Preserve ordinary Aozora-style ruby such as 1 base char + 3-6 kana
+    # (情《じょう》 / 掌《てのひら》 / short jukujikun-like readings) and
+    # 2 base chars + 4-7 kana (吾輩《わがはい》 / 乾坤《けんこん》).
+    # These readings commonly overhang their parent glyphs in the ruby lane;
+    # reserving body cells for them inserts visible blank gaps in the main text.
+    # Reserve space only for clearly overlong ruby beyond those normal patterns.
+    ordinary_ruby_limit = max(base_len * 2, base_len + 5, 6)
+    if ruby_len <= ordinary_ruby_limit:
+        return 0
+    font_size = max(1, int(getattr(args, 'font_size', 1) or 1))
+    ruby_size = max(1, int(getattr(args, 'ruby_size', 1) or 1))
+    line_step = font_size + 2
+    ruby_step = ruby_size + 2
+    try:
+        start_y = int(group.get('start_y', 0) or 0)
+        end_y = int(group.get('end_y', start_y) or start_y)
+    except Exception:
+        start_y = 0
+        end_y = 0
+    base_extent = max(font_size, end_y - start_y + font_size)
+    ruby_extent = ruby_len * ruby_step
+    overflow = ruby_extent - base_extent
+    if overflow <= 0:
+        return 0
+    return max(1, int(math.ceil(overflow / float(line_step))))
+
+
+def _expanded_ruby_overlay_groups_for_parts(
+    grouped: Sequence[Mapping[str, Any]],
+    ruby_parts: Sequence[str],
+    args: ConversionArgs,
+) -> list[RubyOverlayGroup]:
+    """Return ruby overlay groups expanded to include long-ruby reserve cells."""
+    font_size = max(1, int(getattr(args, 'font_size', 1) or 1))
+    line_step = font_size + 2
+    expanded: list[RubyOverlayGroup] = []
+    for idx, group in enumerate(grouped):
+        copied: RubyOverlayGroup = {
+            'page_index': int(group.get('page_index', 0) or 0),
+            'x': int(group.get('x', 0) or 0),
+            'start_y': int(group.get('start_y', 0) or 0),
+            'end_y': int(group.get('end_y', group.get('start_y', 0)) or group.get('start_y', 0) or 0),
+            'base_len': max(1, int(group.get('base_len', 1) or 1)),
+        }
+        ruby_part = ruby_parts[idx] if idx < len(ruby_parts) else ''
+        extra_cells = _ruby_group_extra_cells_for_part(copied, ruby_part, args)
+        if extra_cells > 0:
+            copied['end_y'] = int(copied['end_y']) + extra_cells * line_step
+        expanded.append(copied)
+    return expanded
+
+
 def _append_ruby_overlay_group(groups: list[RubyOverlayGroup], page_index: int, x_pos: int, y_pos: int, base_len: int) -> None:
     base_len = max(1, int(base_len or 1))
     page_index = int(page_index)
@@ -4229,6 +5101,65 @@ def _build_ruby_overlay_groups(segment_infos: Sequence[Mapping[str, Any]]) -> li
 
 def _append_overlay_cell(cells: list[OverlayCell], page_index: int, x_pos: int, y_pos: int, cell_text: str) -> None:
     cells.append((int(page_index), int(x_pos), int(y_pos), str(cell_text or '')))
+
+
+_RUBY_TAIL_PUNCTUATION_RUN_FLAG = '_ruby_tail_punctuation'
+
+
+def _ruby_tail_punctuation_prefix_len(text: str) -> int:
+    """Return leading punctuation that should remain attached to a ruby parent."""
+    if not text:
+        return 0
+    tail_chars = TAIL_PUNCTUATION_CHARS | CLOSING_BRACKET_CHARS
+    idx = 0
+    for ch in text:
+        if ch not in tail_chars:
+            break
+        idx += 1
+    return idx
+
+
+def _run_allows_ruby_tail_punctuation_split(run: Mapping[str, Any]) -> bool:
+    return not (
+        run.get('ruby')
+        or run.get('emphasis')
+        or run.get('side_line')
+        or run.get('code')
+        or run.get('_latin_horizontal')
+    )
+
+
+def _split_ruby_tail_punctuation_runs(runs: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Split punctuation immediately after ruby into a temporary standalone run.
+
+    Long-ruby reserve cells are layout-only blanks.  Japanese punctuation right
+    after the ruby parent belongs before those blanks, so this split lets the
+    drawing loop render that punctuation first and reserve the blank cells after
+    it.
+    """
+    adjusted: list[Mapping[str, Any]] = []
+    previous_had_ruby = False
+    for run in runs:
+        if not run:
+            adjusted.append(run)
+            continue
+        text = str(run.get('text', '') or '')
+        if previous_had_ruby and text and _run_allows_ruby_tail_punctuation_split(run):
+            prefix_len = _ruby_tail_punctuation_prefix_len(text)
+            if prefix_len > 0:
+                punctuation_run = dict(run)
+                punctuation_run['text'] = text[:prefix_len]
+                punctuation_run[_RUBY_TAIL_PUNCTUATION_RUN_FLAG] = True
+                adjusted.append(punctuation_run)
+                if prefix_len < len(text):
+                    rest_run = dict(run)
+                    rest_run['text'] = text[prefix_len:]
+                    adjusted.append(rest_run)
+                previous_had_ruby = False
+                continue
+        adjusted.append(run)
+        previous_had_ruby = bool(run.get('ruby'))
+    return adjusted
 
 
 def _effective_ruby_overlay_bottom_margin(args: ConversionArgs) -> int:
@@ -4361,6 +5292,191 @@ def _apply_page_entry_margin_clip(entry: PageEntry) -> PageEntry:
         _apply_text_page_margin_clip(cast(Image.Image, image), cast(ConversionArgs, args))
     return entry
 
+
+def _build_horizontal_latin_run_image(
+    text: str,
+    font: Any,
+    f_size: int,
+    *,
+    is_bold: bool = False,
+    is_italic: bool = False,
+) -> Image.Image | None:
+    """Render an ASCII Latin run as a sideways inline image for vertical layout.
+
+    The run is first drawn in normal horizontal Latin order so punctuation such
+    as periods and commas keeps its natural horizontal position.  The image is
+    then rotated clockwise, preserving the reading order from top to bottom in a
+    vertical Japanese column while avoiding horizontal overlap with neighbouring
+    columns.
+    """
+    source = str(text or '')
+    if not source:
+        return None
+    f_size = max(1, int(f_size or 1))
+    bbox = _get_text_bbox(font, source, is_bold=is_bold)
+    text_w = max(1, int(bbox[2]) - int(bbox[0]))
+    text_h = max(1, int(bbox[3]) - int(bbox[1]))
+    pad_x = max(2, int(round(f_size * 0.14)))
+    pad_y = max(2, int(round(f_size * 0.12)))
+    canvas_w = max(1, text_w + pad_x * 2)
+    canvas_h = max(1, text_h + pad_y * 2)
+    glyph_img = Image.new('L', (canvas_w, canvas_h), 255)
+    glyph_draw = create_image_draw(glyph_img)
+    draw_weighted_text(
+        glyph_draw,
+        (pad_x - int(bbox[0]), pad_y - int(bbox[1])),
+        source,
+        font,
+        is_bold=is_bold,
+        is_italic=is_italic,
+    )
+    glyph_img = _trim_glyph_image_to_ink(glyph_img)
+    if glyph_img.width <= 0 or glyph_img.height <= 0:
+        return None
+    max_horizontal_height = max(1, int(round(f_size * 0.96)))
+    if glyph_img.height > max_horizontal_height:
+        scale = max_horizontal_height / glyph_img.height
+        glyph_img = glyph_img.resize(
+            (max(1, int(round(glyph_img.width * scale))), max_horizontal_height),
+            Image.Resampling.LANCZOS,
+        )
+    # PIL's positive rotate direction is counter-clockwise; 270 degrees means
+    # clockwise.  This keeps the first Latin glyph near the top of the column.
+    sideways_img = glyph_img.rotate(270, expand=True)
+    if sideways_img.width > f_size:
+        scale = f_size / sideways_img.width
+        sideways_img = sideways_img.resize(
+            (f_size, max(1, int(round(sideways_img.height * scale)))),
+            Image.Resampling.LANCZOS,
+        )
+    return sideways_img
+
+
+
+def _latin_horizontal_url_scheme_guard_end(text: str) -> int:
+    match = re.match(r'^[A-Za-z][A-Za-z0-9+.-]*://', str(text or ''))
+    return match.end() if match else 0
+
+
+def _latin_horizontal_url_split_pieces(text: str) -> tuple[str, ...]:
+    source = str(text or '')
+    if not source:
+        return ()
+    guard_end = _latin_horizontal_url_scheme_guard_end(source)
+    pieces: list[str] = []
+    start = 0
+    for index, ch in enumerate(source):
+        pos = index + 1
+        if pos >= len(source) or pos <= guard_end:
+            continue
+        if ch in _LATIN_HORIZONTAL_URL_SPLIT_AFTER_CHARS:
+            pieces.append(source[start:pos])
+            start = pos
+    if start < len(source):
+        pieces.append(source[start:])
+    return tuple(piece for piece in pieces if piece)
+
+
+def _split_latin_horizontal_url_text_for_column(source: str, fits: Callable[[str], bool]) -> tuple[str, ...]:
+    pieces = _latin_horizontal_url_split_pieces(source)
+    if len(pieces) <= 1:
+        return ()
+    chunks: list[str] = []
+    current = ''
+    current_fits = False
+    for piece in pieces:
+        candidate = piece if not current else f'{current}{piece}'
+        if fits(candidate):
+            current = candidate
+            current_fits = True
+            continue
+        if current and current_fits:
+            chunks.append(current)
+            current = piece
+            current_fits = fits(piece)
+            if not current_fits:
+                return ()
+            continue
+        return ()
+    if current and current_fits:
+        chunks.append(current)
+    return tuple(chunks)
+
+def _split_latin_horizontal_text_for_column(
+    text: str,
+    font: Any,
+    f_size: int,
+    max_inline_height: int,
+    *,
+    is_bold: bool = False,
+    is_italic: bool = False,
+) -> tuple[str, ...]:
+    """Split a Latin horizontal run into column-fitting chunks.
+
+    The detector may classify a full English line or paragraph as one logical
+    Latin run.  A single rotated image for a long run can be taller than the
+    text area of the page; in that case we wrap at spaces and let the normal
+    vertical column/page advance logic place each chunk.  Long individual words
+    are still filtered before this point by
+    ``_has_too_long_latin_horizontal_word``.
+    """
+    source = str(text or '')
+    if not source:
+        return ()
+    max_inline_height = max(1, int(max_inline_height or 1))
+    whole_img = _build_horizontal_latin_run_image(
+        source,
+        font,
+        f_size,
+        is_bold=is_bold,
+        is_italic=is_italic,
+    )
+    if whole_img is None:
+        return ()
+    if whole_img.height <= max_inline_height:
+        return (source,)
+
+    def fits(candidate: str) -> bool:
+        candidate_img = _build_horizontal_latin_run_image(
+            candidate,
+            font,
+            f_size,
+            is_bold=is_bold,
+            is_italic=is_italic,
+        )
+        return candidate_img is not None and candidate_img.height <= max_inline_height
+
+    words = source.split(' ')
+    if len(words) <= 1:
+        if _is_horizontal_latin_url_candidate(source):
+            url_chunks = _split_latin_horizontal_url_text_for_column(source, fits)
+            if url_chunks:
+                return url_chunks
+        return ()
+    chunks: list[str] = []
+    current = ''
+    current_fits = False
+
+    for word in words:
+        if not word:
+            continue
+        candidate = word if not current else f'{current} {word}'
+        if fits(candidate):
+            current = candidate
+            current_fits = True
+            continue
+        if current and current_fits:
+            chunks.append(current)
+            current = word
+            current_fits = fits(word)
+            if not current_fits:
+                return ()
+            continue
+        return ()
+    if current and current_fits:
+        chunks.append(current)
+    return tuple(chunks)
+
 class _VerticalPageRenderer:
     def __init__(self: _VerticalPageRenderer, args: ConversionArgs, font: Any, ruby_font: Any, *, should_cancel: CancelCallback | None = None, page_created_cb: PageCreatedCallback | None = None,
                  store_page_entries: bool = True, max_buffered_pages: int | None = None,
@@ -4385,6 +5501,7 @@ class _VerticalPageRenderer:
         self._emphasis_metrics_cache: dict[tuple[str, bool], tuple[int, int, int, int]] = {}
         self.has_started_document = False
         self._pending_paragraph_indent = False
+        self._fresh_column_after_hanging_punctuation = False
         self._new_blank_page()
 
     def _new_blank_page(self: _VerticalPageRenderer) -> None:
@@ -4394,6 +5511,7 @@ class _VerticalPageRenderer:
         self.curr_x = _initial_text_column_x(self.args)
         self.curr_y = self.args.margin_t
         self.has_drawn_on_page = False
+        self._fresh_column_after_hanging_punctuation = False
 
     def add_page(self: _VerticalPageRenderer, image: Image.Image, *, label: str | None = None, page_args: ConversionArgs | None = None, copy_image: bool = True) -> PageEntry:
         stored_image = image.copy() if copy_image else image
@@ -4537,6 +5655,18 @@ class _VerticalPageRenderer:
             return 0
         return indent_step_height
 
+    def _mark_fresh_column_after_hanging_punctuation(self: _VerticalPageRenderer) -> None:
+        self._fresh_column_after_hanging_punctuation = True
+
+    def _consume_fresh_hanging_column_gap(self: _VerticalPageRenderer) -> bool:
+        if not self._fresh_column_after_hanging_punctuation:
+            return False
+        self._fresh_column_after_hanging_punctuation = False
+        return True
+
+    def _clear_fresh_hanging_column_gap(self: _VerticalPageRenderer) -> None:
+        self._fresh_column_after_hanging_punctuation = False
+
     def _advance_column_with_indent_step(self: _VerticalPageRenderer, indent_step_height: int = 0) -> None:
         """Move to the next column using a precomputed continuation indent.
 
@@ -4618,8 +5748,27 @@ class _VerticalPageRenderer:
             self._page_draw_cache[page_index] = target_draw
         return target_img, target_draw
 
-    def _draw_text_run_plain(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: VerticalLayoutHints, run_font: Any, *, wrap_indent_step: int = 0,
-                             is_bold: bool = False, is_italic: bool = False) -> None:
+    def _run_vertical_text_cells(
+        self: _VerticalPageRenderer,
+        tokens: Sequence[str],
+        layout_hints: VerticalLayoutHints,
+        run_font: Any,
+        *,
+        wrap_indent_step: int = 0,
+        is_bold: bool = False,
+        is_italic: bool = False,
+        on_draw_cell: Callable[[int, int, int, int, str, str, str], None] | None = None,
+        on_hang_pair: Callable[[int, int, int, int, str, str, str], None] | None = None,
+    ) -> None:
+        """Drive one vertical text run and delegate per-cell metadata emission.
+
+        The renderer has several capture modes: plain drawing, ruby overlay
+        collection, emphasis/side-line overlay cells, and segment metadata.  The
+        drawing and wrapping control flow is identical for all of them.  Keeping
+        the ``advance`` / ``hang_pair`` / normal-cell state transitions here
+        prevents those modes from silently diverging when kinsoku behavior is
+        changed.
+        """
         token_count = len(tokens)
         if token_count <= 0:
             return
@@ -4631,7 +5780,6 @@ class _VerticalPageRenderer:
         line_step = font_size + 2
         kinsoku_mode = _normalize_kinsoku_mode(args.kinsoku_mode)
         action_cache: dict[tuple[int, int, bool], str] = {}
-        choose_layout_action = _choose_vertical_layout_action_with_hints
         advance_for_wrap = self._advance_column_with_indent_step
         draw_char = draw_char_tate
         draw_hang_pair = draw_hanging_punctuation
@@ -4642,10 +5790,17 @@ class _VerticalPageRenderer:
         should_cancel = self.should_cancel
         has_started_document = bool(self.has_started_document)
         has_drawn_on_page = bool(self.has_drawn_on_page)
+        current_page_index = len(self.page_entries)
         curr_x = self.curr_x
         curr_y = self.curr_y
         draw_obj = self.draw
         slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
+
+        def noop_emit(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str, token: str, next_token: str) -> None:
+            return None
+
+        draw_cell = on_draw_cell or noop_emit
+        hang_pair = on_hang_pair or noop_emit
 
         def sync_renderer_state() -> None:
             self.curr_x = curr_x
@@ -4654,7 +5809,8 @@ class _VerticalPageRenderer:
             self.has_started_document = has_started_document
 
         def refresh_after_wrap() -> None:
-            nonlocal has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
+            nonlocal current_page_index, has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
+            current_page_index = len(self.page_entries)
             has_drawn_on_page = bool(self.has_drawn_on_page)
             has_started_document = bool(self.has_started_document)
             curr_x = self.curr_x
@@ -4662,1020 +5818,274 @@ class _VerticalPageRenderer:
             draw_obj = self.draw
             slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
 
+        def draw_base_token(token: str) -> None:
+            self._clear_fresh_hanging_column_gap()
+            if is_lowerable_hang_bracket(token):
+                draw_hang_bracket(
+                    draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
+                    is_bold=is_bold, is_italic=is_italic,
+                )
+            else:
+                draw_char(
+                    draw_obj, token, (curr_x, curr_y), run_font, font_size,
+                    is_bold=is_bold, is_italic=is_italic,
+                )
+
+        def mark_drawn() -> None:
+            nonlocal has_drawn_on_page, has_started_document
+            if not has_drawn_on_page:
+                has_drawn_on_page = True
+            if not has_started_document:
+                has_started_document = True
+
         idx = 0
         while idx < token_count:
             raise_if_cancelled(should_cancel)
             token = tokens[idx]
-            action = choose_layout_action(
+            action = _resolve_vertical_layout_action(
                 layout_hints,
                 idx,
+                token_count,
                 slots_left,
-                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
-                kinsoku_mode=kinsoku_mode,
-                action_cache=action_cache,
+                curr_y,
+                margin_t,
+                wrap_indent_step,
+                kinsoku_mode,
+                action_cache,
             )
-            # Cross-run kinsoku: layout_hints may be extended with the leading
-            # line-head-forbidden tokens of the following run so the break
-            # decision can pull a body character forward.  Those virtual tokens
-            # are not drawn by this run, so never hang across the real boundary.
-            if action == 'hang_pair' and idx + 1 >= token_count:
-                action = 'advance'
             if action == 'advance':
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
                 refresh_after_wrap()
                 continue
             if action == 'hang_pair':
-                if is_lowerable_hang_bracket(token):
-                    draw_hang_bracket(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                else:
-                    draw_char(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
+                draw_base_token(token)
+                next_token = tokens[idx + 1]
                 draw_hang_pair(
-                    draw_obj, tokens[idx + 1], (curr_x, curr_y), run_font, font_size, page_height,
+                    draw_obj, next_token, (curr_x, curr_y), run_font, font_size, page_height,
                     is_bold=is_bold, is_italic=is_italic,
                 )
-                if not has_drawn_on_page:
-                    has_drawn_on_page = True
-                if not has_started_document:
-                    has_started_document = True
+                base_len = len(token) + len(next_token)
+                cell_text = token + next_token
+                hang_pair(current_page_index, curr_x, curr_y, base_len, cell_text, token, next_token)
+                mark_drawn()
                 sync_renderer_state()
                 advance_for_wrap(wrap_indent_step)
                 refresh_after_wrap()
+                if idx + 2 >= token_count:
+                    self._mark_fresh_column_after_hanging_punctuation()
                 idx += 2
                 continue
 
+            self._clear_fresh_hanging_column_gap()
             draw_char(
                 draw_obj, token, (curr_x, curr_y), run_font, font_size,
                 is_bold=is_bold, is_italic=is_italic,
             )
+            draw_cell(current_page_index, curr_x, curr_y, len(token), token, token, '')
             curr_y += line_step
             slots_left -= 1
-            if not has_drawn_on_page:
-                has_drawn_on_page = True
-            if not has_started_document:
-                has_started_document = True
+            mark_drawn()
             idx += 1
 
         sync_renderer_state()
+
+    def _make_segment_info_appender(
+        self: _VerticalPageRenderer,
+        segment_infos: list[SegmentInfo],
+        *,
+        needs_base_len: bool = True,
+        needs_cell_text: bool = True,
+    ) -> Callable[[int, int, int, int, str], None]:
+        append_segment = segment_infos.append
+
+        def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
+            entry: SegmentInfo = {
+                'page_index': page_index,
+                'x': x_pos,
+                'y': y_pos,
+            }
+            if needs_base_len:
+                entry['base_len'] = base_len
+            if needs_cell_text:
+                entry['cell_text'] = cell_text
+            append_segment(entry)
+
+        return append_segment_info
+
+    def _draw_text_run_plain(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: VerticalLayoutHints, run_font: Any, *, wrap_indent_step: int = 0,
+                             is_bold: bool = False, is_italic: bool = False) -> None:
+        self._run_vertical_text_cells(
+            tokens,
+            layout_hints,
+            run_font,
+            wrap_indent_step=wrap_indent_step,
+            is_bold=is_bold,
+            is_italic=is_italic,
+        )
 
     def _draw_text_run_ruby_only(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: VerticalLayoutHints, run_font: Any, *,
                                   ruby_overlay_groups: list[RubyOverlayGroup], wrap_indent_step: int = 0,
                                   is_bold: bool = False, is_italic: bool = False) -> None:
-        token_count = len(tokens)
-        if token_count <= 0:
-            return
-        args = self.args
-        font_size = args.font_size
-        page_height = args.height
-        margin_t = args.margin_t
-        margin_b = args.margin_b
-        line_step = font_size + 2
-        kinsoku_mode = _normalize_kinsoku_mode(args.kinsoku_mode)
-        action_cache: dict[tuple[int, int, bool], str] = {}
-        choose_layout_action = _choose_vertical_layout_action_with_hints
-        advance_for_wrap = self._advance_column_with_indent_step
-        draw_char = draw_char_tate
-        draw_hang_pair = draw_hanging_punctuation
-        draw_hang_bracket = draw_hanging_closing_bracket
-        is_lowerable_hang_bracket = _is_lowerable_hanging_closing_bracket
         append_ruby_group = _append_ruby_overlay_group
-        raise_if_cancelled = _raise_if_cancelled
-        remaining_slots = _remaining_vertical_slots_for_current_column
-        should_cancel = self.should_cancel
-        has_started_document = bool(self.has_started_document)
-        has_drawn_on_page = bool(self.has_drawn_on_page)
-        current_page_index = len(self.page_entries)
-        curr_x = self.curr_x
-        curr_y = self.curr_y
-        draw_obj = self.draw
-        slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
 
-        def sync_renderer_state() -> None:
-            self.curr_x = curr_x
-            self.curr_y = curr_y
-            self.has_drawn_on_page = has_drawn_on_page
-            self.has_started_document = has_started_document
+        def emit_ruby(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str, token: str, next_token: str) -> None:
+            append_ruby_group(ruby_overlay_groups, page_index, x_pos, y_pos, base_len)
 
-        def refresh_after_wrap() -> None:
-            nonlocal current_page_index, has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
-            current_page_index = len(self.page_entries)
-            has_drawn_on_page = bool(self.has_drawn_on_page)
-            has_started_document = bool(self.has_started_document)
-            curr_x = self.curr_x
-            curr_y = self.curr_y
-            draw_obj = self.draw
-            slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
-
-        idx = 0
-        while idx < token_count:
-            raise_if_cancelled(should_cancel)
-            token = tokens[idx]
-            action = choose_layout_action(
-                layout_hints,
-                idx,
-                slots_left,
-                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
-                kinsoku_mode=kinsoku_mode,
-                action_cache=action_cache,
-            )
-            # Cross-run kinsoku: layout_hints may be extended with the leading
-            # line-head-forbidden tokens of the following run so the break
-            # decision can pull a body character forward.  Those virtual tokens
-            # are not drawn by this run, so never hang across the real boundary.
-            if action == 'hang_pair' and idx + 1 >= token_count:
-                action = 'advance'
-            if action == 'advance':
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                continue
-            if action == 'hang_pair':
-                if is_lowerable_hang_bracket(token):
-                    draw_hang_bracket(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                else:
-                    draw_char(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                next_token = tokens[idx + 1]
-                draw_hang_pair(
-                    draw_obj, next_token, (curr_x, curr_y), run_font, font_size, page_height,
-                    is_bold=is_bold, is_italic=is_italic,
-                )
-                append_ruby_group(ruby_overlay_groups, current_page_index, curr_x, curr_y, len(token) + len(next_token))
-                if not has_drawn_on_page:
-                    has_drawn_on_page = True
-                if not has_started_document:
-                    has_started_document = True
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                idx += 2
-                continue
-
-            draw_char(
-                draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                is_bold=is_bold, is_italic=is_italic,
-            )
-            append_ruby_group(ruby_overlay_groups, current_page_index, curr_x, curr_y, len(token))
-            curr_y += line_step
-            slots_left -= 1
-            if not has_drawn_on_page:
-                has_drawn_on_page = True
-            if not has_started_document:
-                has_started_document = True
-            idx += 1
-
-        sync_renderer_state()
+        self._run_vertical_text_cells(
+            tokens,
+            layout_hints,
+            run_font,
+            wrap_indent_step=wrap_indent_step,
+            is_bold=is_bold,
+            is_italic=is_italic,
+            on_draw_cell=emit_ruby,
+            on_hang_pair=emit_ruby,
+        )
 
     def _draw_text_run_overlay_cells_only(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: VerticalLayoutHints, run_font: Any, *,
                                           overlay_cells: list[OverlayCell], wrap_indent_step: int = 0,
                                           is_bold: bool = False, is_italic: bool = False) -> None:
-        token_count = len(tokens)
-        if token_count <= 0:
-            return
-        args = self.args
-        font_size = args.font_size
-        page_height = args.height
-        margin_t = args.margin_t
-        margin_b = args.margin_b
-        line_step = font_size + 2
-        kinsoku_mode = _normalize_kinsoku_mode(args.kinsoku_mode)
-        action_cache: dict[tuple[int, int, bool], str] = {}
-        choose_layout_action = _choose_vertical_layout_action_with_hints
-        advance_for_wrap = self._advance_column_with_indent_step
-        draw_char = draw_char_tate
-        draw_hang_pair = draw_hanging_punctuation
-        draw_hang_bracket = draw_hanging_closing_bracket
-        is_lowerable_hang_bracket = _is_lowerable_hanging_closing_bracket
         append_overlay_cell = _append_overlay_cell
-        raise_if_cancelled = _raise_if_cancelled
-        remaining_slots = _remaining_vertical_slots_for_current_column
-        should_cancel = self.should_cancel
-        has_started_document = bool(self.has_started_document)
-        has_drawn_on_page = bool(self.has_drawn_on_page)
-        current_page_index = len(self.page_entries)
-        curr_x = self.curr_x
-        curr_y = self.curr_y
-        draw_obj = self.draw
-        slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
 
-        def sync_renderer_state() -> None:
-            self.curr_x = curr_x
-            self.curr_y = curr_y
-            self.has_drawn_on_page = has_drawn_on_page
-            self.has_started_document = has_started_document
+        def emit_overlay_cell(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str, token: str, next_token: str) -> None:
+            append_overlay_cell(overlay_cells, page_index, x_pos, y_pos, cell_text)
 
-        def refresh_after_wrap() -> None:
-            nonlocal current_page_index, has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
-            current_page_index = len(self.page_entries)
-            has_drawn_on_page = bool(self.has_drawn_on_page)
-            has_started_document = bool(self.has_started_document)
-            curr_x = self.curr_x
-            curr_y = self.curr_y
-            draw_obj = self.draw
-            slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
-
-        idx = 0
-        while idx < token_count:
-            raise_if_cancelled(should_cancel)
-            token = tokens[idx]
-            action = choose_layout_action(
-                layout_hints,
-                idx,
-                slots_left,
-                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
-                kinsoku_mode=kinsoku_mode,
-                action_cache=action_cache,
-            )
-            # Cross-run kinsoku: layout_hints may be extended with the leading
-            # line-head-forbidden tokens of the following run so the break
-            # decision can pull a body character forward.  Those virtual tokens
-            # are not drawn by this run, so never hang across the real boundary.
-            if action == 'hang_pair' and idx + 1 >= token_count:
-                action = 'advance'
-            if action == 'advance':
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                continue
-            if action == 'hang_pair':
-                if is_lowerable_hang_bracket(token):
-                    draw_hang_bracket(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                else:
-                    draw_char(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                next_token = tokens[idx + 1]
-                draw_hang_pair(
-                    draw_obj, next_token, (curr_x, curr_y), run_font, font_size, page_height,
-                    is_bold=is_bold, is_italic=is_italic,
-                )
-                append_overlay_cell(overlay_cells, current_page_index, curr_x, curr_y, token + next_token)
-                if not has_drawn_on_page:
-                    has_drawn_on_page = True
-                if not has_started_document:
-                    has_started_document = True
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                idx += 2
-                continue
-
-            draw_char(
-                draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                is_bold=is_bold, is_italic=is_italic,
-            )
-            append_overlay_cell(overlay_cells, current_page_index, curr_x, curr_y, token)
-            curr_y += line_step
-            slots_left -= 1
-            if not has_drawn_on_page:
-                has_drawn_on_page = True
-            if not has_started_document:
-                has_started_document = True
-            idx += 1
-
-        sync_renderer_state()
+        self._run_vertical_text_cells(
+            tokens,
+            layout_hints,
+            run_font,
+            wrap_indent_step=wrap_indent_step,
+            is_bold=is_bold,
+            is_italic=is_italic,
+            on_draw_cell=emit_overlay_cell,
+            on_hang_pair=emit_overlay_cell,
+        )
 
     def _draw_text_run_overlay_only(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: VerticalLayoutHints, run_font: Any, *,
-                                    ruby_overlay_groups: list[RubyOverlayGroup] | None = None,
-                                    overlay_cells: list[OverlayCell] | None = None, wrap_indent_step: int = 0,
+                                    ruby_overlay_groups: list[RubyOverlayGroup], overlay_cells: list[OverlayCell], wrap_indent_step: int = 0,
                                     is_bold: bool = False, is_italic: bool = False) -> None:
-        token_count = len(tokens)
-        if token_count <= 0:
-            return
-        args = self.args
-        font_size = args.font_size
-        page_height = args.height
-        margin_t = args.margin_t
-        margin_b = args.margin_b
-        line_step = font_size + 2
-        kinsoku_mode = _normalize_kinsoku_mode(args.kinsoku_mode)
-        action_cache: dict[tuple[int, int, bool], str] = {}
-        choose_layout_action = _choose_vertical_layout_action_with_hints
-        advance_for_wrap = self._advance_column_with_indent_step
-        draw_char = draw_char_tate
-        draw_hang_pair = draw_hanging_punctuation
-        draw_hang_bracket = draw_hanging_closing_bracket
-        is_lowerable_hang_bracket = _is_lowerable_hanging_closing_bracket
-        append_ruby_group = _append_ruby_overlay_group if ruby_overlay_groups is not None else None
-        append_overlay_cell = _append_overlay_cell if overlay_cells is not None else None
-        raise_if_cancelled = _raise_if_cancelled
-        remaining_slots = _remaining_vertical_slots_for_current_column
-        should_cancel = self.should_cancel
-        has_started_document = bool(self.has_started_document)
-        has_drawn_on_page = bool(self.has_drawn_on_page)
-        current_page_index = len(self.page_entries)
-        curr_x = self.curr_x
-        curr_y = self.curr_y
-        draw_obj = self.draw
-        slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
+        append_ruby_group = _append_ruby_overlay_group
+        append_overlay_cell = _append_overlay_cell
 
-        def sync_renderer_state() -> None:
-            self.curr_x = curr_x
-            self.curr_y = curr_y
-            self.has_drawn_on_page = has_drawn_on_page
-            self.has_started_document = has_started_document
+        def emit_overlay(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str, token: str, next_token: str) -> None:
+            append_ruby_group(ruby_overlay_groups, page_index, x_pos, y_pos, base_len)
+            append_overlay_cell(overlay_cells, page_index, x_pos, y_pos, cell_text)
 
-        def refresh_after_wrap() -> None:
-            nonlocal current_page_index, has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
-            current_page_index = len(self.page_entries)
-            has_drawn_on_page = bool(self.has_drawn_on_page)
-            has_started_document = bool(self.has_started_document)
-            curr_x = self.curr_x
-            curr_y = self.curr_y
-            draw_obj = self.draw
-            slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
-
-        idx = 0
-        while idx < token_count:
-            raise_if_cancelled(should_cancel)
-            token = tokens[idx]
-            action = choose_layout_action(
-                layout_hints,
-                idx,
-                slots_left,
-                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
-                kinsoku_mode=kinsoku_mode,
-                action_cache=action_cache,
-            )
-            # Cross-run kinsoku: layout_hints may be extended with the leading
-            # line-head-forbidden tokens of the following run so the break
-            # decision can pull a body character forward.  Those virtual tokens
-            # are not drawn by this run, so never hang across the real boundary.
-            if action == 'hang_pair' and idx + 1 >= token_count:
-                action = 'advance'
-            if action == 'advance':
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                continue
-            if action == 'hang_pair':
-                if is_lowerable_hang_bracket(token):
-                    draw_hang_bracket(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                else:
-                    draw_char(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                next_token = tokens[idx + 1]
-                draw_hang_pair(
-                    draw_obj, next_token, (curr_x, curr_y), run_font, font_size, page_height,
-                    is_bold=is_bold, is_italic=is_italic,
-                )
-                if append_ruby_group is not None:
-                    append_ruby_group(ruby_overlay_groups, current_page_index, curr_x, curr_y, len(token) + len(next_token))
-                if append_overlay_cell is not None:
-                    append_overlay_cell(overlay_cells, current_page_index, curr_x, curr_y, token + next_token)
-                if not has_drawn_on_page:
-                    has_drawn_on_page = True
-                if not has_started_document:
-                    has_started_document = True
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                idx += 2
-                continue
-
-            draw_char(
-                draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                is_bold=is_bold, is_italic=is_italic,
-            )
-            if append_ruby_group is not None:
-                append_ruby_group(ruby_overlay_groups, current_page_index, curr_x, curr_y, len(token))
-            if append_overlay_cell is not None:
-                append_overlay_cell(overlay_cells, current_page_index, curr_x, curr_y, token)
-            curr_y += line_step
-            slots_left -= 1
-            if not has_drawn_on_page:
-                has_drawn_on_page = True
-            if not has_started_document:
-                has_started_document = True
-            idx += 1
-
-        sync_renderer_state()
+        self._run_vertical_text_cells(
+            tokens,
+            layout_hints,
+            run_font,
+            wrap_indent_step=wrap_indent_step,
+            is_bold=is_bold,
+            is_italic=is_italic,
+            on_draw_cell=emit_overlay,
+            on_hang_pair=emit_overlay,
+        )
 
     def _draw_text_run_segment_only(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: Sequence[str], run_font: Any, *,
-                                    segment_infos: list[SegmentInfo], wrap_indent_step: int = 0, is_bold: bool = False,
-                                    is_italic: bool = False, needs_base_len: bool = True, needs_cell_text: bool = True) -> None:
-        token_count = len(tokens)
-        if token_count <= 0:
-            return
-        args = self.args
-        font_size = args.font_size
-        page_height = args.height
-        margin_t = args.margin_t
-        margin_b = args.margin_b
-        line_step = font_size + 2
-        kinsoku_mode = _normalize_kinsoku_mode(args.kinsoku_mode)
-        action_cache: dict[tuple[int, int, bool], str] = {}
-        choose_layout_action = _choose_vertical_layout_action_with_hints
-        advance_for_wrap = self._advance_column_with_indent_step
-        draw_char = draw_char_tate
-        draw_hang_pair = draw_hanging_punctuation
-        draw_hang_bracket = draw_hanging_closing_bracket
-        is_lowerable_hang_bracket = _is_lowerable_hanging_closing_bracket
-        append_segment = segment_infos.append
-        raise_if_cancelled = _raise_if_cancelled
-        remaining_slots = _remaining_vertical_slots_for_current_column
-        should_cancel = self.should_cancel
-        has_started_document = bool(self.has_started_document)
-        has_drawn_on_page = bool(self.has_drawn_on_page)
-        current_page_index = len(self.page_entries)
-        curr_x = self.curr_x
-        curr_y = self.curr_y
-        draw_obj = self.draw
-        slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
+                                    segment_infos: list[SegmentInfo], wrap_indent_step: int = 0,
+                                    is_bold: bool = False, is_italic: bool = False,
+                                    needs_base_len: bool = True, needs_cell_text: bool = True) -> None:
+        append_segment_info = self._make_segment_info_appender(
+            segment_infos,
+            needs_base_len=needs_base_len,
+            needs_cell_text=needs_cell_text,
+        )
 
-        if needs_base_len and needs_cell_text:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'base_len': base_len,
-                    'cell_text': cell_text,
-                })
-        elif needs_base_len:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'base_len': base_len,
-                })
-        elif needs_cell_text:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'cell_text': cell_text,
-                })
-        else:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                })
+        def emit_segment(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str, token: str, next_token: str) -> None:
+            append_segment_info(page_index, x_pos, y_pos, base_len, cell_text)
 
-        def sync_renderer_state() -> None:
-            self.curr_x = curr_x
-            self.curr_y = curr_y
-            self.has_drawn_on_page = has_drawn_on_page
-            self.has_started_document = has_started_document
-
-        def refresh_after_wrap() -> None:
-            nonlocal current_page_index, has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
-            current_page_index = len(self.page_entries)
-            has_drawn_on_page = bool(self.has_drawn_on_page)
-            has_started_document = bool(self.has_started_document)
-            curr_x = self.curr_x
-            curr_y = self.curr_y
-            draw_obj = self.draw
-            slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
-
-        idx = 0
-        while idx < token_count:
-            raise_if_cancelled(should_cancel)
-            token = tokens[idx]
-            action = choose_layout_action(
-                layout_hints,
-                idx,
-                slots_left,
-                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
-                kinsoku_mode=kinsoku_mode,
-                action_cache=action_cache,
-            )
-            # Cross-run kinsoku: layout_hints may be extended with the leading
-            # line-head-forbidden tokens of the following run so the break
-            # decision can pull a body character forward.  Those virtual tokens
-            # are not drawn by this run, so never hang across the real boundary.
-            if action == 'hang_pair' and idx + 1 >= token_count:
-                action = 'advance'
-            if action == 'advance':
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                continue
-            if action == 'hang_pair':
-                if is_lowerable_hang_bracket(token):
-                    draw_hang_bracket(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                else:
-                    draw_char(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                next_token = tokens[idx + 1]
-                draw_hang_pair(
-                    draw_obj, next_token, (curr_x, curr_y), run_font, font_size, page_height,
-                    is_bold=is_bold, is_italic=is_italic,
-                )
-                append_segment_info(current_page_index, curr_x, curr_y, len(token) + len(next_token), token + next_token)
-                if not has_drawn_on_page:
-                    has_drawn_on_page = True
-                if not has_started_document:
-                    has_started_document = True
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                idx += 2
-                continue
-
-            draw_char(
-                draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                is_bold=is_bold, is_italic=is_italic,
-            )
-            append_segment_info(current_page_index, curr_x, curr_y, len(token), token)
-            curr_y += line_step
-            slots_left -= 1
-            if not has_drawn_on_page:
-                has_drawn_on_page = True
-            if not has_started_document:
-                has_started_document = True
-            idx += 1
-
-        sync_renderer_state()
+        self._run_vertical_text_cells(
+            tokens,
+            layout_hints,
+            run_font,
+            wrap_indent_step=wrap_indent_step,
+            is_bold=is_bold,
+            is_italic=is_italic,
+            on_draw_cell=emit_segment,
+            on_hang_pair=emit_segment,
+        )
 
     def _draw_text_run_segment_and_ruby_only(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: Sequence[str], run_font: Any, *,
                                              segment_infos: list[SegmentInfo], ruby_overlay_groups: list[RubyOverlayGroup],
                                              wrap_indent_step: int = 0, is_bold: bool = False, is_italic: bool = False,
                                              needs_base_len: bool = True, needs_cell_text: bool = True) -> None:
-        token_count = len(tokens)
-        if token_count <= 0:
-            return
-        args = self.args
-        font_size = args.font_size
-        page_height = args.height
-        margin_t = args.margin_t
-        margin_b = args.margin_b
-        line_step = font_size + 2
-        kinsoku_mode = _normalize_kinsoku_mode(args.kinsoku_mode)
-        action_cache: dict[tuple[int, int, bool], str] = {}
-        choose_layout_action = _choose_vertical_layout_action_with_hints
-        advance_for_wrap = self._advance_column_with_indent_step
-        draw_char = draw_char_tate
-        draw_hang_pair = draw_hanging_punctuation
-        draw_hang_bracket = draw_hanging_closing_bracket
-        is_lowerable_hang_bracket = _is_lowerable_hanging_closing_bracket
-        append_segment = segment_infos.append
+        append_segment_info = self._make_segment_info_appender(
+            segment_infos,
+            needs_base_len=needs_base_len,
+            needs_cell_text=needs_cell_text,
+        )
         append_ruby_group = _append_ruby_overlay_group
-        raise_if_cancelled = _raise_if_cancelled
-        remaining_slots = _remaining_vertical_slots_for_current_column
-        should_cancel = self.should_cancel
-        has_started_document = bool(self.has_started_document)
-        has_drawn_on_page = bool(self.has_drawn_on_page)
-        current_page_index = len(self.page_entries)
-        curr_x = self.curr_x
-        curr_y = self.curr_y
-        draw_obj = self.draw
-        slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
 
-        if needs_base_len and needs_cell_text:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'base_len': base_len,
-                    'cell_text': cell_text,
-                })
-        elif needs_base_len:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'base_len': base_len,
-                })
-        elif needs_cell_text:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'cell_text': cell_text,
-                })
-        else:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                })
+        def emit_segment_and_ruby(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str, token: str, next_token: str) -> None:
+            append_ruby_group(ruby_overlay_groups, page_index, x_pos, y_pos, base_len)
+            append_segment_info(page_index, x_pos, y_pos, base_len, cell_text)
 
-        def sync_renderer_state() -> None:
-            self.curr_x = curr_x
-            self.curr_y = curr_y
-            self.has_drawn_on_page = has_drawn_on_page
-            self.has_started_document = has_started_document
-
-        def refresh_after_wrap() -> None:
-            nonlocal current_page_index, has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
-            current_page_index = len(self.page_entries)
-            has_drawn_on_page = bool(self.has_drawn_on_page)
-            has_started_document = bool(self.has_started_document)
-            curr_x = self.curr_x
-            curr_y = self.curr_y
-            draw_obj = self.draw
-            slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
-
-        idx = 0
-        while idx < token_count:
-            raise_if_cancelled(should_cancel)
-            token = tokens[idx]
-            action = choose_layout_action(
-                layout_hints,
-                idx,
-                slots_left,
-                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
-                kinsoku_mode=kinsoku_mode,
-                action_cache=action_cache,
-            )
-            # Cross-run kinsoku: layout_hints may be extended with the leading
-            # line-head-forbidden tokens of the following run so the break
-            # decision can pull a body character forward.  Those virtual tokens
-            # are not drawn by this run, so never hang across the real boundary.
-            if action == 'hang_pair' and idx + 1 >= token_count:
-                action = 'advance'
-            if action == 'advance':
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                continue
-            if action == 'hang_pair':
-                if is_lowerable_hang_bracket(token):
-                    draw_hang_bracket(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                else:
-                    draw_char(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                next_token = tokens[idx + 1]
-                draw_hang_pair(
-                    draw_obj, next_token, (curr_x, curr_y), run_font, font_size, page_height,
-                    is_bold=is_bold, is_italic=is_italic,
-                )
-                base_len = len(token) + len(next_token)
-                cell_text = token + next_token
-                append_ruby_group(ruby_overlay_groups, current_page_index, curr_x, curr_y, base_len)
-                append_segment_info(current_page_index, curr_x, curr_y, base_len, cell_text)
-                if not has_drawn_on_page:
-                    has_drawn_on_page = True
-                if not has_started_document:
-                    has_started_document = True
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                idx += 2
-                continue
-
-            draw_char(
-                draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                is_bold=is_bold, is_italic=is_italic,
-            )
-            append_ruby_group(ruby_overlay_groups, current_page_index, curr_x, curr_y, len(token))
-            append_segment_info(current_page_index, curr_x, curr_y, len(token), token)
-            curr_y += line_step
-            slots_left -= 1
-            if not has_drawn_on_page:
-                has_drawn_on_page = True
-            if not has_started_document:
-                has_started_document = True
-            idx += 1
-
-        sync_renderer_state()
+        self._run_vertical_text_cells(
+            tokens,
+            layout_hints,
+            run_font,
+            wrap_indent_step=wrap_indent_step,
+            is_bold=is_bold,
+            is_italic=is_italic,
+            on_draw_cell=emit_segment_and_ruby,
+            on_hang_pair=emit_segment_and_ruby,
+        )
 
     def _draw_text_run_segment_and_overlay_cells_only(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: Sequence[str], run_font: Any, *,
                                                       segment_infos: list[SegmentInfo], overlay_cells: list[OverlayCell],
                                                       wrap_indent_step: int = 0, is_bold: bool = False, is_italic: bool = False,
                                                       needs_base_len: bool = True, needs_cell_text: bool = True) -> None:
-        token_count = len(tokens)
-        if token_count <= 0:
-            return
-        args = self.args
-        font_size = args.font_size
-        page_height = args.height
-        margin_t = args.margin_t
-        margin_b = args.margin_b
-        line_step = font_size + 2
-        kinsoku_mode = _normalize_kinsoku_mode(args.kinsoku_mode)
-        action_cache: dict[tuple[int, int, bool], str] = {}
-        choose_layout_action = _choose_vertical_layout_action_with_hints
-        advance_for_wrap = self._advance_column_with_indent_step
-        draw_char = draw_char_tate
-        draw_hang_pair = draw_hanging_punctuation
-        draw_hang_bracket = draw_hanging_closing_bracket
-        is_lowerable_hang_bracket = _is_lowerable_hanging_closing_bracket
-        append_segment = segment_infos.append
+        append_segment_info = self._make_segment_info_appender(
+            segment_infos,
+            needs_base_len=needs_base_len,
+            needs_cell_text=needs_cell_text,
+        )
         append_overlay_cell = _append_overlay_cell
-        raise_if_cancelled = _raise_if_cancelled
-        remaining_slots = _remaining_vertical_slots_for_current_column
-        should_cancel = self.should_cancel
-        has_started_document = bool(self.has_started_document)
-        has_drawn_on_page = bool(self.has_drawn_on_page)
-        current_page_index = len(self.page_entries)
-        curr_x = self.curr_x
-        curr_y = self.curr_y
-        draw_obj = self.draw
-        slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
 
-        if needs_base_len and needs_cell_text:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'base_len': base_len,
-                    'cell_text': cell_text,
-                })
-        elif needs_base_len:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'base_len': base_len,
-                })
-        elif needs_cell_text:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'cell_text': cell_text,
-                })
-        else:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                })
+        def emit_segment_and_overlay_cell(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str, token: str, next_token: str) -> None:
+            append_overlay_cell(overlay_cells, page_index, x_pos, y_pos, cell_text)
+            append_segment_info(page_index, x_pos, y_pos, base_len, cell_text)
 
-        def sync_renderer_state() -> None:
-            self.curr_x = curr_x
-            self.curr_y = curr_y
-            self.has_drawn_on_page = has_drawn_on_page
-            self.has_started_document = has_started_document
-
-        def refresh_after_wrap() -> None:
-            nonlocal current_page_index, has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
-            current_page_index = len(self.page_entries)
-            has_drawn_on_page = bool(self.has_drawn_on_page)
-            has_started_document = bool(self.has_started_document)
-            curr_x = self.curr_x
-            curr_y = self.curr_y
-            draw_obj = self.draw
-            slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
-
-        idx = 0
-        while idx < token_count:
-            raise_if_cancelled(should_cancel)
-            token = tokens[idx]
-            action = choose_layout_action(
-                layout_hints,
-                idx,
-                slots_left,
-                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
-                kinsoku_mode=kinsoku_mode,
-                action_cache=action_cache,
-            )
-            # Cross-run kinsoku: layout_hints may be extended with the leading
-            # line-head-forbidden tokens of the following run so the break
-            # decision can pull a body character forward.  Those virtual tokens
-            # are not drawn by this run, so never hang across the real boundary.
-            if action == 'hang_pair' and idx + 1 >= token_count:
-                action = 'advance'
-            if action == 'advance':
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                continue
-            if action == 'hang_pair':
-                if is_lowerable_hang_bracket(token):
-                    draw_hang_bracket(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                else:
-                    draw_char(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                next_token = tokens[idx + 1]
-                draw_hang_pair(
-                    draw_obj, next_token, (curr_x, curr_y), run_font, font_size, page_height,
-                    is_bold=is_bold, is_italic=is_italic,
-                )
-                base_len = len(token) + len(next_token)
-                cell_text = token + next_token
-                append_overlay_cell(overlay_cells, current_page_index, curr_x, curr_y, cell_text)
-                append_segment_info(current_page_index, curr_x, curr_y, base_len, cell_text)
-                if not has_drawn_on_page:
-                    has_drawn_on_page = True
-                if not has_started_document:
-                    has_started_document = True
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                idx += 2
-                continue
-
-            draw_char(
-                draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                is_bold=is_bold, is_italic=is_italic,
-            )
-            append_overlay_cell(overlay_cells, current_page_index, curr_x, curr_y, token)
-            append_segment_info(current_page_index, curr_x, curr_y, len(token), token)
-            curr_y += line_step
-            slots_left -= 1
-            if not has_drawn_on_page:
-                has_drawn_on_page = True
-            if not has_started_document:
-                has_started_document = True
-            idx += 1
-
-        sync_renderer_state()
-
+        self._run_vertical_text_cells(
+            tokens,
+            layout_hints,
+            run_font,
+            wrap_indent_step=wrap_indent_step,
+            is_bold=is_bold,
+            is_italic=is_italic,
+            on_draw_cell=emit_segment_and_overlay_cell,
+            on_hang_pair=emit_segment_and_overlay_cell,
+        )
 
     def _draw_text_run_segment_and_overlay_mixed(self: _VerticalPageRenderer, tokens: Sequence[str], layout_hints: Sequence[str], run_font: Any, *,
                                                  segment_infos: list[SegmentInfo], ruby_overlay_groups: list[RubyOverlayGroup], overlay_cells: list[OverlayCell],
                                                  wrap_indent_step: int = 0, is_bold: bool = False, is_italic: bool = False,
                                                  needs_base_len: bool = True, needs_cell_text: bool = True) -> None:
-        token_count = len(tokens)
-        if token_count <= 0:
-            return
-        args = self.args
-        font_size = args.font_size
-        page_height = args.height
-        margin_t = args.margin_t
-        margin_b = args.margin_b
-        line_step = font_size + 2
-        kinsoku_mode = _normalize_kinsoku_mode(args.kinsoku_mode)
-        action_cache: dict[tuple[int, int, bool], str] = {}
-        choose_layout_action = _choose_vertical_layout_action_with_hints
-        advance_for_wrap = self._advance_column_with_indent_step
-        draw_char = draw_char_tate
-        draw_hang_pair = draw_hanging_punctuation
-        draw_hang_bracket = draw_hanging_closing_bracket
-        is_lowerable_hang_bracket = _is_lowerable_hanging_closing_bracket
-        append_segment = segment_infos.append
+        append_segment_info = self._make_segment_info_appender(
+            segment_infos,
+            needs_base_len=needs_base_len,
+            needs_cell_text=needs_cell_text,
+        )
         append_ruby_group = _append_ruby_overlay_group
         append_overlay_cell = _append_overlay_cell
-        raise_if_cancelled = _raise_if_cancelled
-        remaining_slots = _remaining_vertical_slots_for_current_column
-        should_cancel = self.should_cancel
-        has_started_document = bool(self.has_started_document)
-        has_drawn_on_page = bool(self.has_drawn_on_page)
-        current_page_index = len(self.page_entries)
-        curr_x = self.curr_x
-        curr_y = self.curr_y
-        draw_obj = self.draw
-        slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
 
-        if needs_base_len and needs_cell_text:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'base_len': base_len,
-                    'cell_text': cell_text,
-                })
-        elif needs_base_len:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'base_len': base_len,
-                })
-        elif needs_cell_text:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                    'cell_text': cell_text,
-                })
-        else:
-            def append_segment_info(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str) -> None:
-                append_segment({
-                    'page_index': page_index,
-                    'x': x_pos,
-                    'y': y_pos,
-                })
+        def emit_mixed(page_index: int, x_pos: int, y_pos: int, base_len: int, cell_text: str, token: str, next_token: str) -> None:
+            append_ruby_group(ruby_overlay_groups, page_index, x_pos, y_pos, base_len)
+            append_overlay_cell(overlay_cells, page_index, x_pos, y_pos, cell_text)
+            append_segment_info(page_index, x_pos, y_pos, base_len, cell_text)
 
-        def sync_renderer_state() -> None:
-            self.curr_x = curr_x
-            self.curr_y = curr_y
-            self.has_drawn_on_page = has_drawn_on_page
-            self.has_started_document = has_started_document
-
-        def refresh_after_wrap() -> None:
-            nonlocal current_page_index, has_drawn_on_page, has_started_document, curr_x, curr_y, draw_obj, slots_left
-            current_page_index = len(self.page_entries)
-            has_drawn_on_page = bool(self.has_drawn_on_page)
-            has_started_document = bool(self.has_started_document)
-            curr_x = self.curr_x
-            curr_y = self.curr_y
-            draw_obj = self.draw
-            slots_left = remaining_slots(curr_y, margin_t, page_height, margin_b, font_size, wrap_indent_step)
-
-        idx = 0
-        while idx < token_count:
-            raise_if_cancelled(should_cancel)
-            token = tokens[idx]
-            action = choose_layout_action(
-                layout_hints,
-                idx,
-                slots_left,
-                _is_after_effective_column_top(curr_y, margin_t, wrap_indent_step),
-                kinsoku_mode=kinsoku_mode,
-                action_cache=action_cache,
-            )
-            # Cross-run kinsoku: layout_hints may be extended with the leading
-            # line-head-forbidden tokens of the following run so the break
-            # decision can pull a body character forward.  Those virtual tokens
-            # are not drawn by this run, so never hang across the real boundary.
-            if action == 'hang_pair' and idx + 1 >= token_count:
-                action = 'advance'
-            if action == 'advance':
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                continue
-            if action == 'hang_pair':
-                if is_lowerable_hang_bracket(token):
-                    draw_hang_bracket(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size, page_height,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                else:
-                    draw_char(
-                        draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                        is_bold=is_bold, is_italic=is_italic,
-                    )
-                next_token = tokens[idx + 1]
-                draw_hang_pair(
-                    draw_obj, next_token, (curr_x, curr_y), run_font, font_size, page_height,
-                    is_bold=is_bold, is_italic=is_italic,
-                )
-                base_len = len(token) + len(next_token)
-                cell_text = token + next_token
-                append_ruby_group(ruby_overlay_groups, current_page_index, curr_x, curr_y, base_len)
-                append_overlay_cell(overlay_cells, current_page_index, curr_x, curr_y, cell_text)
-                append_segment_info(current_page_index, curr_x, curr_y, base_len, cell_text)
-                if not has_drawn_on_page:
-                    has_drawn_on_page = True
-                if not has_started_document:
-                    has_started_document = True
-                sync_renderer_state()
-                advance_for_wrap(wrap_indent_step)
-                refresh_after_wrap()
-                idx += 2
-                continue
-
-            draw_char(
-                draw_obj, token, (curr_x, curr_y), run_font, font_size,
-                is_bold=is_bold, is_italic=is_italic,
-            )
-            append_ruby_group(ruby_overlay_groups, current_page_index, curr_x, curr_y, len(token))
-            append_overlay_cell(overlay_cells, current_page_index, curr_x, curr_y, token)
-            append_segment_info(current_page_index, curr_x, curr_y, len(token), token)
-            curr_y += line_step
-            slots_left -= 1
-            if not has_drawn_on_page:
-                has_drawn_on_page = True
-            if not has_started_document:
-                has_started_document = True
-            idx += 1
-
-        sync_renderer_state()
+        self._run_vertical_text_cells(
+            tokens,
+            layout_hints,
+            run_font,
+            wrap_indent_step=wrap_indent_step,
+            is_bold=is_bold,
+            is_italic=is_italic,
+            on_draw_cell=emit_mixed,
+            on_hang_pair=emit_mixed,
+        )
 
     def draw_text_run(self: _VerticalPageRenderer, text: str, run_font: Any, *, wrap_indent_chars: int = 0, segment_infos: list[SegmentInfo] | None = None,
                       ruby_overlay_groups: list[RubyOverlayGroup] | None = None, overlay_cells: list[OverlayCell] | None = None,
@@ -5835,6 +6245,72 @@ class _VerticalPageRenderer:
         )
         return
 
+    def _reserve_long_ruby_overlay_space(
+        self: _VerticalPageRenderer,
+        grouped: list[RubyOverlayGroup],
+        rt_text: str,
+        *,
+        wrap_indent_step: int = 0,
+        final_tail_end_y: int | None = None,
+        final_tail_base_len: int = 0,
+        final_min_extra_cells: int = 0,
+    ) -> None:
+        """Expand ruby groups and reserve trailing body space for long ruby.
+
+        The GUI intentionally has no setting for this: long ruby should not
+        collide by default.  The renderer keeps normal ruby unchanged and only
+        expands groups whose ruby text is physically taller than the base block.
+
+        When punctuation immediately follows a ruby parent, that punctuation is
+        drawn before the reserve blanks.  ``final_tail_end_y`` tells this helper
+        where the punctuation cell ended so the blank cells are reserved *after*
+        the punctuation, not before it.  The extra-cell count is still computed
+        from the original ruby parent group so the punctuation cell itself does
+        not consume the ruby-overlap guard.
+        """
+        if not rt_text or not grouped:
+            return
+        ruby_parts = _ruby_parts_for_overlay_groups(grouped, rt_text, self.args)
+        if not ruby_parts:
+            return
+        font_size = max(1, int(self.args.font_size or 1))
+        line_step = font_size + 2
+        final_extra_cells = 0
+        final_index = len(grouped) - 1
+        for idx, group in enumerate(grouped):
+            ruby_part = ruby_parts[idx] if idx < len(ruby_parts) else ''
+            extra_cells = _ruby_group_extra_cells_for_part(group, ruby_part, self.args)
+            if idx == final_index and final_min_extra_cells > 0:
+                extra_cells = max(extra_cells, int(final_min_extra_cells))
+            if extra_cells <= 0:
+                # Ordinary short ruby followed by punctuation must keep its ruby
+                # anchor on the parent glyph only.  Extending the display group
+                # with the punctuation cell makes a one-character ruby parent
+                # such as 観《かん》、 center against 観、 and visibly pulls the
+                # ruby downward.  Tail punctuation is only relevant when we
+                # actually reserve extra body cells for overlong/adjacent ruby;
+                # otherwise it remains a normal following body cell.
+                continue
+            original_end_y = int(group.get('end_y', 0) or 0)
+            reserve_origin_y = original_end_y
+            if idx == final_index and final_tail_end_y is not None:
+                reserve_origin_y = max(reserve_origin_y, int(final_tail_end_y))
+            group['end_y'] = reserve_origin_y + extra_cells * line_step
+            if idx == final_index:
+                if final_tail_base_len > 0:
+                    group['base_len'] = max(1, int(group.get('base_len', 1) or 1)) + int(final_tail_base_len)
+                final_extra_cells = extra_cells
+        if final_extra_cells <= 0:
+            return
+        final_group = grouped[-1]
+        current_page_index = len(self.page_entries)
+        if int(final_group.get('page_index', -1)) != current_page_index:
+            return
+        if int(final_group.get('x', -1)) != int(self.curr_x):
+            return
+        self.curr_y = max(int(self.curr_y), int(final_group['end_y']) + line_step)
+        self.ensure_room(font_size)
+
     def _ruby_group_capacity(self: _VerticalPageRenderer, group: Mapping[str, Any], segment_index: int, total_segments: int) -> int:
         return _ruby_group_capacity_for_args(group, segment_index, total_segments, self.args)
 
@@ -5917,6 +6393,195 @@ class _VerticalPageRenderer:
         local_run_layout_cache_set = local_run_layout_cache.__setitem__
         ruby_overlay_groups: list[RubyOverlayGroup]
         overlay_cells: list[OverlayCell]
+        pending_ruby_reserve: dict[str, Any] | None = None
+        pending_ruby_display: dict[str, Any] | None = None
+
+        def _append_display_ruby_groups(
+            target: list[RubyOverlayGroup],
+            sources: Sequence[Mapping[str, Any]],
+            *,
+            merge: bool = True,
+        ) -> None:
+            for source in sources:
+                try:
+                    copied: RubyOverlayGroup = {
+                        'page_index': int(source.get('page_index', 0) or 0),
+                        'x': int(source.get('x', 0) or 0),
+                        'start_y': int(source.get('start_y', 0) or 0),
+                        'end_y': int(source.get('end_y', source.get('start_y', 0)) or source.get('start_y', 0) or 0),
+                        'base_len': max(1, int(source.get('base_len', 1) or 1)),
+                    }
+                except Exception:
+                    continue
+                if merge and target:
+                    current = target[-1]
+                    if (
+                        int(current.get('page_index', -1)) == copied['page_index']
+                        and int(current.get('x', -1)) == copied['x']
+                        and copied['start_y'] >= int(current.get('end_y', copied['start_y']))
+                    ):
+                        current['end_y'] = max(int(current.get('end_y', copied['end_y']) or copied['end_y']), copied['end_y'])
+                        current['base_len'] = max(1, int(current.get('base_len', 1) or 1)) + copied['base_len']
+                        continue
+                target.append(copied)
+
+        def flush_pending_ruby_display() -> None:
+            nonlocal pending_ruby_display
+            if pending_ruby_display is None:
+                return
+            display_groups = pending_ruby_display.get('groups') or []
+            display_ruby = str(pending_ruby_display.get('ruby', '') or '')
+            if display_groups and display_ruby:
+                if bool(pending_ruby_display.get('draw_as_sequence', False)):
+                    self.draw_kanbun_ruby_sequence(
+                        display_groups,
+                        display_ruby,
+                        is_bold=bool(pending_ruby_display.get('is_bold', False)),
+                        is_italic=bool(pending_ruby_display.get('is_italic', False)),
+                    )
+                else:
+                    draw_split_ruby_groups(
+                        display_groups,
+                        display_ruby,
+                        is_bold=bool(pending_ruby_display.get('is_bold', False)),
+                        is_italic=bool(pending_ruby_display.get('is_italic', False)),
+                    )
+            pending_ruby_display = None
+
+        def queue_or_draw_ruby_display(
+            groups: list[RubyOverlayGroup],
+            ruby_text: str,
+            *,
+            can_continue: bool = False,
+            separator_before: bool = False,
+            separator_after: bool = False,
+            is_bold: bool = False,
+            is_italic: bool = False,
+        ) -> None:
+            nonlocal pending_ruby_display
+            if not groups or not ruby_text:
+                return
+            if pending_ruby_display is not None and (
+                bool(pending_ruby_display.get('is_bold', False)) != bool(is_bold)
+                or bool(pending_ruby_display.get('is_italic', False)) != bool(is_italic)
+            ):
+                flush_pending_ruby_display()
+            if pending_ruby_display is not None:
+                has_separator = bool(pending_ruby_display.pop('separator_before_next', False)) or separator_before
+                if has_separator:
+                    pending_ruby_display['ruby'] = str(pending_ruby_display.get('ruby', '') or '') + '　'
+                    pending_ruby_display['draw_as_sequence'] = True
+                merge_display_groups = not bool(pending_ruby_display.get('draw_as_sequence', False))
+                _append_display_ruby_groups(pending_ruby_display['groups'], groups, merge=merge_display_groups)
+                pending_ruby_display['ruby'] = str(pending_ruby_display.get('ruby', '') or '') + str(ruby_text or '')
+                if separator_after:
+                    pending_ruby_display['separator_before_next'] = True
+                if not can_continue:
+                    flush_pending_ruby_display()
+                return
+            if can_continue:
+                display_groups: list[RubyOverlayGroup] = []
+                _append_display_ruby_groups(display_groups, groups)
+                pending_ruby_display = {
+                    'groups': display_groups,
+                    'ruby': str(ruby_text or ''),
+                    'separator_before_next': bool(separator_after),
+                    'is_bold': bool(is_bold),
+                    'is_italic': bool(is_italic),
+                }
+                return
+            draw_split_ruby_groups(groups, ruby_text, is_bold=is_bold, is_italic=is_italic)
+
+        def flush_pending_ruby_reserve() -> None:
+            nonlocal pending_ruby_reserve
+            if pending_ruby_reserve is None:
+                return
+            pending_groups = pending_ruby_reserve['groups']
+            pending_ruby = pending_ruby_reserve['ruby']
+            pending_wrap_indent_step = int(pending_ruby_reserve.get('wrap_indent_step', wrap_indent_step) or 0)
+            self._reserve_long_ruby_overlay_space(
+                pending_groups,
+                pending_ruby,
+                wrap_indent_step=pending_wrap_indent_step,
+                final_tail_end_y=pending_ruby_reserve.get('tail_end_y'),
+                final_tail_base_len=int(pending_ruby_reserve.get('tail_base_len', 0) or 0),
+                final_min_extra_cells=int(pending_ruby_reserve.get('min_extra_cells_after_tail', 0) or 0),
+            )
+            queue_or_draw_ruby_display(
+                pending_groups,
+                pending_ruby,
+                can_continue=bool(pending_ruby_reserve.get('display_can_continue_after_tail', False)),
+                separator_after=bool(pending_ruby_reserve.get('display_separator_after_tail', False)),
+                is_bold=bool(pending_ruby_reserve.get('is_bold', False)),
+                is_italic=bool(pending_ruby_reserve.get('is_italic', False)),
+            )
+            pending_ruby_reserve = None
+
+        def queue_or_draw_ruby_groups(
+            groups: list[RubyOverlayGroup],
+            ruby_text: str,
+            *,
+            run_index: int,
+            is_bold: bool = False,
+            is_italic: bool = False,
+        ) -> None:
+            nonlocal pending_ruby_reserve
+            if not groups:
+                return
+            next_is_tail_punctuation = (
+                run_index + 1 < run_count
+                and bool((runs_seq[run_index + 1] or {}).get(_RUBY_TAIL_PUNCTUATION_RUN_FLAG, False))
+            )
+            next_is_direct_ruby = (
+                run_index + 1 < run_count
+                and bool((runs_seq[run_index + 1] or {}).get('ruby'))
+            )
+            if next_is_tail_punctuation:
+                flush_pending_ruby_reserve()
+                pending_ruby_reserve = {
+                    'groups': groups,
+                    'ruby': ruby_text,
+                    'wrap_indent_step': wrap_indent_step,
+                    'is_bold': bool(is_bold),
+                    'is_italic': bool(is_italic),
+                }
+                return
+            self._reserve_long_ruby_overlay_space(groups, ruby_text, wrap_indent_step=wrap_indent_step)
+            queue_or_draw_ruby_display(
+                groups, ruby_text, can_continue=next_is_direct_ruby,
+                is_bold=is_bold, is_italic=is_italic,
+            )
+
+        def extend_pending_ruby_with_tail_segments(segment_infos: Sequence[Mapping[str, Any]]) -> None:
+            if pending_ruby_reserve is None or not segment_infos:
+                return
+            pending_groups = pending_ruby_reserve['groups']
+            if not pending_groups:
+                return
+            final_group = pending_groups[-1]
+            try:
+                group_page = int(final_group.get('page_index', -1))
+                group_x = int(final_group.get('x', -1))
+            except Exception:
+                return
+            extra_base_len = 0
+            max_y = int(final_group.get('end_y', final_group.get('start_y', 0)) or 0)
+            for info in segment_infos:
+                try:
+                    info_page = int(info.get('page_index', -2))
+                    info_x = int(info.get('x', -2))
+                    info_y = int(info.get('y', max_y) or max_y)
+                    info_len = max(1, int(info.get('base_len', 1) or 1))
+                except Exception:
+                    continue
+                if info_page != group_page or info_x != group_x:
+                    continue
+                max_y = max(max_y, info_y)
+                extra_base_len += info_len
+            if extra_base_len > 0:
+                pending_ruby_reserve['tail_end_y'] = max(int(pending_ruby_reserve.get('tail_end_y', max_y) or max_y), max_y)
+                pending_ruby_reserve['tail_base_len'] = int(pending_ruby_reserve.get('tail_base_len', 0) or 0) + extra_base_len
+
         if repeated_medium_texts:
             for repeated_text in repeated_medium_texts:
                 repeated_tokens = tokenize_vertical_text(repeated_text, tatechuyoko_digit_mode)
@@ -5926,7 +6591,37 @@ class _VerticalPageRenderer:
         # drawable run.  The current run extends its layout hints with them so a
         # body character can be pulled forward and the bracket never starts the
         # next column, even when the bracket lives in a separate ruby/bold run.
-        runs_seq = list(runs or ())
+        raw_runs_seq = list(runs or ())
+        latin_orientation_mode = _normalize_latin_orientation_mode(getattr(self.args, 'latin_orientation_mode', 'vertical'))
+        if latin_orientation_mode == 'horizontal':
+            runs_seq = []
+            for raw_run in raw_runs_seq:
+                if not raw_run:
+                    continue
+                raw_text = str(raw_run.get('text', '') or '')
+                # Ruby/emphasis/side-line/code runs keep the historical vertical path;
+                # horizontal Latin drawing is intentionally limited to plain inline
+                # body text for the first rendering step.
+                can_split_latin = bool(raw_text) and not (
+                    raw_run.get('ruby')
+                    or raw_run.get('emphasis')
+                    or raw_run.get('side_line')
+                    or raw_run.get('code')
+                )
+                if not can_split_latin:
+                    runs_seq.append(raw_run)
+                    continue
+                for segment_kind, segment_text in _split_latin_orientation_runs(raw_text, latin_orientation_mode):
+                    if not segment_text:
+                        continue
+                    copied_run = dict(raw_run)
+                    copied_run['text'] = segment_text
+                    if segment_kind == _LATIN_HORIZONTAL_KIND:
+                        copied_run['_latin_horizontal'] = True
+                    runs_seq.append(copied_run)
+        else:
+            runs_seq = raw_runs_seq
+        runs_seq = _split_ruby_tail_punctuation_runs(runs_seq)
         run_count = len(runs_seq)
         next_leading_forbidden: list[tuple[str, ...]] = [()] * run_count
         carry_leading: tuple[str, ...] = ()
@@ -5944,6 +6639,9 @@ class _VerticalPageRenderer:
             seg_text = get_value('text', '')
             if not seg_text:
                 continue
+            is_ruby_tail_punctuation_run = bool(get_value(_RUBY_TAIL_PUNCTUATION_RUN_FLAG, False))
+            if pending_ruby_reserve is not None and not is_ruby_tail_punctuation_run:
+                flush_pending_ruby_reserve()
             trailing_layout_tokens = next_leading_forbidden[run_index]
             # Only forward the cross-run kinsoku hint when there actually is a
             # following forbidden group, so the common call stays compact.
@@ -5965,6 +6663,50 @@ class _VerticalPageRenderer:
                 | (1 if side_line else 0)
             )
             overlay_mode = run_mode & 3
+            if pending_ruby_display is not None and run_mode != 4 and not is_ruby_tail_punctuation_run:
+                flush_pending_ruby_display()
+            if is_ruby_tail_punctuation_run and pending_ruby_reserve is not None and run_mode == 0:
+                tail_segment_infos: list[SegmentInfo] = []
+                draw_text_run(
+                    str(seg_text),
+                    run_font,
+                    wrap_indent_chars=wrap_indent_chars,
+                    segment_infos=tail_segment_infos,
+                    is_bold=is_bold,
+                    is_italic=is_italic,
+                    segment_info_needs_base_len=True,
+                    segment_info_needs_cell_text=False,
+                    **trailing_kw,
+                )
+                extend_pending_ruby_with_tail_segments(tail_segment_infos)
+                next_run_has_ruby = (
+                    run_index + 1 < run_count
+                    and bool((runs_seq[run_index + 1] or {}).get('ruby'))
+                )
+                if next_run_has_ruby and pending_ruby_reserve is not None:
+                    # Consecutive ruby spans separated by punctuation can collide
+                    # in the ruby lane if the next ruby parent starts immediately.
+                    # Keep the step16 body gap, but keep the ruby drawing queued
+                    # so the next parent can be drawn as one kanbun-style reading
+                    # sequence with exactly one ruby-lane separator after the
+                    # punctuation boundary.
+                    pending_ruby_reserve['min_extra_cells_after_tail'] = max(
+                        int(pending_ruby_reserve.get('min_extra_cells_after_tail', 0) or 0),
+                        1,
+                    )
+                    pending_ruby_reserve['display_can_continue_after_tail'] = True
+                    pending_ruby_reserve['display_separator_after_tail'] = True
+                flush_pending_ruby_reserve()
+                continue
+            if bool(get_value('_latin_horizontal', False)) and run_mode == 0:
+                if self.draw_latin_horizontal_run(
+                    str(seg_text),
+                    run_font,
+                    wrap_indent_chars=wrap_indent_chars,
+                    is_bold=is_bold,
+                    is_italic=is_italic,
+                ):
+                    continue
             text_len = len(seg_text)
             use_cached_direct_path = (text_len <= 8) or (seg_text in repeated_medium_texts)
             if use_cached_direct_path:
@@ -6005,7 +6747,10 @@ class _VerticalPageRenderer:
                         is_italic=is_italic,
                     )
                     if ruby_overlay_groups:
-                        draw_split_ruby_groups(ruby_overlay_groups, ruby, is_bold=is_bold, is_italic=is_italic)
+                        queue_or_draw_ruby_groups(
+                            ruby_overlay_groups, ruby, run_index=run_index,
+                            is_bold=is_bold, is_italic=is_italic,
+                        )
                     continue
                 if run_mode < 4:
                     overlay_cells = []
@@ -6037,7 +6782,10 @@ class _VerticalPageRenderer:
                     is_italic=is_italic,
                 )
                 if ruby_overlay_groups:
-                    draw_split_ruby_groups(ruby_overlay_groups, ruby, is_bold=is_bold, is_italic=is_italic)
+                    queue_or_draw_ruby_groups(
+                        ruby_overlay_groups, ruby, run_index=run_index,
+                        is_bold=is_bold, is_italic=is_italic,
+                    )
                 if overlay_cells:
                     if overlay_mode & 2:
                         draw_emphasis_marks_cells(overlay_cells, emphasis, prefer_left=True)
@@ -6066,7 +6814,10 @@ class _VerticalPageRenderer:
                     **trailing_kw,
                 )
                 if ruby_overlay_groups:
-                    draw_split_ruby_groups(ruby_overlay_groups, ruby, is_bold=is_bold, is_italic=is_italic)
+                    queue_or_draw_ruby_groups(
+                        ruby_overlay_groups, ruby, run_index=run_index,
+                        is_bold=is_bold, is_italic=is_italic,
+                    )
                 continue
             if run_mode < 4:
                 overlay_cells = []
@@ -6098,12 +6849,17 @@ class _VerticalPageRenderer:
                 **trailing_kw,
             )
             if ruby_overlay_groups:
-                draw_split_ruby_groups(ruby_overlay_groups, ruby, is_bold=is_bold, is_italic=is_italic)
+                queue_or_draw_ruby_groups(
+                    ruby_overlay_groups, ruby, run_index=run_index,
+                    is_bold=is_bold, is_italic=is_italic,
+                )
             if overlay_cells:
                 if overlay_mode & 2:
                     draw_emphasis_marks_cells(overlay_cells, emphasis, prefer_left=True)
                 if overlay_mode & 1:
                     draw_side_lines_cells(overlay_cells, side_line, ruby_text=ruby, emphasis_kind=emphasis)
+        flush_pending_ruby_reserve()
+        flush_pending_ruby_display()
 
     def draw_split_ruby(self: _VerticalPageRenderer, segment_infos: Sequence[Mapping[str, Any]], rt_text: str, *, is_bold: bool = False, is_italic: bool = False) -> None:
         _raise_if_cancelled(self.should_cancel)
@@ -6116,6 +6872,128 @@ class _VerticalPageRenderer:
             is_italic=is_italic,
         )
 
+    def draw_kanbun_ruby_sequence(self: _VerticalPageRenderer, grouped: Sequence[Mapping[str, Any]], rt_text: str, *, is_bold: bool = False, is_italic: bool = False) -> None:
+        """Draw a kanbun-style continuous ruby reading without body-gap redistribution.
+
+        Long-ruby reserve may insert blank body cells between punctuation-delimited
+        kanbun clauses.  Those artificial cells are useful in the body column, but
+        they should not make the ruby reading start lower or introduce a large
+        ruby-lane gap.  Draw the queued ruby string as a continuous sequence from
+        the first ruby parent, wrapping only when the ruby lane reaches the page
+        bottom or the queued body groups move to another column/page.
+        """
+        _refresh_core_globals()
+        _raise_if_cancelled(self.should_cancel)
+        ruby_text = str(rt_text or '')
+        if not ruby_text or not grouped:
+            return
+        args = self.args
+        ruby_size = args.ruby_size
+        font_size = args.font_size
+        min_ry = args.margin_t
+        effective_bottom_margin = _effective_ruby_overlay_bottom_margin(args)
+        max_visible_ry = args.height - effective_bottom_margin
+        step_y = ruby_size + 2
+        if step_y <= 0:
+            return
+
+        # Use the first parent ruby as the anchor.  The inserted fullwidth space
+        # is a reading separator, not a body segment; anchoring against the whole
+        # merged clause would pull the first ruby down when later clause groups
+        # extend far below it.
+        first_group = grouped[0]
+        first_reading = ruby_text.split('　', 1)[0] or ruby_text
+        try:
+            start_y = int(first_group.get('start_y', 0) or 0)
+            end_y = int(first_group.get('end_y', start_y) or start_y)
+        except Exception:
+            start_y = min_ry
+            end_y = start_y
+        first_extent = max(font_size, end_y - start_y + font_size)
+        first_ruby_extent = max(1, len(first_reading)) * step_y
+        try:
+            first_base_len = max(1, int(first_group.get('base_len', 1) or 1))
+        except Exception:
+            first_base_len = 1
+        if len(first_reading) >= first_base_len + 4 or first_ruby_extent >= first_extent:
+            # Kanbun readings such as 独坐幽篁裏《ゆうこうのうちにざし》
+            # should begin beside the first parent character.  Centering against
+            # an expanded/tail-aware group pulls the reading downward.
+            ry = start_y
+        else:
+            ry = start_y + (first_extent - first_ruby_extent) // 2
+        if ry < min_ry:
+            ry = min_ry
+
+        group_index = 0
+        current_group = grouped[group_index]
+        current_page_index = int(current_group.get('page_index', 0) or 0)
+        current_x = int(current_group.get('x', 0) or 0)
+        ruby_x = current_x + font_size + 1
+        cached_page_index = None
+        target_draw = None
+        get_page_image_draw = self.get_page_image_draw
+        draw_char_tate_fn = draw_char_tate
+        ruby_font = self.ruby_font
+        ruby_bbox_cache: dict[str, tuple[int, int, int, int]] = {}
+
+        def _move_to_next_group() -> bool:
+            nonlocal group_index, current_group, current_page_index, current_x, ruby_x, ry
+            previous_page = current_page_index
+            previous_x = current_x
+            group_index += 1
+            while group_index < len(grouped):
+                current_group = grouped[group_index]
+                try:
+                    candidate_page = int(current_group.get('page_index', 0) or 0)
+                    candidate_x = int(current_group.get('x', 0) or 0)
+                    # Do not wrap back into a later parent in the same body
+                    # column; artificial body gaps are exactly what this drawing
+                    # path is meant to ignore in the ruby lane.  Use the next
+                    # column/page boundary instead.
+                    if candidate_page == previous_page and candidate_x == previous_x:
+                        group_index += 1
+                        continue
+                    current_page_index = candidate_page
+                    current_x = candidate_x
+                    ry = max(min_ry, int(current_group.get('start_y', min_ry) or min_ry))
+                    ruby_x = current_x + font_size + 1
+                    return True
+                except Exception:
+                    group_index += 1
+            return False
+
+        for r_char in ruby_text:
+            _raise_if_cancelled(self.should_cancel)
+            if ry + step_y > max_visible_ry and not _move_to_next_group():
+                break
+            if cached_page_index != current_page_index or target_draw is None:
+                _target_img, target_draw = get_page_image_draw(current_page_index)
+                cached_page_index = current_page_index
+            bbox = ruby_bbox_cache.get(r_char)
+            if bbox is None:
+                bbox = _get_text_bbox(ruby_font, r_char, is_bold=is_bold)
+                ruby_bbox_cache[r_char] = bbox
+            bbox_x0, bbox_y0, bbox_x1, bbox_y1 = bbox
+            min_draw_x = -int(bbox_x0)
+            max_draw_x = args.width - int(bbox_x1)
+            if max_draw_x < min_draw_x:
+                ry += step_y
+                continue
+            draw_x = max(min_draw_x, min(int(ruby_x), max_draw_x))
+            min_draw_y = min_ry - int(bbox_y0)
+            max_draw_y = max_visible_ry - int(bbox_y1)
+            if max_draw_y < min_draw_y:
+                ry += step_y
+                continue
+            draw_y = max(min_draw_y, min(int(ry), max_draw_y))
+            if min_ry <= draw_y + int(bbox_y0) and draw_y + int(bbox_y1) <= max_visible_ry:
+                draw_char_tate_fn(
+                    target_draw, r_char, (draw_x, draw_y), ruby_font, ruby_size,
+                    is_bold=is_bold, ruby_mode=True, is_italic=is_italic,
+                )
+            ry += step_y
+
     def draw_split_ruby_groups(self: _VerticalPageRenderer, grouped: Sequence[Mapping[str, Any]], rt_text: str, *, is_bold: bool = False, is_italic: bool = False) -> None:
         _refresh_core_globals()
         raise_if_cancelled = _raise_if_cancelled
@@ -6123,19 +7001,15 @@ class _VerticalPageRenderer:
         raise_if_cancelled(should_cancel)
         if not rt_text or not grouped:
             return
-        total_segments = len(grouped)
-        if total_segments == 1:
-            ruby_parts = [str(rt_text or '')]
-        else:
-            segment_lengths = [group['base_len'] for group in grouped]
-            ruby_group_capacity = self._ruby_group_capacity
-            segment_capacities = [
-                ruby_group_capacity(group, idx, total_segments)
-                for idx, group in enumerate(grouped)
-            ]
-            ruby_parts = _split_ruby_text_segments(rt_text, segment_lengths, segment_capacities=segment_capacities)
-
         args = self.args
+        ruby_parts = _ruby_parts_for_overlay_groups(grouped, rt_text, args)
+        if any(
+            _ruby_group_extra_cells_for_part(group, ruby_parts[idx] if idx < len(ruby_parts) else '', args) > 0
+            for idx, group in enumerate(grouped)
+        ):
+            grouped = _expanded_ruby_overlay_groups_for_parts(grouped, ruby_parts, args)
+        total_segments = len(grouped)
+
         ruby_size = args.ruby_size
         font_size = args.font_size
         min_ry = args.margin_t
@@ -6494,6 +7368,45 @@ class _VerticalPageRenderer:
             draw_side_line(target_draw, base_x, y1, y2, primary_kind, width=primary_width)
             draw_side_line(target_draw, secondary_x, y1, y2, 'solid', width=1)
 
+    def draw_latin_horizontal_run(self: _VerticalPageRenderer, text: str, run_font: Any, *, wrap_indent_chars: int = 0,
+                                  is_bold: bool = False, is_italic: bool = False) -> bool:
+        """Draw a Latin phrase sideways, wrapping long phrases at word boundaries."""
+        _refresh_core_globals()
+        _raise_if_cancelled(self.should_cancel)
+        effective_margin_b = _effective_vertical_layout_bottom_margin(self.args.margin_b, self.args.font_size)
+        max_inline_height = max(1, int(self.args.height - self.args.margin_t - effective_margin_b))
+        chunks = _split_latin_horizontal_text_for_column(
+            str(text or ''),
+            run_font,
+            self.args.font_size,
+            max_inline_height,
+            is_bold=is_bold,
+            is_italic=is_italic,
+        )
+        if not chunks:
+            return False
+        for chunk in chunks:
+            run_img = _build_horizontal_latin_run_image(
+                chunk,
+                run_font,
+                self.args.font_size,
+                is_bold=is_bold,
+                is_italic=is_italic,
+            )
+            if run_img is None or run_img.height > max_inline_height:
+                return False
+            self.ensure_room(run_img.height, continuation_indent_chars=wrap_indent_chars)
+            paste_x = self.curr_x + (self.args.font_size - run_img.width) // 2
+            paste_y = self.curr_y
+            paste_x = _clamp_int(paste_x, 0, max(0, self.args.width - run_img.width))
+            paste_y = _clamp_int(paste_y, 0, max(0, self.args.height - run_img.height))
+            mask = ImageOps.invert(run_img)
+            self.img.paste(run_img, (paste_x, paste_y), mask)
+            self.curr_y += run_img.height + 2
+            self.has_drawn_on_page = True
+            self.has_started_document = True
+        return True
+
     def draw_inline_image(self: _VerticalPageRenderer, char_img: Image.Image | None, *, wrap_indent_chars: int = 0) -> None:
         if char_img is None:
             return
@@ -6510,6 +7423,8 @@ def _render_text_blocks_to_page_entries(blocks: Sequence[TextBlock], font_value:
     _refresh_core_globals()
     _raise_if_cancelled(should_cancel)
     if not _has_renderable_text_blocks(blocks, should_cancel=should_cancel):
+        if _contains_image_blocks(blocks, should_cancel=should_cancel):
+            raise RuntimeError("挿絵を取得できませんでした。画像ファイルまたは青空文庫の挿絵キャッシュを確認してください。")
         raise RuntimeError("入力ファイルに変換できる本文がありません。")
 
     font = load_truetype_font(font_value, args.font_size)
@@ -6547,12 +7462,12 @@ def _render_text_blocks_to_page_entries(blocks: Sequence[TextBlock], font_value:
         remaining_blocks = max(0, len(blocks) - active_block_index)
         return max(1, completed_pages + remaining_blocks + 1)
 
-    def add_page_entry(image: Image.Image, *, copy_image: bool = True, label: str = '本文ページ') -> None:
+    def add_page_entry(image: Image.Image, *, copy_image: bool = True, label: str = '本文ページ', page_args: ConversionArgs | None = None) -> None:
         nonlocal page_limit_reached
         if page_limit is not None and len(page_entries) >= page_limit:
             page_limit_reached = True
             return
-        entry = _make_page_entry(image.copy() if copy_image else image, page_args=args, label=label)
+        entry = _make_page_entry(image.copy() if copy_image else image, page_args=page_args or args, label=label)
         _apply_page_entry_margin_clip(entry)
         page_entries.append(entry)
         _emit_progress(progress_cb, len(page_entries), _estimate_text_render_total(), f'本文ページを作成中… ({len(page_entries)} ページ)')
@@ -6560,7 +7475,12 @@ def _render_text_blocks_to_page_entries(blocks: Sequence[TextBlock], font_value:
     def spool_completed_block_pages() -> None:
         for entry in renderer.pop_page_entries():
             _raise_if_cancelled(should_cancel)
-            add_page_entry(entry['image'], copy_image=False, label=entry.get('label') or '本文ページ')
+            add_page_entry(
+                entry['image'],
+                copy_image=False,
+                label=entry.get('label') or '本文ページ',
+                page_args=entry.get('page_args') or args,
+            )
         if page_limit is not None:
             remaining = page_limit - len(page_entries)
             renderer.set_page_buffer_limit(remaining if remaining > 0 else 1)
@@ -6569,6 +7489,82 @@ def _render_text_blocks_to_page_entries(blocks: Sequence[TextBlock], font_value:
         _raise_if_cancelled(should_cancel)
         render_runs = _runs_without_ruby(runs) if _should_hide_ruby(args) else runs
         renderer.draw_runs(render_runs, default_font=font, wrap_indent_chars=wrap_indent_chars)
+
+    def draw_image_block(block: Mapping[str, Any], wrap_indent_chars: int = 0) -> bool:
+        _raise_if_cancelled(should_cancel)
+        source, img_data = _read_image_block_bytes(block)
+        if not img_data:
+            return False
+        try:
+            is_full_page, _img_w, _img_h = _inspect_embedded_image_bytes(
+                img_data,
+                args.width,
+                args.height,
+                args.margin_l,
+                args.margin_r,
+                args.margin_t,
+                args.margin_b,
+                args.font_size,
+            )
+            if not is_full_page:
+                prepared = _prepare_inline_embedded_image_bytes(img_data, args.font_size, args.night_mode)
+                if prepared is None:
+                    return False
+                img_w, img_h, img_bytes = prepared
+                renderer.draw_inline_image(
+                    Image.frombytes('L', (img_w, img_h), img_bytes),
+                    wrap_indent_chars=wrap_indent_chars,
+                )
+                return True
+            with Image.open(io.BytesIO(img_data)) as s_img:
+                full_page_img = s_img.convert('L')
+            renderer.add_full_page_image(
+                full_page_img,
+                label='挿絵ページ',
+                page_args=dc_replace(args, night_mode=False),
+                copy_image=False,
+            )
+            return True
+        except Exception as exc:
+            LOGGER.warning('挿絵画像処理エラー (%s): %s', source, exc)
+            return False
+
+    def image_caption_runs(block: Mapping[str, Any]) -> list[TextRun]:
+        caption = str(block.get('caption', '') or '').strip()
+        if not caption:
+            return []
+        return [{
+            'text': caption,
+            'ruby': '',
+            'bold': False,
+            'italic': False,
+            'emphasis': '',
+            'side_line': '',
+            'code': False,
+        }]
+
+    def block_text_starts_with_opening_bracket(block: Mapping[str, Any]) -> bool:
+        for run in block.get('runs', []) or []:
+            if not isinstance(run, Mapping):
+                continue
+            text = str(run.get('text', '') or '')
+            if not text:
+                continue
+            return text[0] in OPENING_BRACKET_CHARS
+        return False
+
+    def effective_block_indent_chars(block: Mapping[str, Any]) -> int:
+        indent_chars = max(0, int(block.get('indent_chars', 1 if block.get('indent', False) else 0) or 0))
+        opening_mode = str(getattr(args, 'opening_bracket_indent_mode', 'none') or 'none').strip().lower()
+        if (
+            opening_mode == 'one_char'
+            and block.get('kind') == 'paragraph'
+            and indent_chars <= 0
+            and not bool(block.get('indent', False))
+            and block_text_starts_with_opening_bracket(block)
+        ):
+            return 1
+        return indent_chars
 
     has_renderable_after_index = [False] * (len(blocks) + 1)
     seen_renderable = False
@@ -6579,17 +7575,18 @@ def _render_text_blocks_to_page_entries(blocks: Sequence[TextBlock], font_value:
 
     total_blocks = max(1, len(blocks))
     first_content = True
-    previous_was_blank = False
+    pending_blank_blocks = 0
     try:
         for block_index, block in enumerate(blocks, 1):
             render_progress_state['active_block_index'] = block_index
             _emit_progress(progress_cb, block_index - 1, total_blocks, f'テキストを描画中… ({max(0, block_index - 1)}/{total_blocks} ブロック)')
             block_kind = block.get('kind')
             if block_kind == 'blank':
-                previous_was_blank = True
+                pending_blank_blocks += 1
                 continue
             if block_kind == 'pagebreak':
-                previous_was_blank = False
+                pending_blank_blocks = 0
+                renderer._clear_fresh_hanging_column_gap()
                 if renderer.has_pending_output:
                     renderer.flush_current_page()
                     spool_completed_block_pages()
@@ -6600,19 +7597,53 @@ def _render_text_blocks_to_page_entries(blocks: Sequence[TextBlock], font_value:
             gap = block.get('blank_before', 1)
             if first_content:
                 first_content = False
-                if previous_was_blank:
-                    # Keep leading blank lines visible.  The first real text block
-                    # has no preceding drawn column, so use one fewer column than
-                    # the normal inter-paragraph blank gap: a single leading empty
-                    # line produces one visible empty column instead of being
-                    # swallowed at the document head.
-                    renderer.advance_column(max(1, max(gap, 2) - 1))
+                if pending_blank_blocks:
+                    # No content column exists before the first rendered block.
+                    # A blank before the first content should therefore reserve
+                    # the same visible blank columns as an in-document blank,
+                    # not one extra anchor/content column.  Keep the count, rather
+                    # than a boolean flag, so multiple explicit blank lines remain
+                    # visible instead of collapsing to one blank column.
+                    renderer.advance_column(max(1, max(gap, pending_blank_blocks + 1) - 1))
             elif renderer.has_drawn_on_page:
-                renderer.advance_column(max(gap, 2 if previous_was_blank else gap))
-            previous_was_blank = False
-            block_indent_chars = block.get('indent_chars', 1 if block.get('indent', False) else 0)
+                suppress_extra_dialogue_gap = bool(block.get('suppress_paragraph_gap_before', False)) and pending_blank_blocks == 0
+                if not suppress_extra_dialogue_gap:
+                    advance_count = max(gap, pending_blank_blocks + 1 if pending_blank_blocks else gap)
+                    if renderer._consume_fresh_hanging_column_gap():
+                        advance_count = max(0, advance_count - 1)
+                    renderer.advance_column(advance_count)
+                else:
+                    # Compact consecutive dialogue lines should still honor the
+                    # source newline and start in the next column.  What we
+                    # suppress here is only the *extra* paragraph gap, not the
+                    # line break itself.  Also ignore any fresh hanging-column
+                    # reuse from the previous block so punctuation at the tail
+                    # does not glue the next dialogue line into the same column.
+                    renderer._clear_fresh_hanging_column_gap()
+                    renderer.advance_column(1)
+            elif pending_blank_blocks:
+                # Aozora TXT often has explicit blank lines immediately after
+                # pagebreak notes.  After ``flush_current_page`` the new page has
+                # no drawn content yet, so the old ``has_drawn_on_page`` gate
+                # discarded those blank blocks.  Treat them like leading blanks
+                # at the start of the document: reserve visible empty columns on
+                # the fresh page without creating an extra anchor column.
+                renderer._clear_fresh_hanging_column_gap()
+                renderer.advance_column(max(1, max(gap, pending_blank_blocks + 1) - 1))
+            pending_blank_blocks = 0
+            block_indent_chars = effective_block_indent_chars(block)
             block_wrap_indent_chars = block.get('wrap_indent_chars', 0)
-            if block.get('indent', False):
+            if block_kind == 'image':
+                image_drawn = draw_image_block(block, wrap_indent_chars=block_wrap_indent_chars)
+                caption_runs = image_caption_runs(block) if image_drawn else []
+                if caption_runs:
+                    draw_runs(caption_runs, wrap_indent_chars=0)
+                spool_completed_block_pages()
+                if page_limit is not None and len(page_entries) >= page_limit and has_renderable_after_index[block_index]:
+                    page_limit_reached = True
+                    break
+                continue
+            if block.get('indent', False) or block_indent_chars > 0:
                 renderer.insert_paragraph_indent(block_indent_chars)
             draw_runs(block.get('runs', []), wrap_indent_chars=block_wrap_indent_chars)
             spool_completed_block_pages()
@@ -6650,4 +7681,18 @@ def _render_text_blocks_to_images(blocks: Sequence[TextBlock], font_value: str |
         max_output_pages=max_output_pages,
         render_state=render_state,
     )]
+
+def _publish_core_reexports() -> None:
+    """Replace circular-import placeholders in gui_core with real split symbols."""
+    for _source_name, _core_name in _CORE_REEXPORT_ALIASES:
+        _value = globals().get(_source_name, _SPLIT_IMPORT_PLACEHOLDER)
+        if _value is _SPLIT_IMPORT_PLACEHOLDER:
+            continue
+        try:
+            setattr(_core, _core_name, _value)
+        except Exception:
+            pass
+
+
+_publish_core_reexports()
 

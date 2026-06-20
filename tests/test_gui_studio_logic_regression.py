@@ -49,7 +49,7 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertIn('表示言語を 日本語 に保存しました。', japanese['status'])
 
     def test_translate_ui_text_returns_english_for_main_controls(self):
-        self.assertEqual(logic.translate_ui_text('縦書きXTC Studio', 'en'), 'TategakiXTC GUI Studio')
+        self.assertEqual(logic.translate_ui_text('縦書きXTC Studio Public', 'en'), 'TategakiXTC GUI Studio Public')
         self.assertEqual(logic.translate_ui_text('ファイルを開く', 'en'), 'Open File')
         self.assertEqual(logic.translate_ui_text('▶  変換実行', 'English'), '▶  Convert')
         self.assertEqual(logic.translate_ui_text('表示設定', 'EN-us'), 'Display settings')
@@ -60,6 +60,7 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertEqual(logic.translate_ui_text('保存先リセット', 'en'), 'Reset Folder')
         self.assertEqual(logic.translate_ui_text('フォルダ一括変換', 'en'), 'Batch Convert')
         self.assertEqual(logic.translate_ui_text('半角数字/記号', 'en'), 'Numbers/Symbols')
+        self.assertEqual(logic.translate_ui_text('中黒', 'en'), 'Middle Dot')
         self.assertEqual(logic.translate_ui_text('縦中横記号', 'en'), 'TCY Symbols')
         self.assertEqual(logic.translate_ui_text('上補正強', 'en'), 'Up strong')
         self.assertEqual(logic.translate_ui_text('下補正強', 'en'), 'Down strong')
@@ -71,7 +72,17 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
         self.assertEqual(logic.translate_ui_text('標準', 'en'), 'Standard')
         self.assertEqual(logic.translate_ui_text('下補正弱', 'en'), 'Down weak')
         self.assertEqual(logic.translate_ui_text('自動連番で保存', 'en'), 'Auto-number')
+        middle_dot_help = logic.translate_ui_text('対象: 文中の中黒（・/･/·）です。\nフォントごとの差を抑えるため、実インク中心を本文の見た目中心へ合わせます。\n下補正強/弱: 標準より下へ寄せます。\n標準: 本文中心へ正規化して描画します。\n上補正弱/強: 標準より上へ寄せます。', 'en')
+        self.assertIn('Target: middle dots', middle_dot_help)
+        self.assertIn('U+30FB / U+FF65 / U+00B7', middle_dot_help)
+        self.assertNotIn('・', middle_dot_help)
+        self.assertNotIn('･', middle_dot_help)
+        self.assertNotIn('·', middle_dot_help)
         self.assertIn('Page Number:', logic.translate_ui_text('ページ番号: チェックすると各ページ右下に「現在ページ/総ページ」を表示します。\nサイズ: 1〜29 の数値を指定します。30以上はエラーです。\nページ番号ON時は、下余白を「サイズ+1」以上に自動確保します。', 'en'))
+        latin_orientation_help = logic.translate_ui_text('欧文表示: 縦組みは従来どおり半角英字を縦方向に組みます。\n横組みは短い半角英字・英文句を横書き run として扱い、縦書き本文内へ配置します。', 'en')
+        self.assertIn('Latin Text:', latin_orientation_help)
+        self.assertNotIn('欧文表示', latin_orientation_help)
+        self.assertNotIn('縦組み', latin_orientation_help)
 
     def test_translate_ui_text_covers_remaining_english_ui_labels(self):
         self.assertEqual(logic.translate_ui_text('参照...', 'en'), 'Browse...')
@@ -80,7 +91,8 @@ class GuiStudioLogicRegressionTests(unittest.TestCase):
             logic.translate_ui_text('プレビュー更新が必要です（更新対象 25 ページのため自動更新しません）', 'en'),
             'Preview refresh needed (auto-refresh skipped because the target is 25 pages)',
         )
-        self.assertIn('Right Pane:', logic.translate_ui_text('右ペイン: プレビュー生成後の見え方を確認します。\nXTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。', 'en'))
+        self.assertIn('Right Pane:', logic.translate_ui_text('右ペイン: プレビュー生成後の見え方を確認します。\n「XTCファイルを開く」では、既存のXTC/XTCHファイルを同じ右ペインでページ送りしながら確認できます。', 'en'))
+        self.assertEqual(logic.translate_ui_text('実寸', 'en'), 'Actual')
         self.assertIn('Actual Size:', logic.translate_ui_text('実寸近似: PC画面上の表示サイズを、選択中の機種の実物サイズに近づける表示モードです。\n端末に表示したときのおおよその大きさを確認したい場合に使います。\nONにすると右ペインの倍率欄は「実寸補正」に切り替わります。\n表示が実物より大きい/小さい場合は、この実寸補正を調整してください。\nOFFでは右ペイン倍率は通常の表示ズームとして働きます。', 'en'))
         self.assertIn('Guides:', logic.translate_ui_text('ガイド: 右ペインのプレビューに、余白や非描画域の目安線を重ねて表示します。\n本文が端に寄りすぎていないか、余白設定が意図通りかを確認するときに使います。\nONにすると補助線を表示し、OFFにすると実際の見た目に近い状態で確認できます。\n変換結果そのものを書き換える機能ではなく、確認用の表示補助です。', 'en'))
         self.assertEqual(

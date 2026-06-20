@@ -14,6 +14,50 @@ import os
 import tempfile
 import zipfile
 
+
+# Circular-import guard for direct split-module imports.
+# ``tategakiXTC_gui_core`` re-exports many names from this module; when this
+# module is imported first, core may ask for those names before the real
+# definitions below have executed.  Placeholders let core finish importing;
+# the real objects are published back to core at module end.
+_SPLIT_IMPORT_PLACEHOLDER = object()
+_CORE_REEXPORT_NAMES = (
+    '_cached_safe_zip_archive_image_listing',
+    '_safe_zip_archive_image_listing',
+    '_ARCHIVE_INVALID_COMPONENT_CHARS',
+    '_ARCHIVE_WINDOWS_RESERVED_NAMES',
+    '_sanitize_extracted_archive_member_component',
+    '_normalize_extracted_archive_member_key',
+    '_safe_zip_archive_image_infos',
+    '_unique_extracted_member_path',
+    '_extract_zip_archive_images_to_tempdir',
+    '_extract_archive_to_tempdir',
+    '_collect_archive_image_files',
+    '_list_zip_archive_image_members',
+    '_load_archive_input_document_compat',
+    'load_archive_input_document',
+    'process_archive'
+)
+_CORE_REEXPORT_ALIASES = (
+    ('_cached_safe_zip_archive_image_listing', '_cached_safe_zip_archive_image_listing'),
+    ('_safe_zip_archive_image_listing', '_safe_zip_archive_image_listing'),
+    ('_ARCHIVE_INVALID_COMPONENT_CHARS', '_ARCHIVE_INVALID_COMPONENT_CHARS'),
+    ('_ARCHIVE_WINDOWS_RESERVED_NAMES', '_ARCHIVE_WINDOWS_RESERVED_NAMES'),
+    ('_sanitize_extracted_archive_member_component', '_sanitize_extracted_archive_member_component'),
+    ('_normalize_extracted_archive_member_key', '_normalize_extracted_archive_member_key'),
+    ('_safe_zip_archive_image_infos', '_safe_zip_archive_image_infos'),
+    ('_unique_extracted_member_path', '_unique_extracted_member_path'),
+    ('_extract_zip_archive_images_to_tempdir', '_extract_zip_archive_images_to_tempdir'),
+    ('_extract_archive_to_tempdir', '_extract_archive_to_tempdir'),
+    ('_collect_archive_image_files', '_collect_archive_image_files'),
+    ('_list_zip_archive_image_members', '_list_zip_archive_image_members'),
+    ('_load_archive_input_document_compat', '_load_archive_input_document_compat'),
+    ('load_archive_input_document', 'load_archive_input_document'),
+    ('process_archive', '_archive_process_archive')
+)
+for _name in _CORE_REEXPORT_NAMES:
+    globals().setdefault(_name, _SPLIT_IMPORT_PLACEHOLDER)
+
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
 
@@ -86,6 +130,8 @@ _ARCHIVE_WINDOWS_RESERVED_NAMES = frozenset({
     'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
     'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
 })
+
+_PATOOLEXTRACT_STAGING_DIR_NAME = '_patool_extract_root'
 
 
 def _sanitize_extracted_archive_member_component(part: str, fallback: str = 'item') -> str:
@@ -199,6 +245,57 @@ def _extract_zip_archive_images_to_tempdir(archive_path: PathLike, tmpdir_path: 
             extracted_files.append(dest_path)
     return extracted_files, traversal_skipped
 
+
+def _resolved_path_is_within(path: PathLike, root: PathLike) -> bool:
+    """Return True when ``path`` resolves inside ``root``."""
+    _refresh_core_globals()
+    try:
+        Path(path).resolve(strict=False).relative_to(Path(root).resolve(strict=False))
+    except ValueError:
+        return False
+    return True
+
+
+def _archive_path_key(path: PathLike) -> str:
+    """Return a stable key for comparing extracted paths defensively."""
+    _refresh_core_globals()
+    try:
+        resolved = Path(path).resolve(strict=False)
+    except Exception:
+        resolved = Path(path)
+    return _normalize_extracted_archive_member_key(resolved) or str(resolved)
+
+
+def _snapshot_archive_tree(root: PathLike) -> set[str]:
+    """Capture the current tree under ``root`` before non-ZIP extraction."""
+    _refresh_core_globals()
+    base = Path(root)
+    if not base.exists():
+        return set()
+    return {_archive_path_key(path) for path in base.rglob('*')}
+
+
+def _detect_patool_staging_escape(tmpdir_path: PathLike, staging_dir: PathLike, before_keys: set[str]) -> list[Path]:
+    """Return new paths created under ``tmpdir_path`` but outside the staging dir.
+
+    patool delegates extraction to external tools for RAR/7z-like formats.  We
+    therefore extract into a dedicated child directory first, then reject any
+    newly-created path that escaped that child directory.  This catches common
+    ``../`` archive entries without changing the ZIP/CBZ direct path.
+    """
+    _refresh_core_globals()
+    base = Path(tmpdir_path)
+    if not base.exists():
+        return []
+    escaped: list[Path] = []
+    for path in base.rglob('*'):
+        key = _archive_path_key(path)
+        if key in before_keys:
+            continue
+        if not _resolved_path_is_within(path, staging_dir):
+            escaped.append(path)
+    return escaped
+
 def _extract_archive_to_tempdir(archive_path: PathLike, tmpdir_path: PathLike, *, should_cancel: CancelCallback | None = None) -> tuple[int, list[Path] | None]:
     """アーカイブを一時ディレクトリへ展開する。"""
     _refresh_core_globals()
@@ -207,9 +304,21 @@ def _extract_archive_to_tempdir(archive_path: PathLike, tmpdir_path: PathLike, *
         extracted_files, traversal_skipped = _extract_zip_archive_images_to_tempdir(archive_path, tmpdir_path, should_cancel=should_cancel)
         return traversal_skipped, extracted_files
     _raise_if_cancelled(should_cancel)
+    extraction_root = Path(tmpdir_path)
+    extraction_root.mkdir(parents=True, exist_ok=True)
+    staging_dir = extraction_root / _PATOOLEXTRACT_STAGING_DIR_NAME
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    before_keys = _snapshot_archive_tree(extraction_root)
     patoolib = _require_patoolib()
-    patoolib.extract_archive(str(archive_path), outdir=str(tmpdir_path), verbosity=-1)
+    patoolib.extract_archive(str(archive_path), outdir=str(staging_dir), verbosity=-1)
     _raise_if_cancelled(should_cancel)
+    escaped_paths = _detect_patool_staging_escape(extraction_root, staging_dir, before_keys)
+    if escaped_paths:
+        LOGGER.warning('非ZIPアーカイブ展開で staging 外の生成物を検出: %s', escaped_paths[0])
+        raise RuntimeError(
+            '安全のためアーカイブ展開を中止しました。'
+            '非ZIPアーカイブが展開先外へファイルを作成した可能性があります。'
+        )
     return 0, None
 
 
@@ -483,4 +592,18 @@ def process_archive(archive_path: str | Path, args: ConversionArgs, output_path:
             + '\n'.join(detail)
         )
     raise RuntimeError(f'対象: {archive_path.name}\n内容: 変換できる画像が見つかりませんでした。')
+
+def _publish_core_reexports() -> None:
+    """Replace circular-import placeholders in gui_core with real split symbols."""
+    for _source_name, _core_name in _CORE_REEXPORT_ALIASES:
+        _value = globals().get(_source_name, _SPLIT_IMPORT_PLACEHOLDER)
+        if _value is _SPLIT_IMPORT_PLACEHOLDER:
+            continue
+        try:
+            setattr(_core, _core_name, _value)
+        except Exception:
+            pass
+
+
+_publish_core_reexports()
 

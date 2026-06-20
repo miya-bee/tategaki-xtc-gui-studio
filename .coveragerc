@@ -35,11 +35,57 @@ source =
     tategakiXTC_gui_studio_runtime
     tategakiXTC_gui_studio_desktop
     tategakiXTC_gui_studio_ui_helpers
+    tategakiXTC_gui_studio_dependency_helpers
     tategakiXTC_gui_studio_dialog_helpers
+    tategakiXTC_gui_studio_clipboard_helpers
+    tategakiXTC_gui_studio_aozora_models
+    tategakiXTC_gui_studio_aozora_catalog
+    tategakiXTC_gui_studio_aozora_downloader
+    tategakiXTC_gui_studio_aozora_html
+    tategakiXTC_gui_studio_aozora_gaiji
+    tategakiXTC_gui_studio_aozora_dialog
+    tategakiXTC_gui_studio_aozora_helpers
+    tategakiXTC_gui_studio_sns_export_helpers
     tategakiXTC_gui_studio_preview_helpers
     tategakiXTC_gui_studio_path_helpers
     tategakiXTC_gui_studio_view_helpers
     tategakiXTC_gui_studio_settings_helpers
+    tategakiXTC_gui_studio_log_helpers
+    tategakiXTC_gui_studio_status_helpers
+    tategakiXTC_gui_studio_results_helpers
+    tategakiXTC_gui_studio_results_actions_helpers
+    tategakiXTC_gui_studio_preset_payload_helpers
+    tategakiXTC_gui_studio_preview_cache_helpers
+    tategakiXTC_gui_studio_xtc_load_helpers
+    tategakiXTC_gui_studio_viewer_profile_helpers
+    tategakiXTC_gui_studio_preview_zoom_helpers
+    tategakiXTC_gui_studio_navigation_helpers
+    tategakiXTC_gui_studio_settings_save_helpers
+    tategakiXTC_gui_studio_live_preview_helpers
+    tategakiXTC_gui_studio_overlay_margin_helpers
+    tategakiXTC_gui_studio_preview_button_helpers
+    tategakiXTC_gui_studio_preview_context_helpers
+    tategakiXTC_gui_studio_display_context_helpers
+    tategakiXTC_gui_studio_conversion_finish_helpers
+    tategakiXTC_gui_studio_conversion_runtime_helpers
+    tategakiXTC_gui_studio_settings_restore_helpers
+    tategakiXTC_gui_studio_startup_preview_helpers
+    tategakiXTC_gui_studio_preview_refresh_helpers
+    tategakiXTC_gui_studio_display_settings_menu_helpers
+    tategakiXTC_gui_studio_top_bar_helpers
+    tategakiXTC_gui_studio_preview_controls_helpers
+    tategakiXTC_gui_studio_settings_sections_helpers
+    tategakiXTC_gui_studio_font_combo_helpers
+    tategakiXTC_gui_studio_target_select_helpers
+    tategakiXTC_gui_studio_preview_pixmap_helpers
+    tategakiXTC_gui_studio_preview_layout_helpers
+    tategakiXTC_gui_studio_wheel_guard_helpers
+    tategakiXTC_gui_studio_right_pane_build_helpers
+    tategakiXTC_gui_studio_bottom_panel_helpers
+    tategakiXTC_gui_studio_navigation_action_helpers
+    tategakiXTC_gui_studio_preset_actions_helpers
+    tategakiXTC_gui_studio_preset_summary_layout_helpers
+    tategakiXTC_gui_studio_render_status_helpers
     tategakiXTC_gui_widget_factory
     tategakiXTC_worker_logic
     tategakiXTC_folder_batch_plan

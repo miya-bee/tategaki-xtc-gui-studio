@@ -107,6 +107,25 @@ class AozoraNoteParserRegressionTests(unittest.TestCase):
         self.assertEqual(len(runs), 2)
         self.assertTrue(runs[1]['bold'])
 
+    def test_parse_aozora_image_notes(self):
+        self.assertEqual(core._parse_aozora_note_only_line('［＃挿絵:0001］'), {
+            'kind': 'image',
+            'image_id': '0001',
+            'blank_before': 1,
+        })
+        inserted = core._parse_aozora_note_only_line('［＃挿絵（fig42388_01.png、横391×縦319）入る］')
+        self.assertEqual(inserted['kind'], 'image')
+        self.assertEqual(inserted['image_src'], 'fig42388_01.png')
+        upper = core._parse_aozora_note_only_line('［＃挿絵（FIG42388_02.PNG、横391×縦319）入る］')
+        self.assertEqual(upper['kind'], 'image')
+        self.assertEqual(upper['image_src'], 'FIG42388_02.PNG')
+
+    def test_blocks_from_plain_text_turns_image_marker_into_image_block(self):
+        blocks = core._blocks_from_plain_text('本文\n［＃挿絵:0002］\n続き')
+        image_blocks = [block for block in blocks if block.get('kind') == 'image']
+        self.assertEqual(len(image_blocks), 1)
+        self.assertEqual(image_blocks[0]['image_id'], '0002')
+
     def test_parse_aozora_note_only_line_prioritizes_specific_note_kinds(self):
         self.assertIsNone(core._parse_aozora_note_only_line('本文'))
         self.assertEqual(core._parse_aozora_note_only_line('［＃改ページ］'), {'kind': 'pagebreak'})
@@ -123,6 +142,33 @@ class AozoraNoteParserRegressionTests(unittest.TestCase):
         implicit = core._aozora_inline_to_runs('東京《とうきょう》へ行く')
         self.assertEqual([run['text'] for run in implicit], ['東京', 'へ行く'])
         self.assertEqual(implicit[0]['ruby'], 'とうきょう')
+
+    def test_aozora_implicit_ruby_accepts_trailing_gaiji_marker(self):
+        runs = core._aozora_inline_to_runs('尺※《せっけん》を見る')
+        self.assertEqual([run['text'] for run in runs], ['尺※', 'を見る'])
+        self.assertEqual(runs[0]['ruby'], 'せっけん')
+
+        annotated = core._aozora_inline_to_runs('尺※［＃「※」は外字注記］《せっけん》を見る')
+        self.assertEqual([run['text'] for run in annotated], ['尺※', 'を見る'])
+        self.assertEqual(annotated[0]['ruby'], 'せっけん')
+
+    def test_aozora_inline_to_runs_converts_jis_x0213_gaiji_notes(self):
+        runs = core._aozora_inline_to_runs('第3水準は※［＃「埒のつくり＋虎」、第3水準1-91-48］、第4水準は※［＃「てへん＋丑」、第4水準2-12-93］。')
+        text = ''.join(run['text'] for run in runs)
+        self.assertIn('第3水準は虢、第4水準は扭。', text)
+        self.assertNotIn('※', text)
+        self.assertNotIn('第3水準1-91-48', text)
+
+    def test_aozora_inline_to_runs_allows_converted_gaiji_as_implicit_ruby_base(self):
+        runs = core._aozora_inline_to_runs('※［＃「てへん＋丑」、第4水準2-12-93］《ねじ》る')
+        self.assertEqual([run['text'] for run in runs], ['扭', 'る'])
+        self.assertEqual(runs[0]['ruby'], 'ねじ')
+
+    def test_aozora_implicit_ruby_keeps_prefixed_gaiji_marker_behavior(self):
+        runs = core._aozora_inline_to_runs('※鏘《そうそう》と響く')
+        self.assertEqual([run['text'] for run in runs], ['※', '鏘', 'と響く'])
+        self.assertFalse(runs[0].get('ruby'))
+        self.assertEqual(runs[1]['ruby'], 'そうそう')
 
     def test_aozora_inline_to_runs_keeps_literal_text_when_ruby_is_not_usable(self):
         runs = core._aozora_inline_to_runs('｜《るび》と《未対応》')

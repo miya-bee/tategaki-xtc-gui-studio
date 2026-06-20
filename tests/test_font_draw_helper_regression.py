@@ -899,8 +899,22 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
                 two_token_hints = core._build_vertical_layout_hints(pair)
                 self.assertEqual(two_token_hints['would_start_forbidden_after_hang_pair'], (False, False))
         self.assertTrue(core._would_orphan_short_tail_after_break(['す', 'か', '？', '」', '、', '「'], 0))
+        self.assertTrue(core._would_orphan_short_tail_after_break(['す', 'だ', '。', '」'], 0))
         self.assertFalse(core._would_orphan_short_tail_after_break(['終', 'わ', 'り', 'で', 'す', '」'], 3))
         self.assertFalse(core._would_orphan_short_tail_after_break(['な', 'い', 'か', 'を'], 0))
+        self.assertFalse(core._would_orphan_short_tail_after_break(['点', 'に', 'お', 'い', 'て', '、'], 3))
+        self.assertFalse(core._would_orphan_short_tail_after_break(['点', 'に', 'お', 'い', 'る', '。'], 3))
+
+    def test_short_tail_guard_does_not_advance_for_plain_hanging_punctuation(self):
+        tokens = ['点', 'に', 'お', 'い', 'て', '、']
+        self.assertEqual(
+            core._choose_vertical_layout_action(tokens, 3, 9, 0, 10, 0, 1, kinsoku_mode='standard'),
+            'draw',
+        )
+        self.assertEqual(
+            core._choose_vertical_layout_action(['点', 'に', 'お', 'い', 'る', '。'], 3, 9, 0, 10, 0, 1, kinsoku_mode='standard'),
+            'draw',
+        )
 
     def test_choose_vertical_layout_action_covers_done_off_pair_and_recursive_advance(self):
         self.assertEqual(
@@ -913,7 +927,7 @@ class FontAndDrawHelperRegressionTests(unittest.TestCase):
         )
         self.assertEqual(
             core._choose_vertical_layout_action(['!', '?'], 0, 45, 10, 100, 10, 20, kinsoku_mode='standard'),
-            'advance',
+            'draw',
         )
         self.assertEqual(
             core._choose_vertical_layout_action(['A', '、', '」'], 0, 45, 10, 100, 10, 20, kinsoku_mode='standard'),

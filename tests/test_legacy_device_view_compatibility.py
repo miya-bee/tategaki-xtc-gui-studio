@@ -29,8 +29,8 @@ class LegacyDeviceViewCompatibilityTests(unittest.TestCase):
 
     def test_release_docs_record_device_mode_compatibility_boundary(self) -> None:
         readme = Path('README.md').read_text(encoding='utf-8')
-        notes = Path('RELEASE_NOTES_v1_4_0.md').read_text(encoding='utf-8')
-        checklist = Path('PUBLISH_CHECKLIST_v1_4_0.md').read_text(encoding='utf-8')
+        notes = Path('docs/release_notes/RELEASE_NOTES_v1_4_0.md').read_text(encoding='utf-8')
+        checklist = Path('docs/publish_checklists/PUBLISH_CHECKLIST_v1_4_0.md').read_text(encoding='utf-8')
 
         self.assertIn('旧 `device` view-mode 値は互換入力として受け入れ', readme)
         self.assertIn('旧 device-view UI は復活させません', readme)

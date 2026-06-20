@@ -33,7 +33,7 @@ USAGE_HELP_TEXT_EN = """\
 - Selecting a device sets the resolution automatically. Use Custom for manual width/height.
 
 [File Viewer]
-- Use "Open XTC/XTCH" to load an existing .xtc / .xtch file into the right pane.
+- Use "Open XTC File" to load an existing .xtc / .xtch file into the right pane.
 
 [Presets]
 - Choose a preset from the combo box and press "Load Preset".
@@ -65,7 +65,7 @@ USAGE_HELP_TEXT_JA = """\
 7. 変換後は右ペインで XTC / XTCH を確認できます。
 
 【プレビュー】
-・右ペイン: 設定中の文字の見え方を確認します。XTC/XTCHを開くと、同じ場所でページ送りしながら確認できます。
+・右ペイン: 設定中の文字の見え方を確認します。XTCファイルを開くと、同じ場所でページ送りしながら確認できます。
 ・ページ送りは右ペインの「前/次」ボタン、またはページ番号入力で行います。
 ・歯車メニューの「ページ送りキー反転」を ON にすると、前/次 ボタンの左右配置と動作感を入れ替えられます。
 
@@ -80,7 +80,7 @@ USAGE_HELP_TEXT_JA = """\
 ・機種を選ぶと解像度が自動設定されます（Custom では手動指定）。
 
 【ファイルビューワー】
-・「XTC/XTCHを開く」から既存の .xtc / .xtch ファイルを右ペインへ読み込めます。
+・「XTCファイルを開く」から既存の .xtc / .xtch ファイルを右ペインへ読み込めます。
 
 【プリセット】
 ・コンボボックスで選択し「プリセット読込」で呼び出します。

@@ -23,3 +23,7 @@
 - `tategaki_halfwidth_fullwidth_alpha_compare_test_text_v1.txt`
   - 半角英字と全角英字の見え方を比較するためのテスト文です。
   - 「半角英字」位置補正が半角 A-Z / a-z だけに効き、全角 Ａ-Ｚ / ａ-ｚ には影響しないことを確認できます。
+
+- `tategaki_middle_dot_position_test_text_v1.txt`
+  - 中黒「・」/ 半角中黒「･」/ 欧文中点「·」の上下位置補正確認用。
+  - 語中・連続・句読点混在・XTC/XTCH などの並びで見え方を比較できます。

@@ -368,6 +368,17 @@ def light_stylesheet() -> str:
         font-size: 15px;
     }
     QPushButton#viewToggleBtn:hover { background: #EEF4FB; color: #37597C; }
+    QPushButton#previewToolbarButton {
+        background: #FFFFFF;
+        border: 1px solid #C8D6E5;
+        border-radius: 8px;
+        padding: 5px 10px;
+        color: #335A82;
+        font-size: 14px;
+    }
+    QPushButton#previewToolbarButton:hover { background: #EEF5FC; color: #23435F; }
+    QPushButton#previewToolbarButton:pressed { background: #DCEBFA; }
+
     QPushButton#viewToggleBtn:checked {
         background: #E8F1FD;
         border: 1px solid #C3D7EE;
@@ -861,6 +872,17 @@ def dark_stylesheet() -> str:
         font-size: 15px;
     }
     QPushButton#viewToggleBtn:hover { background: #14283A; color: #A8C8E0; }
+    QPushButton#previewToolbarButton {
+        background: #182C3E;
+        border: 1px solid #29455D;
+        border-radius: 8px;
+        padding: 5px 10px;
+        color: #A8C8E0;
+        font-size: 14px;
+    }
+    QPushButton#previewToolbarButton:hover { background: #1E3850; color: #E0F2FF; }
+    QPushButton#previewToolbarButton:pressed { background: #24425E; }
+
     QPushButton#viewToggleBtn:checked {
         background: #1A3550;
         border: 1px solid #2A5070;

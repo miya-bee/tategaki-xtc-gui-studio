@@ -15,6 +15,82 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Literal, Sequence
 
+
+# Circular-import guard for direct split-module imports.
+# ``tategakiXTC_gui_core`` re-exports many names from this module; when this
+# module is imported first, core may ask for those names before the real
+# definitions below have executed.  Placeholders let core finish importing;
+# the real objects are published back to core at module end.
+_SPLIT_IMPORT_PLACEHOLDER = object()
+_CORE_REEXPORT_NAMES = (
+    'XTCSpooledPages',
+    '_apply_xtc_filter_prepared',
+    '_apply_xtch_filter_prepared',
+    '_atomic_replace_xt_container',
+    '_clamp_u8',
+    '_compute_xtch_thresholds',
+    '_copy_fileobj_with_cancel',
+    '_dither_xtch_grayscale',
+    '_invert_grayscale_image',
+    '_invert_u8_lut',
+    '_looks_like_expected_xt_page_blob',
+    '_prepare_canvas_image',
+    '_prepared_canvas_to_xtg_bytes',
+    '_prepared_canvas_to_xth_bytes',
+    '_quantize_xtch_value',
+    '_verify_xt_container_file',
+    '_verify_xt_page_blob_header',
+    '_xtc_threshold_lut',
+    '_xtch_plane_value_lut',
+    '_xtch_quantization_lut',
+    'apply_bottom_overlays_to_canvas',
+    'apply_page_number_overlay_to_canvas',
+    'apply_progress_bar_overlay_to_canvas',
+    'apply_xtc_filter',
+    'apply_xtch_filter',
+    'build_xtc',
+    'canvas_image_to_xt_bytes',
+    'ensure_valid_xt_page_blob',
+    'page_image_to_xt_bytes',
+    'png_to_xtg_bytes',
+    'png_to_xth_bytes'
+)
+_CORE_REEXPORT_ALIASES = (
+    ('XTCSpooledPages', 'XTCSpooledPages'),
+    ('_apply_xtc_filter_prepared', '_apply_xtc_filter_prepared'),
+    ('_apply_xtch_filter_prepared', '_apply_xtch_filter_prepared'),
+    ('_atomic_replace_xt_container', '_atomic_replace_xt_container'),
+    ('_clamp_u8', '_clamp_u8'),
+    ('_compute_xtch_thresholds', '_compute_xtch_thresholds'),
+    ('_copy_fileobj_with_cancel', '_copy_fileobj_with_cancel'),
+    ('_dither_xtch_grayscale', '_dither_xtch_grayscale'),
+    ('_invert_grayscale_image', '_invert_grayscale_image'),
+    ('_invert_u8_lut', '_invert_u8_lut'),
+    ('_looks_like_expected_xt_page_blob', '_looks_like_expected_xt_page_blob'),
+    ('_prepare_canvas_image', '_prepare_canvas_image'),
+    ('_prepared_canvas_to_xtg_bytes', '_prepared_canvas_to_xtg_bytes'),
+    ('_prepared_canvas_to_xth_bytes', '_prepared_canvas_to_xth_bytes'),
+    ('_quantize_xtch_value', '_quantize_xtch_value'),
+    ('_verify_xt_container_file', '_verify_xt_container_file'),
+    ('_verify_xt_page_blob_header', '_verify_xt_page_blob_header'),
+    ('_xtc_threshold_lut', '_xtc_threshold_lut'),
+    ('_xtch_plane_value_lut', '_xtch_plane_value_lut'),
+    ('_xtch_quantization_lut', '_xtch_quantization_lut'),
+    ('apply_bottom_overlays_to_canvas', 'apply_bottom_overlays_to_canvas'),
+    ('apply_page_number_overlay_to_canvas', 'apply_page_number_overlay_to_canvas'),
+    ('apply_progress_bar_overlay_to_canvas', 'apply_progress_bar_overlay_to_canvas'),
+    ('apply_xtc_filter', 'apply_xtc_filter'),
+    ('apply_xtch_filter', 'apply_xtch_filter'),
+    ('build_xtc', 'build_xtc'),
+    ('canvas_image_to_xt_bytes', 'canvas_image_to_xt_bytes'),
+    ('ensure_valid_xt_page_blob', 'ensure_valid_xt_page_blob'),
+    ('page_image_to_xt_bytes', 'page_image_to_xt_bytes'),
+    ('png_to_xtg_bytes', 'png_to_xtg_bytes'),
+    ('png_to_xth_bytes', 'png_to_xth_bytes')
+)
+for _name in _CORE_REEXPORT_NAMES:
+    globals().setdefault(_name, _SPLIT_IMPORT_PLACEHOLDER)
+
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
 
@@ -840,3 +916,18 @@ class XTCSpooledPages:
 # ==========================================
 # --- アーカイブ / EPUB 変換 ---
 # ==========================================
+
+def _publish_core_reexports() -> None:
+    """Replace circular-import placeholders in gui_core with real split symbols."""
+    for _source_name, _core_name in _CORE_REEXPORT_ALIASES:
+        _value = globals().get(_source_name, _SPLIT_IMPORT_PLACEHOLDER)
+        if _value is _SPLIT_IMPORT_PLACEHOLDER:
+            continue
+        try:
+            setattr(_core, _core_name, _value)
+        except Exception:
+            pass
+
+
+_publish_core_reexports()
+

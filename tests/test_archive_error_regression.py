@@ -32,7 +32,7 @@ class ArchiveErrorMessageTests(unittest.TestCase):
     def setUp(self):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.tmpdir = Path(self._tmpdir.name)
-        self.args = core.ConversionArgs(width=8, height=8, output_format="xtc")
+        self.args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format="xtc")
 
     def tearDown(self):
         self._tmpdir.cleanup()

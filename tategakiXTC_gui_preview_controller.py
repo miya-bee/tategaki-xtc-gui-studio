@@ -218,6 +218,12 @@ def build_preview_payload(
         'ichi_position_mode': render_settings_base.get('ichi_position_mode', 'standard'),
         'halfwidth_digit_position_mode': render_settings_base.get('halfwidth_digit_position_mode', 'standard'),
         'halfwidth_alpha_position_mode': render_settings_base.get('halfwidth_alpha_position_mode', 'standard'),
+        'latin_orientation_mode': render_settings_base.get('latin_orientation_mode', 'vertical'),
+        'opening_bracket_indent_mode': studio_logic.normalize_opening_bracket_indent_mode(
+            render_settings_base.get('opening_bracket_indent_mode', 'none'),
+            'none',
+        ),
+        'middle_dot_position_mode': render_settings_base.get('middle_dot_position_mode', 'standard'),
         'tatechuyoko_symbol_position_mode': render_settings_base.get('tatechuyoko_symbol_position_mode', 'standard'),
         'lower_closing_bracket_position_mode': render_settings_base.get('lower_closing_bracket_position_mode', 'standard'),
         'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(

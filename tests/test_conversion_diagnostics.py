@@ -14,7 +14,7 @@ import tategakiXTC_gui_core as core
 
 class ConversionDiagnosticTests(unittest.TestCase):
     def setUp(self):
-        self.args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+        self.args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
 
     def test_build_conversion_error_report_for_epub_load(self):
         report = core.build_conversion_error_report('broken.epub', ValueError('bad spine entry'), stage='EPUB読込')
@@ -40,6 +40,13 @@ class ConversionDiagnosticTests(unittest.TestCase):
                 'mode': 'image',
                 'width': '16',
                 'height': '16',
+                'font_size': 6,
+                'ruby_size': 4,
+                'line_spacing': 6,
+                'margin_t': 0,
+                'margin_b': 0,
+                'margin_r': 0,
+                'margin_l': 0,
                 'file_b64': 'not-a-data-uri',
             })
         self.assertIn('画像プレビュー用データURIが不正です', str(ctx.exception))
@@ -49,6 +56,13 @@ class ConversionDiagnosticTests(unittest.TestCase):
             'mode': 'image',
             'width': 16,
             'height': 16,
+            'font_size': 6,
+            'ruby_size': 4,
+            'line_spacing': 6,
+            'margin_t': 0,
+            'margin_b': 0,
+            'margin_r': 0,
+            'margin_l': 0,
             'dither': True,
             'night_mode': '1',
             'output_format': 'xtc',
@@ -57,6 +71,13 @@ class ConversionDiagnosticTests(unittest.TestCase):
             'mode': 'image',
             'width': 16,
             'height': 16,
+            'font_size': 6,
+            'ruby_size': 4,
+            'line_spacing': 6,
+            'margin_t': 0,
+            'margin_b': 0,
+            'margin_r': 0,
+            'margin_l': 0,
             'dither': 0,
             'night_mode': False,
             'output_format': 'xtc',

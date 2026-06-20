@@ -110,6 +110,8 @@ class _QPoint(_QtDummy):
 class _QtNamespace:
     AlignBottom = 1
     AlignCenter = 2
+    AlignLeft = 3
+    AlignRight = 5
     AlignHCenter = 4
     AlignTop = 8
     DashLine = 16
@@ -119,6 +121,7 @@ class _QtNamespace:
     Key_Right = 66
     NoFocus = 128
     OtherFocusReason = 256
+    PlainText = 384
     ScrollBarAlwaysOff = 512
     ShortcutFocusReason = 1024
     SmoothTransformation = 2048
@@ -283,10 +286,13 @@ def _install_pyside6_stubs(force_reset: bool = False, prefer_test_stubs: bool = 
 
 _TATEGAKI_QT_BOUND_MODULE_NAMES = (
     'tategakiXTC_gui_studio',
+    'tategakiXTC_gui_widget_factory',
     'tategakiXTC_gui_studio_ui_helpers',
     'tategakiXTC_gui_studio_widgets',
     'tategakiXTC_gui_studio_worker',
     'tategakiXTC_gui_studio_xtc_io',
+    'tategakiXTC_gui_studio_sns_export_helpers',
+    'tategakiXTC_gui_studio_settings_sections_helpers',
     'tategakiXTC_folder_batch_dialog',
 )
 

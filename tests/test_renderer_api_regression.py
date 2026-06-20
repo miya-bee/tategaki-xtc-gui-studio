@@ -62,6 +62,93 @@ class RendererApiRegressionTests(TestCase):
         self.assertEqual(build_hints.call_count, 1)
         self.assertGreater(choose_with_hints.call_count, 0)
 
+    def test_render_text_blocks_preserves_leading_blank_before_first_content(self):
+        args = core.ConversionArgs(width=160, height=220, font_size=20, ruby_size=10, line_spacing=28, output_format='xtc')
+        blocks_without_blank = core._blocks_from_plain_text('本文')
+        blocks_with_blank = core._blocks_from_plain_text('\n本文')
+        blocks_with_two_blanks = core._blocks_from_plain_text('\n\n本文')
+        blocks_with_three_blanks = core._blocks_from_plain_text('\n\n\n本文')
+        self.assertEqual(blocks_with_blank[0].get('kind'), 'blank')
+
+        def draw_starts(blocks):
+            starts = []
+            original_renderer = core._VerticalPageRenderer
+
+            class TrackingRenderer(original_renderer):
+                def draw_runs(self, runs, *draw_args, **draw_kwargs):
+                    if runs:
+                        starts.append((self.curr_x, self.curr_y))
+                    return super().draw_runs(runs, *draw_args, **draw_kwargs)
+
+            with patch.object(core, '_VerticalPageRenderer', TrackingRenderer):
+                core._render_text_blocks_to_page_entries(blocks, FONT_PATH, args)
+            return starts
+
+        baseline_starts = draw_starts(blocks_without_blank)
+        leading_blank_starts = draw_starts(blocks_with_blank)
+        leading_two_blank_starts = draw_starts(blocks_with_two_blanks)
+        leading_three_blank_starts = draw_starts(blocks_with_three_blanks)
+        in_document_blank_starts = draw_starts(core._blocks_from_plain_text('あ\n\nい'))
+        in_document_two_blank_starts = draw_starts(core._blocks_from_plain_text('あ\n\n\nい'))
+
+        self.assertEqual(len(baseline_starts), 1)
+        self.assertEqual(len(leading_blank_starts), 1)
+        self.assertEqual(len(leading_two_blank_starts), 1)
+        self.assertEqual(len(leading_three_blank_starts), 1)
+        self.assertGreaterEqual(len(in_document_blank_starts), 2)
+        self.assertGreaterEqual(len(in_document_two_blank_starts), 2)
+
+        baseline_x, baseline_y = baseline_starts[0]
+        leading_blank_x, leading_blank_y = leading_blank_starts[0]
+        leading_two_blank_x, leading_two_blank_y = leading_two_blank_starts[0]
+        leading_three_blank_x, leading_three_blank_y = leading_three_blank_starts[0]
+        in_document_blank_delta = in_document_blank_starts[0][0] - in_document_blank_starts[1][0]
+        in_document_two_blank_delta = in_document_two_blank_starts[0][0] - in_document_two_blank_starts[1][0]
+
+        self.assertEqual(leading_blank_x, baseline_x - args.line_spacing)
+        self.assertEqual(leading_two_blank_x, baseline_x - args.line_spacing * 2)
+        self.assertEqual(leading_three_blank_x, baseline_x - args.line_spacing * 3)
+        self.assertEqual(leading_blank_y, baseline_y)
+        self.assertEqual(leading_two_blank_y, baseline_y)
+        self.assertEqual(leading_three_blank_y, baseline_y)
+        self.assertEqual(in_document_blank_delta, args.line_spacing * 2)
+        self.assertEqual(in_document_two_blank_delta, args.line_spacing * 3)
+
+
+    def test_blank_lines_after_aozora_pagebreak_are_preserved_on_fresh_page(self):
+        args = core.ConversionArgs(width=160, height=220, font_size=20, ruby_size=10, line_spacing=28, output_format='xtc')
+        blocks_without_blank = core._blocks_from_plain_text('一\n［＃改ページ］\n二')
+        blocks_with_blank = core._blocks_from_plain_text('一\n［＃改ページ］\n\n二')
+        blocks_with_two_blanks = core._blocks_from_plain_text('一\n［＃改ページ］\n\n\n二')
+
+        def draw_starts(blocks):
+            starts = []
+            original_renderer = core._VerticalPageRenderer
+
+            class TrackingRenderer(original_renderer):
+                def draw_runs(self, runs, *draw_args, **draw_kwargs):
+                    if runs:
+                        starts.append((self.curr_x, self.curr_y, len(self.page_entries)))
+                    return super().draw_runs(runs, *draw_args, **draw_kwargs)
+
+            with patch.object(core, '_VerticalPageRenderer', TrackingRenderer):
+                core._render_text_blocks_to_page_entries(blocks, FONT_PATH, args)
+            return starts
+
+        baseline_starts = draw_starts(blocks_without_blank)
+        one_blank_starts = draw_starts(blocks_with_blank)
+        two_blank_starts = draw_starts(blocks_with_two_blanks)
+
+        self.assertEqual(len(baseline_starts), 2)
+        self.assertEqual(len(one_blank_starts), 2)
+        self.assertEqual(len(two_blank_starts), 2)
+        baseline_x = baseline_starts[1][0]
+        self.assertEqual(one_blank_starts[1][0], baseline_x - args.line_spacing)
+        self.assertEqual(two_blank_starts[1][0], baseline_x - args.line_spacing * 2)
+        self.assertEqual(one_blank_starts[1][1], baseline_starts[1][1])
+        self.assertEqual(two_blank_starts[1][1], baseline_starts[1][1])
+
+
     def test_epub_code_block_uses_code_font(self):
         args = core.ConversionArgs(width=320, height=480, font_size=24, ruby_size=12, line_spacing=40, output_format='xtc')
         font = core.load_truetype_font(FONT_PATH, args.font_size)
@@ -566,8 +653,12 @@ class RendererApiRegressionTests(TestCase):
 
 
     def test_build_vertical_layout_hints_single_token_uses_direct_fast_path(self):
+        core._build_vertical_layout_hints_cached.cache_clear()
+        core._build_single_token_vertical_layout_hints.cache_clear()
         with patch.object(core, '_is_line_head_forbidden', wraps=core._is_line_head_forbidden) as line_head,              patch.object(core, '_is_line_end_forbidden', wraps=core._is_line_end_forbidden) as line_end,              patch.object(core, '_is_hanging_punctuation', wraps=core._is_hanging_punctuation) as hanging,              patch.object(core, '_is_continuous_punctuation_pair', wraps=core._is_continuous_punctuation_pair) as pair_check:
             hints = core._build_vertical_layout_hints_cached(('。',))
+        core._build_vertical_layout_hints_cached.cache_clear()
+        core._build_single_token_vertical_layout_hints.cache_clear()
 
         self.assertEqual(line_head.call_count, 1)
         self.assertEqual(line_end.call_count, 1)

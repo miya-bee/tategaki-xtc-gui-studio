@@ -57,9 +57,9 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
 
 
     def test_release_notes_file_matches_public_version(self):
-        self.assertTrue(Path('RELEASE_NOTES_v1_3_2.md').exists())
-        self.assertFalse(Path('RELEASE_NOTES_v1_1_69.md').exists())
-        notes = Path('RELEASE_NOTES_v1_3_2.md').read_text(encoding='utf-8')
+        self.assertTrue(Path('docs/release_notes/RELEASE_NOTES_v1_3_2.md').exists())
+        self.assertFalse(Path('docs/release_notes/RELEASE_NOTES_v1_1_69.md').exists())
+        notes = Path('docs/release_notes/RELEASE_NOTES_v1_3_2.md').read_text(encoding='utf-8')
         self.assertIn('v1.3.2', notes)
         self.assertIn('フォルダ一括変換', notes)
         self.assertNotIn('1.1.69', notes)
@@ -119,7 +119,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
     def test_public_docs_do_not_expose_internal_work_numbers(self):
         readme = Path('README.md').read_text(encoding='utf-8')
         changelog = Path('CHANGELOG.md').read_text(encoding='utf-8')
-        notes = Path('RELEASE_NOTES_v1_2_2.md').read_text(encoding='utf-8')
+        notes = Path('docs/release_notes/RELEASE_NOTES_v1_2_2.md').read_text(encoding='utf-8')
         for content in (readme, changelog, notes):
             self.assertNotIn('bugfix171', content)
             self.assertNotIn('1.1.69', content)
@@ -355,7 +355,8 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         self.assertIn("return root / 'dist' / RELEASE_ZIP_FILE_NAME", content)
         self.assertIn('default_output = default_release_output_path(root)', content)
         self.assertIn("help=f'出力 zip パス。未指定時は dist/{RELEASE_ZIP_FILE_NAME}'", content)
-        self.assertIn("RELEASE_ZIP_FILE_NAME = f'tategaki-xtc-gui-studio_v{PUBLIC_VERSION}-release.zip'", metadata)
+        self.assertIn("RELEASE_ZIP_FILE_NAME = f'tategaki-xtc-gui-studio_v{PUBLIC_VERSION}-{PUBLIC_DISTRIBUTION_FLAVOR}.zip'", metadata)
+        self.assertIn("SOURCE_ONLY_ZIP_FILE_NAME = f'tategaki-xtc-gui-studio_v{PUBLIC_VERSION}-{PUBLIC_DISTRIBUTION_FLAVOR}-source-only.zip'", metadata)
 
 
     def test_release_docs_and_batches_are_registered_for_public_payload(self):
@@ -371,7 +372,7 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
             self.assertIn(expected, builder)
         self.assertIn('install_requirements.bat', readme)
         self.assertIn(RELEASE_ZIP_FILE_NAME, readme)
-        self.assertIn('RELEASE_NOTES_v1_2_2.md', readme)
+        self.assertIn('docs/release_notes/RELEASE_NOTES_v1_2_2.md', readme)
 
 
     def test_run_tests_verifies_created_release_zip_with_explicit_path(self):
@@ -410,6 +411,13 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
         builder = Path('build_release_zip.py').read_text(encoding='utf-8')
         self.assertIn("'.rootcopy'", builder)
         self.assertIn("'work_clean*_md.md'", builder)
+
+    def test_release_rules_exclude_internal_refactoring_plan_memos(self):
+        import build_release_zip as builder
+
+        self.assertIn("'REFACTORING_PLAN*.md'", Path('build_release_zip.py').read_text(encoding='utf-8'))
+        self.assertFalse(builder.archive_member_should_be_included('REFACTORING_PLAN.md'))
+        self.assertFalse(builder.source_archive_member_should_be_included('REFACTORING_PLAN.md'))
 
     def test_gitignore_and_release_rules_exclude_local_archives(self):
         gitignore = Path('.gitignore').read_text(encoding='utf-8')
@@ -582,10 +590,10 @@ class ReleaseHygieneRegressionTests(unittest.TestCase):
     def test_default_render_settings_are_shared_by_settings_helpers(self):
         constants = Path('tategakiXTC_gui_studio_constants.py').read_text(encoding='utf-8')
         controller = Path('tategakiXTC_gui_settings_controller.py').read_text(encoding='utf-8')
-        studio = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        settings_save_helpers = Path('tategakiXTC_gui_studio_settings_save_helpers.py').read_text(encoding='utf-8')
         self.assertIn('DEFAULT_RENDER_SETTINGS', constants)
         self.assertIn('_DEFAULT_RENDER_SETTINGS = studio_constants.DEFAULT_RENDER_SETTINGS', controller)
-        self.assertIn('defaults = DEFAULT_RENDER_SETTINGS', studio)
+        self.assertIn('defaults = DEFAULT_RENDER_SETTINGS', settings_save_helpers)
 
     def test_help_text_does_not_expose_internal_sweep_numbers(self):
         studio = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')

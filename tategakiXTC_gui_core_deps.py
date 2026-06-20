@@ -12,6 +12,36 @@ from typing import Any, Iterable, cast
 import importlib
 import os
 
+
+# Circular-import guard for direct split-module imports.
+# ``tategakiXTC_gui_core`` re-exports many names from this module; when this
+# module is imported first, core may ask for those names before the real
+# definitions below have executed.  Placeholders let core finish importing;
+# the real objects are published back to core at module end.
+_SPLIT_IMPORT_PLACEHOLDER = object()
+_CORE_REEXPORT_NAMES = (
+    'OPTIONAL_DEPENDENCIES',
+    '_compact_error_text',
+    'build_conversion_error_report',
+    '_require_patoolib',
+    '_iter_with_optional_tqdm',
+    '_is_module_available',
+    'list_optional_dependency_status',
+    'get_missing_dependencies_for_suffixes'
+)
+_CORE_REEXPORT_ALIASES = (
+    ('OPTIONAL_DEPENDENCIES', 'OPTIONAL_DEPENDENCIES'),
+    ('_compact_error_text', '_compact_error_text'),
+    ('build_conversion_error_report', 'build_conversion_error_report'),
+    ('_require_patoolib', '_require_patoolib'),
+    ('_iter_with_optional_tqdm', '_deps_iter_with_optional_tqdm'),
+    ('_is_module_available', '_deps_is_module_available'),
+    ('list_optional_dependency_status', 'list_optional_dependency_status'),
+    ('get_missing_dependencies_for_suffixes', 'get_missing_dependencies_for_suffixes')
+)
+for _name in _CORE_REEXPORT_NAMES:
+    globals().setdefault(_name, _SPLIT_IMPORT_PLACEHOLDER)
+
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
 
@@ -294,3 +324,18 @@ def get_missing_dependencies_for_suffixes(suffixes: Iterable[str]) -> list[Missi
                 'purpose': info['purpose'],
             })
     return missing
+
+def _publish_core_reexports() -> None:
+    """Replace circular-import placeholders in gui_core with real split symbols."""
+    for _source_name, _core_name in _CORE_REEXPORT_ALIASES:
+        _value = globals().get(_source_name, _SPLIT_IMPORT_PLACEHOLDER)
+        if _value is _SPLIT_IMPORT_PLACEHOLDER:
+            continue
+        try:
+            setattr(_core, _core_name, _value)
+        except Exception:
+            pass
+
+
+_publish_core_reexports()
+

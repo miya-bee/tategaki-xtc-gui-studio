@@ -5,12 +5,14 @@ import ast
 import os
 import re
 import stat
+import subprocess
+import sys
 import unicodedata
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Callable, Iterable, Iterator
 
-from tategakiXTC_release_metadata import APP_VERSION, PUBLIC_VERSION_TAG, RELEASE_NOTES_FILE, RELEASE_ZIP_FILE_NAME
+from tategakiXTC_release_metadata import APP_VERSION, PUBLIC_VERSION_TAG, RELEASE_NOTES_FILE, RELEASE_ZIP_FILE_NAME, SOURCE_ONLY_ZIP_FILE_NAME
 
 DEFAULT_EXCLUDED_DIR_NAMES = {
     '__pycache__',
@@ -90,6 +92,7 @@ DEFAULT_EXCLUDED_SUFFIXES = {
 DEFAULT_EXCLUDED_GLOBS = (
     'regression_audit_bugfix*.md',
     'work_instructions_from_changelog_*.md',
+    'REFACTORING_PLAN*.md',
     'code_split_preparation_roadmap_bugfix*.md',
     'split_refactor_progress_bugfix*.md',
     'CONTINUATION_PROGRESS*.md',
@@ -130,7 +133,7 @@ REQUIRED_PUBLIC_DOC_FILES = (
     'WINDOWS_SETUP.md',
     'FAQ.md',
     'KNOWN_LIMITATIONS.md',
-    f'PUBLISH_CHECKLIST_v{PUBLIC_VERSION_TAG.replace(".", "_")}.md',
+    f'docs/publish_checklists/PUBLISH_CHECKLIST_v{PUBLIC_VERSION_TAG.replace(".", "_")}.md',
     RELEASE_NOTES_FILE,
 )
 REQUIRED_PROJECT_APP_MODULE_FILES = (
@@ -166,11 +169,50 @@ REQUIRED_PROJECT_APP_MODULE_FILES = (
     'tategakiXTC_gui_studio_runtime.py',
     'tategakiXTC_gui_studio_desktop.py',
     'tategakiXTC_gui_studio_ui_helpers.py',
+    'tategakiXTC_gui_studio_dependency_helpers.py',
     'tategakiXTC_gui_studio_dialog_helpers.py',
+    'tategakiXTC_gui_studio_aozora_gaiji.py',
+    'tategakiXTC_gui_studio_sns_export_helpers.py',
     'tategakiXTC_gui_studio_preview_helpers.py',
     'tategakiXTC_gui_studio_path_helpers.py',
     'tategakiXTC_gui_studio_view_helpers.py',
     'tategakiXTC_gui_studio_settings_helpers.py',
+    'tategakiXTC_gui_studio_log_helpers.py',
+    'tategakiXTC_gui_studio_status_helpers.py',
+    'tategakiXTC_gui_studio_results_helpers.py',
+    'tategakiXTC_gui_studio_results_actions_helpers.py',
+    'tategakiXTC_gui_studio_preset_payload_helpers.py',
+    'tategakiXTC_gui_studio_preview_cache_helpers.py',
+    'tategakiXTC_gui_studio_xtc_load_helpers.py',
+    'tategakiXTC_gui_studio_viewer_profile_helpers.py',
+    'tategakiXTC_gui_studio_preview_zoom_helpers.py',
+    'tategakiXTC_gui_studio_navigation_helpers.py',
+    'tategakiXTC_gui_studio_settings_save_helpers.py',
+    'tategakiXTC_gui_studio_live_preview_helpers.py',
+    'tategakiXTC_gui_studio_overlay_margin_helpers.py',
+    'tategakiXTC_gui_studio_preview_button_helpers.py',
+    'tategakiXTC_gui_studio_preview_context_helpers.py',
+    'tategakiXTC_gui_studio_display_context_helpers.py',
+    'tategakiXTC_gui_studio_conversion_finish_helpers.py',
+    'tategakiXTC_gui_studio_conversion_runtime_helpers.py',
+    'tategakiXTC_gui_studio_settings_restore_helpers.py',
+    'tategakiXTC_gui_studio_startup_preview_helpers.py',
+    'tategakiXTC_gui_studio_preview_refresh_helpers.py',
+    'tategakiXTC_gui_studio_display_settings_menu_helpers.py',
+    'tategakiXTC_gui_studio_top_bar_helpers.py',
+    'tategakiXTC_gui_studio_preview_controls_helpers.py',
+    'tategakiXTC_gui_studio_settings_sections_helpers.py',
+    'tategakiXTC_gui_studio_font_combo_helpers.py',
+    'tategakiXTC_gui_studio_target_select_helpers.py',
+    'tategakiXTC_gui_studio_preview_pixmap_helpers.py',
+    'tategakiXTC_gui_studio_preview_layout_helpers.py',
+    'tategakiXTC_gui_studio_wheel_guard_helpers.py',
+    'tategakiXTC_gui_studio_right_pane_build_helpers.py',
+    'tategakiXTC_gui_studio_bottom_panel_helpers.py',
+    'tategakiXTC_gui_studio_navigation_action_helpers.py',
+    'tategakiXTC_gui_studio_preset_actions_helpers.py',
+    'tategakiXTC_gui_studio_preset_summary_layout_helpers.py',
+    'tategakiXTC_gui_studio_render_status_helpers.py',
     'tategakiXTC_gui_widget_factory.py',
     'tategakiXTC_worker_logic.py',
     'tategakiXTC_folder_batch_plan.py',
@@ -292,9 +334,11 @@ REQUIRED_PROJECT_SAMPLE_TEXT_FILES = (
     'sample_texts/tategaki_tatechuyoko_punctuation_test_text_v1.txt',
     'sample_texts/tategaki_halfwidth_alpha_position_test_text_v1.txt',
     'sample_texts/tategaki_halfwidth_fullwidth_alpha_compare_test_text_v1.txt',
+    'sample_texts/tategaki_middle_dot_position_test_text_v1.txt',
 )
 REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_aozora_archive_edge_regression.py',
+    'tests/test_aozora_image_sidecar_regression.py',
     'tests/test_aozora_note_parser_regression.py',
     'tests/test_aozora_style_helpers_regression.py',
     'tests/test_api_safety_regression.py',
@@ -304,6 +348,7 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_conversion_diagnostics.py',
     'tests/test_conversion_worker_logic.py',
     'tests/test_core_optional_import_regression.py',
+    'tests/test_share_export_regression.py',
     'tests/test_docstrings_regression.py',
     'tests/test_english_ui_widget_scan.py',
     'tests/test_epub_archive_dependency_regression.py',
@@ -347,17 +392,21 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_gui_studio_logic_regression.py',
     'tests/test_gui_studio_logging_regression.py',
     'tests/test_gui_studio_smoke_optional.py',
+    'tests/test_gui_startup_smoke_regression.py',
     'tests/test_source_drop_line_edit_regression.py',
     'tests/test_gui_studio_worker_regression.py',
     'tests/test_gui_widget_factory_regression.py',
     'tests/test_studio_import_helper_isolation.py',
     'tests/test_ichi_centering_regression.py',
     'tests/test_image_golden_regression.py',
+    'tests/test_kinsoku_decider_equivalence.py',
     'tests/test_input_pipeline_regression.py',
     'tests/test_layout_regression.py',
+    'tests/test_draw_loop_unification.py',
     'tests/test_legacy_device_view_compatibility.py',
     'tests/test_margin_preview_regression.py',
     'tests/test_markdown_table_footnote_regression.py',
+    'tests/test_middle_dot_position_regression.py',
     'tests/test_misc_conversion_helper_regression.py',
     'tests/test_output_conflict_regression.py',
     'tests/test_page_number_regression.py',
@@ -368,10 +417,12 @@ REQUIRED_PROJECT_REGRESSION_TEST_FILES = (
     'tests/test_release_bundle_hygiene.py',
     'tests/test_release_docs_regression.py',
     'tests/test_release_hygiene_regression.py',
+    'tests/test_release_golden_gate.py',
     'tests/test_renderer_api_regression.py',
     'tests/test_ruby_hide_mode_regression.py',
     'tests/test_ruby_renderer_helper_regression.py',
     'tests/test_sample_fixture_regression.py',
+    'tests/test_setting_registration_completeness.py',
     'tests/test_sweep368_layout_contract_regression.py',
     'tests/test_shared_page_entry_pipeline.py',
     'tests/test_spooled_copy_cancel_regression.py',
@@ -514,6 +565,170 @@ REQUIRED_APP_CONTENT_MARKERS = {
         'def _normalized_main_view_mode',
         'def _preview_view_help_text',
         'def _main_view_mode_status_text',
+    ),
+    'tategakiXTC_gui_studio_log_helpers.py': (
+        'def _append_log_without_status_best_effort',
+        'def _emit_postprocess_warning',
+        'def _emit_unique_postprocess_warnings_or_append_to_log',
+    ),
+    'tategakiXTC_gui_studio_status_helpers.py': (
+        'def _visible_render_failure_status_text',
+        'def _status_bar_message_text',
+        'def _show_ui_status_message_with_reflection_or_direct_fallback',
+    ),
+    'tategakiXTC_gui_studio_results_helpers.py': (
+        'def _clear_results_view',
+        'def _apply_results_selection_context_with_fallback',
+        'def _set_results_current_index_with_fallback',
+    ),
+    'tategakiXTC_gui_studio_results_actions_helpers.py': (
+        'def _show_conversion_results',
+        'def on_result_item_clicked',
+        'def load_selected_result',
+    ),
+    'tategakiXTC_gui_studio_preset_payload_helpers.py': (
+        'def _normalize_preset_payload',
+        'def _load_preset_definitions',
+        'def _live_preset_widget_payload',
+    ),
+    'tategakiXTC_gui_studio_preview_cache_helpers.py': (
+        'def _rebuild_preview_page_cache_tokens',
+        'def _font_preview_page_pixmap_cache_key',
+        'def _xtc_page_qimage_cache_key',
+    ),
+    'tategakiXTC_gui_studio_xtc_load_helpers.py': (
+        'def _xtc_source_document_payload',
+        'def _xtc_load_failure_status_message',
+        'def _apply_loaded_xtc_path_success',
+    ),
+    'tategakiXTC_gui_studio_viewer_profile_helpers.py': (
+        'def _current_viewer_profile',
+        'def _active_device_viewer_profile',
+        'def _viewer_profile_for_dimensions',
+    ),
+    'tategakiXTC_gui_studio_preview_zoom_helpers.py': (
+        'def _normalize_preview_zoom_pct',
+        'def _sync_preview_zoom_control_state',
+        'def _preview_zoom_left_bias',
+    ),
+    'tategakiXTC_gui_studio_navigation_helpers.py': (
+        'def _xtc_navigation_payload',
+        'def _apply_xtc_navigation_ui',
+        'def _xtc_page_state_payload',
+    ),
+    'tategakiXTC_gui_studio_settings_save_helpers.py': (
+        'def _current_render_settings_base',
+        'def _window_state_save_payload',
+        'def _settings_save_payload',
+    ),
+    'tategakiXTC_gui_studio_live_preview_helpers.py': (
+        'def _schedule_live_preview_refresh',
+        'def _has_active_preview_for_live_refresh',
+        'def _mark_preview_dirty_without_auto_refresh',
+    ),
+    'tategakiXTC_gui_studio_overlay_margin_helpers.py': (
+        'def _minimum_bottom_overlay_margin',
+        'def _sync_bottom_overlay_margin_to_ui',
+        'def _bottom_overlay_margin_auto_save_payload',
+    ),
+    'tategakiXTC_gui_studio_preview_button_helpers.py': (
+        'def _refresh_preview_update_button_for_current_state',
+        'def _apply_file_viewer_mode_preview_button_state',
+        'def _is_file_viewer_mode_active',
+    ),
+    'tategakiXTC_gui_studio_preview_context_helpers.py': (
+        'def _apply_preview_success_context',
+        'def _apply_preview_failure_context',
+        'def _apply_preview_progress_bar_context',
+    ),
+    'tategakiXTC_gui_studio_display_context_helpers.py': (
+        'def _restore_shared_status_for_visible_display_context',
+        'def _sync_active_display_context_for_visible_page',
+        'def _set_current_xtc_display_name',
+    ),
+    'tategakiXTC_gui_studio_conversion_finish_helpers.py': (
+        'def handle_conversion_finished',
+        'def _ensure_finish_helpers',
+        'def _finished_folder_warnings',
+    ),
+    'tategakiXTC_gui_studio_conversion_runtime_helpers.py': (
+        'def prepare_conversion_ui_for_run',
+        'def stop_conversion',
+        'def update_conversion_progress',
+    ),
+    'tategakiXTC_gui_studio_settings_restore_helpers.py': (
+        'def apply_settings_payload_to_ui',
+        'def restore_settings',
+        'def _window_state_restore_payload',
+        'def _settings_restore_payload',
+        'def _startup_preview_defaults_payload',
+    ),
+    'tategakiXTC_gui_studio_startup_preview_helpers.py': (
+        'def _set_target_path_for_normal_preview',
+        'def _request_startup_preview_after_restore',
+        'def _startup_font_combo_scroll_reset',
+    ),
+    'tategakiXTC_gui_studio_top_bar_helpers.py': (
+        'def build_top_bar',
+        'SourceDropLineEdit',
+        'DEFAULT_TOP_PATH_BUTTON_WIDTH',
+    ),
+    'tategakiXTC_gui_studio_preview_controls_helpers.py': (
+        'def build_margin_rows',
+        'def section_preview_controls',
+        'DEFAULT_PREVIEW_PAGE_LIMIT',
+    ),
+    'tategakiXTC_gui_studio_settings_sections_helpers.py': (
+        'def _section_composition',
+        'def _section_position',
+        'def _section_file_viewer',
+    ),
+    'tategakiXTC_gui_studio_font_combo_helpers.py': (
+        'def current_font_value',
+        'def _available_font_entries',
+        'def _set_current_font_value',
+    ),
+    'tategakiXTC_gui_studio_target_select_helpers.py': (
+        'def select_target_path',
+        'def select_output_folder',
+        'def select_font_file',
+    ),
+    'tategakiXTC_gui_studio_preview_pixmap_helpers.py': (
+        'def _decorate_font_view_pixmap',
+        'def _apply_preview_pixmap',
+        'def _render_current_xtc_page_in_font_view',
+    ),
+    'tategakiXTC_gui_studio_preview_layout_helpers.py': (
+        'def _sync_viewer_size',
+        'def _sync_preview_size',
+        'def _sync_font_preview_scroll_placement',
+    ),
+    'tategakiXTC_gui_studio_wheel_guard_helpers.py': (
+        'def _should_suppress_center_settings_wheel_value_change',
+        'def _scroll_center_settings_from_wheel_event',
+        'def _clear_startup_input_focus',
+    ),
+    'tategakiXTC_gui_studio_right_pane_build_helpers.py': (
+        'def _build_right_preview',
+        'def _build_view_toggle_bar',
+        'def _add_nav_controls_to_layout',
+    ),
+    'tategakiXTC_gui_studio_bottom_panel_helpers.py': (
+        'def build_bottom_panel',
+        'def build_results_tab',
+        'def build_log_tab',
+        'def bind_bottom_panel_external_scrollbar',
+        'def apply_bottom_panel_external_scroll_value',
+    ),
+    'tategakiXTC_gui_studio_render_status_helpers.py': (
+        'def _refresh_successful_preview_render_status',
+        'def _refresh_successful_device_render_status',
+        'def _handle_xtc_render_failure',
+    ),
+    'tategakiXTC_gui_studio_preset_actions_helpers.py': (
+        'def save_preset',
+        'def apply_preset',
+        'def verify_preset_save_readback',
     ),
     'tategakiXTC_gui_core_sync.py': (
         'def install_core_sync_tracker',
@@ -2893,7 +3108,32 @@ def default_release_output_path(root: Path) -> Path:
 
 def default_source_only_output_path(root: Path) -> Path:
     """Return the versioned default GitHub/source-only zip path."""
-    return root / 'dist' / f'tategaki-xtc-gui-studio_v{PUBLIC_VERSION_TAG}-source-only.zip'
+    return root / 'dist' / SOURCE_ONLY_ZIP_FILE_NAME
+
+
+def _run_golden_release_gate(root: Path) -> None:
+    """Abort release creation when checked-in golden images are stale.
+
+    This gate intentionally runs before any zip is emitted, so rendering/golden
+    drift cannot slip through a packaging-only release check.
+    """
+    script = root / 'tests' / 'generate_golden_images.py'
+    if not script.exists():
+        raise SystemExit('Golden release gate failed: tests/generate_golden_images.py is missing.')
+    result = subprocess.run(  # noqa: S603 - executes this repository's checked-in test helper
+        [sys.executable, str(script), '--check'],
+        cwd=root,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        output = (result.stdout or '').strip()
+        message = 'Golden release gate failed: run tests/generate_golden_images.py --check and update/commit intentional golden changes before building a release zip.'
+        if output:
+            message = f'{message}\n{output}'
+        raise SystemExit(message)
 
 
 def parse_args() -> argparse.Namespace:
@@ -2919,6 +3159,7 @@ def main() -> int:
         return 0
 
     root = Path(args.root).resolve()
+    _run_golden_release_gate(root)
     if args.source_only:
         default_output = default_source_only_output_path(root)
         output_path = Path(args.output).resolve() if args.output else default_output

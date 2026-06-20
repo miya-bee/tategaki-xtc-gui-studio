@@ -87,8 +87,8 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
             self.assertTrue(lines)
 
     def test_right_preview_keeps_navigation_in_top_toggle_row(self):
-        right_source = inspect.getsource(self.studio.MainWindow._build_right_preview)
-        toggle_source = inspect.getsource(self.studio.MainWindow._build_view_toggle_bar)
+        right_source = inspect.getsource(self.studio._build_right_preview_impl)
+        toggle_source = inspect.getsource(self.studio._build_view_toggle_bar_impl)
 
         self.assertNotIn('lay.addWidget(self._build_nav_bar())', right_source)
         self.assertLess(
@@ -113,10 +113,10 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         )
 
     def test_right_preview_stack_chrome_is_read_from_layout_plan(self):
-        source = inspect.getsource(self.studio.MainWindow._build_right_preview)
+        source = inspect.getsource(self.studio._build_right_preview_impl)
 
         self.assertNotIn("self._plan_frame_shape_value(preview_panel_plan, 'top_separator_frame_shape', 'hline')", source)
-        toggle_source = inspect.getsource(self.studio.MainWindow._build_view_toggle_bar)
+        toggle_source = inspect.getsource(self.studio._build_view_toggle_bar_impl)
         self.assertIn("sep.setObjectName(str(toggle_plan.get('top_separator_object_name', 'topSep')))", toggle_source)
         self.assertIn("self._plan_alignment_value(preview_panel_plan, 'font_preview_alignment', 'center')", source)
         self.assertIn("self._plan_bool_value(preview_panel_plan, 'font_scroll_widget_resizable', False)", source)
@@ -128,8 +128,8 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIn("self._plan_focus_policy_value(preview_panel_plan, 'device_scroll_focus_policy', 'strong_focus')", source)
 
     def test_nav_bar_widget_identity_is_read_from_layout_plan(self):
-        source = inspect.getsource(self.studio.MainWindow._add_nav_controls_to_layout)
-        nav_reverse_source = inspect.getsource(self.studio.MainWindow._ensure_nav_reverse_control)
+        source = inspect.getsource(self.studio._add_nav_controls_to_layout_impl)
+        nav_reverse_source = inspect.getsource(self.studio._ensure_nav_reverse_control_impl)
 
         self.assertIn("nav_bar_plan.get('current_xtc_label_object_name', 'hintLabel')", source)
         self.assertIn("nav_bar_plan.get('nav_reverse_object_name', 'navToggle')", nav_reverse_source)
@@ -148,7 +148,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
 
 
     def test_log_tab_read_only_state_is_read_from_layout_plan(self):
-        source = inspect.getsource(self.studio.MainWindow._build_log_tab)
+        source = inspect.getsource(self.studio._build_log_tab_impl)
 
         self.assertIn('log_tab_plan = self._localized_plan(gui_layouts.build_log_tab_plan', source)
         self.assertIn("log_path_read_only = self._plan_bool_value(log_tab_plan, 'log_path_edit_read_only', True)", source)
@@ -161,7 +161,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
 
 
     def test_results_tab_chrome_is_read_from_layout_plan(self):
-        source = inspect.getsource(self.studio.MainWindow._build_results_tab)
+        source = inspect.getsource(self.studio._build_results_tab_impl)
 
         self.assertIn('results_tab_plan = self._localized_plan(gui_layouts.build_results_tab_plan())', source)
         self.assertIn("self._plan_int_tuple_value(results_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4)", source)
@@ -176,7 +176,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
 
 
     def test_bottom_status_strip_chrome_is_read_from_layout_plan(self):
-        source = inspect.getsource(self.studio.MainWindow._build_bottom_panel)
+        source = inspect.getsource(self.studio._build_bottom_panel_impl)
 
         self.assertIn("status_strip_plan.get('badge_object_name', 'badge')", source)
         self.assertIn("self._plan_bool_value(status_strip_plan, 'progress_text_visible', False)", source)
@@ -190,7 +190,7 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIn('self._bind_bottom_panel_external_scrollbar()', source)
 
     def test_bottom_panel_external_scroll_value_suppresses_signal_recursive_sync(self):
-        source = inspect.getsource(self.studio.MainWindow._apply_bottom_panel_external_scroll_value)
+        source = inspect.getsource(self.studio._apply_bottom_panel_external_scroll_value_impl)
 
         self.assertIn('self._bottom_panel_scrollbar_syncing = True', source)
         self.assertIn('source.setValue(int(value))', source)
@@ -241,22 +241,26 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
 
 
     def test_page_input_runtime_range_is_read_from_layout_plan(self):
-        source = inspect.getsource(self.studio.MainWindow._reset_xtc_page_input)
+        source = Path('tategakiXTC_gui_studio_xtc_load_helpers.py').read_text(encoding='utf-8')
 
-        self.assertIn('nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())', source)
-        self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_empty_minimum', 0)", source)
-        self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_empty_maximum', 0)", source)
-        self.assertIn("self._plan_int_value(nav_bar_plan, 'page_input_active_minimum', 1)", source)
-        self.assertIn('self.page_input.setRange(minimum, maximum)', source)
+        self.assertIn('nav_bar_plan = window._localized_plan(build_nav_bar_plan())', source)
+        self.assertIn("window._plan_int_value(nav_bar_plan, 'page_input_empty_minimum', 0)", source)
+        self.assertIn("window._plan_int_value(nav_bar_plan, 'page_input_empty_maximum', 0)", source)
+        self.assertIn("window._plan_int_value(nav_bar_plan, 'page_input_active_minimum', 1)", source)
+        self.assertIn('window.page_input.setRange(minimum, maximum)', source)
 
     def test_nav_button_texts_are_read_from_layout_plan(self):
-        source = inspect.getsource(self.studio.MainWindow._update_nav_button_texts)
+        source = Path('tategakiXTC_gui_studio_navigation_action_helpers.py').read_text(encoding='utf-8')
+        marker = 'def update_nav_button_texts('
+        start = source.index(marker)
+        end = source.index('def on_nav_reverse_toggled(', start)
+        block = source[start:end]
 
-        self.assertIn('nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())', source)
-        self.assertIn("nav_bar_plan.get('prev_button_text', '前')", source)
-        self.assertIn("nav_bar_plan.get('next_button_text', '次')", source)
-        self.assertIn('self.prev_btn.setText(next_text)', source)
-        self.assertIn('self.next_btn.setText(prev_text)', source)
+        self.assertIn('nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())', block)
+        self.assertIn("nav_bar_plan.get('prev_button_text', '前')", block)
+        self.assertIn("nav_bar_plan.get('next_button_text', '次')", block)
+        self.assertIn('self.prev_btn.setText(next_text)', block)
+        self.assertIn('self.next_btn.setText(prev_text)', block)
 
     def test_conversion_worker_wrapper_methods(self):
         worker = self.studio.ConversionWorker(self.make_settings('dummy'))
@@ -928,20 +932,52 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
         self.assertEqual(window.bottom_tabs.tabBar().index, self.studio.LOG_TAB_INDEX)
 
-    def test_source_declares_set_results_summary_text_with_fallback_helper(self):
-        source = inspect.getsource(self.studio.MainWindow._set_results_summary_text_with_fallback)
+    def test_set_results_summary_text_with_fallback_confirms_primary_visible_update(self):
+        # Behavioral: the real primary helper path is accepted only after the
+        # visible summary label reflects the requested text.
+        window = self.studio.MainWindow.__new__(self.studio.MainWindow)
+        window.results_summary_label = _LabelStub()
 
-        self.assertIn("self._set_results_summary_text_fallback(summary_text, default_text=default_text)", source)
-        self.assertIn("self._ui_widget_text(getattr(self, 'results_summary_label', None)) == expected_text", source)
-        self.assertIn('self.results_summary_label.setText(expected_text)', source)
+        ok = window._set_results_summary_text_with_fallback('保存ファイル: 5 件')
 
-    def test_source_declares_set_bottom_tab_index_with_fallback_helper(self):
-        source = inspect.getsource(self.studio.MainWindow._set_bottom_tab_index_with_fallback)
+        self.assertTrue(ok)
+        self.assertEqual(window.results_summary_label.text(), '保存ファイル: 5 件')
 
-        self.assertIn('self.bottom_tabs.setCurrentIndex(normalized_index)', source)
-        self.assertIn("tab_bar_getter = getattr(self.bottom_tabs, 'tabBar', None)", source)
-        self.assertIn('set_tab_bar_index(normalized_index)', source)
-        self.assertIn("self._ui_widget_index(getattr(self, 'bottom_tabs', None)) == normalized_index", source)
+    def test_set_bottom_tab_index_with_fallback_uses_widget_fallback_when_index_is_not_reflected(self):
+        # Behavioral: if setCurrentIndex is a no-op and no tab bar reflects the
+        # new index, the helper still tries setCurrentWidget as a final visible
+        # fallback.
+        window = self.studio.MainWindow.__new__(self.studio.MainWindow)
+
+        class _BottomTabsWidgetFallbackStub:
+            def __init__(self):
+                self.index = 0
+                self.widgets = ['result-tab', 'log-tab']
+                self.current_widget = None
+
+            def count(self):
+                return len(self.widgets)
+
+            def currentIndex(self):
+                return self.index
+
+            def setCurrentIndex(self, _index):
+                return None
+
+            def widget(self, index):
+                return self.widgets[index]
+
+            def setCurrentWidget(self, widget):
+                self.current_widget = widget
+                self.index = self.widgets.index(widget)
+
+        window.bottom_tabs = _BottomTabsWidgetFallbackStub()
+
+        ok = window._set_bottom_tab_index_with_fallback(self.studio.LOG_TAB_INDEX)
+
+        self.assertTrue(ok)
+        self.assertEqual(window.bottom_tabs.current_widget, 'log-tab')
+        self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
 
     def test_set_results_current_index_with_fallback_uses_current_item_when_row_helper_is_noop(self):
         window = self.studio.MainWindow.__new__(self.studio.MainWindow)
@@ -961,27 +997,59 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
         self.assertIs(window.results_list.current_item, item1)
         self.assertEqual(window.results_list.current_row, 1)
 
-    def test_source_declares_load_xtc_from_path_with_result_helper(self):
-        source = inspect.getsource(self.studio.MainWindow._load_xtc_from_path_with_result)
+    def test_load_xtc_from_path_with_result_treats_false_return_as_failed_load_without_error_reporting(self):
+        # Behavioral: the helper delegates to load_xtc_from_path and treats an
+        # explicit False return as a failed load, without converting it into an
+        # exception-reporting path.
+        window = self.studio.MainWindow.__new__(self.studio.MainWindow)
+        called = []
+        restored = []
+        logged = []
+        window.load_xtc_from_path = lambda path: called.append(path) or False
+        window._restore_results_selection_after_xtc_load_failure = lambda: restored.append('restored')
+        window._append_log_with_status_fallback = lambda text, reflect_in_status=False: logged.append((text, reflect_in_status)) or True
 
-        self.assertIn("loader = getattr(self, 'load_xtc_from_path', None)", source)
-        self.assertIn('def _report_load_failure(exc: Exception) -> None:', source)
-        self.assertIn('self._restore_results_selection_after_xtc_load_failure()', source)
-        self.assertIn('self._xtc_load_failure_status_message(path, exc)', source)
-        self.assertIn('reflect_failure_in_status = not self._visible_render_failure_status_text()', source)
-        self.assertIn('reflect_in_status=reflect_failure_in_status', source)
-        self.assertIn('result = loader(path)', source)
-        self.assertIn("_report_load_failure(RuntimeError('読込処理を開始できませんでした。'))", source)
-        self.assertIn('return result is not False', source)
+        result = window._load_xtc_from_path_with_result('exports/book.xtc')
 
-    def test_source_declares_set_results_current_index_with_fallback_helper(self):
-        source = inspect.getsource(self.studio.MainWindow._set_results_current_index_with_fallback)
+        self.assertFalse(result)
+        self.assertEqual(called, ['exports/book.xtc'])
+        self.assertEqual(restored, [])
+        self.assertEqual(logged, [])
 
-        self.assertIn("matched_item = self._result_item_at(normalized_index)", source)
-        self.assertIn("set_current_row = getattr(self.results_list, 'setCurrentRow', None)", source)
-        self.assertIn("if self._current_results_index() == normalized_index:", source)
-        self.assertIn("if normalized_index in self._selected_result_indexes():", source)
-        self.assertIn("set_current_item = getattr(self.results_list, 'setCurrentItem', None)", source)
+    def test_set_results_current_index_with_fallback_accepts_selected_item_verification(self):
+        # Behavioral: a list widget may expose selection state even when
+        # currentItem remains unavailable; selecting the requested row is still
+        # considered a successful visible selection.
+        window = self.studio.MainWindow.__new__(self.studio.MainWindow)
+
+        class _SelectedOnlyListWidget(_ListWidgetStub):
+            def __init__(self, items):
+                super().__init__(items)
+                self.selected = []
+
+            def currentItem(self):
+                return None
+
+            def selectedItems(self):
+                return list(self.selected)
+
+            def setCurrentRow(self, row):
+                self.current_row = row
+                self.current_item = None
+                if isinstance(row, int) and 0 <= row < len(self.items):
+                    self.selected = [self.items[row]]
+                else:
+                    self.selected = []
+
+        item0 = _ListWidgetItemDataStub('one.xtc')
+        item1 = _ListWidgetItemDataStub('two.xtc')
+        window.results_list = _SelectedOnlyListWidget([item0, item1])
+
+        ok = window._set_results_current_index_with_fallback(1)
+
+        self.assertTrue(ok)
+        self.assertEqual(window.results_list.selectedItems(), [item1])
+        self.assertEqual(window.results_list.current_row, 1)
 
     def test_apply_results_entries_to_ui_uses_results_current_index_fallback_helper(self):
         window = self.studio.MainWindow.__new__(self.studio.MainWindow)
@@ -994,15 +1062,24 @@ class GuiStudioWorkerRegressionTest(unittest.TestCase):
 
         self.assertEqual(selection_requests, [0])
 
-    def test_source_declares_apply_results_entries_to_ui_uses_results_current_index_fallback_helper(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _apply_results_entries_to_ui('
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('def populate_results(', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn('self._set_results_current_index_with_fallback(normalized_index)', block)
+    def test_apply_results_entries_to_ui_selects_initial_index_with_real_fallback(self):
+        # Behavioral: applying result entries selects the requested initial row
+        # through the real results-index fallback helper instead of relying on a
+        # source-code pin to the call site.
+        window = self.studio.MainWindow.__new__(self.studio.MainWindow)
+        window.results_summary_label = _LabelStub()
+        window.results_list = _PopulateResultsListStub()
+
+        window._apply_results_entries_to_ui(
+            [('A', '/tmp/a.xtc'), ('B', '/tmp/b.xtc')],
+            '保存ファイル: 2 件',
+            1,
+        )
+
+        self.assertEqual(window.results_summary_label.text(), '保存ファイル: 2 件')
+        self.assertEqual(window.results_list.count(), 2)
+        self.assertEqual(window.results_list.current_row, 1)
+        self.assertIs(window.results_list.currentItem(), window.results_list.items[1])
 
     def test_sync_results_selection_matches_paths_even_when_case_differs(self):
         user_role = self.studio.Qt.UserRole
@@ -5077,14 +5154,34 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(helper_calls, [('停止要求の送信に失敗しました: stop failed', 5000)])
         self.assertEqual(status_bar.messages, [('停止要求の送信に失敗しました: stop failed', 5000)])
 
-    def test_source_declares_stop_conversion_prefers_render_failure_aware_status_helper_on_status_fallback(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def stop_conversion(self: MainWindow) -> None:'
-        start = source.index(marker)
-        end = source.index('    def _schedule_cleanup_worker(', start)
-        block = source[start:end]
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback(log_message, 5000)", block)
-        self.assertIn("status helper にフォールバックします", block)
+    def test_stop_conversion_status_fallback_reflects_when_statusless_log_helper_fails(self):
+        window = self.make_window()
+
+        class _Worker:
+            def __init__(self):
+                self.stop_calls = 0
+
+            def stop(self):
+                self.stop_calls += 1
+
+        worker = _Worker()
+        status = _StatusBarStub()
+        window.worker = worker
+        window.stop_btn = _ButtonStub()
+        window.progress_bar = _SpinStub()
+        window.progress_label = _LabelStub()
+        window.busy_badge = _LabelStub()
+        window.statusBar = lambda: status
+        window._append_log_without_status_best_effort = lambda _text: False
+        window._show_ui_status_message_unless_render_failure_visible = lambda text, timeout=2000: status.showMessage(text, timeout)
+
+        window.stop_conversion()
+
+        self.assertEqual(worker.stop_calls, 1)
+        self.assertFalse(window.stop_btn.enabled)
+        self.assertEqual(window.progress_bar.range, (0, 1))
+        self.assertEqual(window.busy_badge.text(), '停止中')
+        self.assertEqual(status.messages[-1], ('停止要求を送りました。現在の変換単位が終わりしだい停止します。', 5000))
 
     def test_stop_conversion_prefers_statusless_log_helper_for_success_message(self):
         window = self.make_window()
@@ -5213,16 +5310,26 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(visible)
         self.assertEqual(direct_calls, [('描画失敗: sample', 5000, {})])
 
-    def test_source_declares_apply_direct_conversion_terminal_fallback_uses_reflection_helpers(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def _apply_direct_conversion_terminal_fallback('
-        start = source.index(marker)
-        end = source.index('    def _apply_conversion_terminal_state(', start)
-        block = source[start:end]
-        self.assertIn("if self._is_render_failure_status_text(status_text):", block)
-        self.assertIn("self._show_ui_status_message_direct_with_reflection_best_effort(", block)
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback(", block)
-        self.assertIn("reuse_existing_message=False", block)
+    def test_apply_direct_conversion_terminal_fallback_uses_reflection_fallback_for_normal_status(self):
+        window = self.make_window()
+        window.progress_label = _LabelStub()
+        window.busy_badge = _LabelStub()
+        status = _StatusBarStub()
+        window.statusBar = lambda: status
+        window._show_ui_status_message_unless_render_failure_visible = lambda text, timeout=2000: None
+        window._is_render_failure_status_text = lambda text: False
+
+        visible = window._apply_direct_conversion_terminal_fallback(
+            '変換完了しました。',
+            badge_text='完了',
+            status_message='変換完了しました。',
+            status_timeout=5000,
+        )
+
+        self.assertTrue(visible)
+        self.assertEqual(window.progress_label.text(), '変換完了しました。')
+        self.assertEqual(window.busy_badge.text(), '完了')
+        self.assertEqual(status.messages[-1], ('変換完了しました。', 5000))
 
     def test_prepare_conversion_settings_does_not_prompt_for_single_file_inside_folder(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -7426,14 +7533,24 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(status.messages[-1], ('warning only', 5000))
 
-    def test_source_declares_append_log_status_fallback_uses_direct_reflection_for_render_failure(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def _append_log_with_status_fallback('
-        start = source.index(marker)
-        end = source.index('    def _append_log_without_status_best_effort(', start)
-        block = source[start:end]
-        self.assertIn('if self._is_render_failure_status_text(message):', block)
-        self.assertIn('self._show_ui_status_message_direct_with_reflection_best_effort(message, status_timeout_ms)', block)
+    def test_append_log_status_fallback_reflects_render_failure_directly_when_log_sinks_fail(self):
+        window = self.make_window()
+        status = _StatusBarStub()
+        window.statusBar = lambda: status
+        window._append_log_without_status = lambda _text: False
+        window.append_log = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('legacy log fail'))
+        window._visible_render_failure_status_text = lambda: ''
+
+        result = window._append_log_with_status_fallback(
+            'ページ表示エラー（表示は book.xtc のまま）: broken page',
+            reflect_in_status=True,
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(
+            status.messages[-1],
+            ('ページ表示エラー（表示は book.xtc のまま）: broken page', 5000),
+        )
 
     def test_append_log_without_status_or_status_bar_shows_status_when_best_effort_log_fails(self):
         window = self.make_window()
@@ -7486,11 +7603,12 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
     def test_on_conversion_finished_uses_class_helper_for_unique_postprocess_warning_emission(self):
         studio_source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        log_helpers_source = Path('tategakiXTC_gui_studio_log_helpers.py').read_text(encoding='utf-8')
 
         self.assertIn('def _emit_unique_postprocess_warnings_with_fallback(', studio_source)
         self.assertIn('def _append_unique_postprocess_warnings_to_log_with_fallback(', studio_source)
-        self.assertIn('self._emit_unique_postprocess_warnings_with_fallback(', studio_source)
-        self.assertIn('self._append_unique_postprocess_warnings_to_log_with_fallback(', studio_source)
+        self.assertIn('window._emit_unique_postprocess_warnings_with_fallback(', log_helpers_source)
+        self.assertIn('window._append_unique_postprocess_warnings_to_log_with_fallback(', log_helpers_source)
         self.assertNotIn('def emit_postprocess_warnings_with_fallback(', studio_source)
         self.assertNotIn('def append_log_without_status_with_fallback(', studio_source)
 
@@ -7530,32 +7648,38 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
     def test_handle_conversion_finish_ui_error_uses_dedicated_finish_error_log_helper(self):
         studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        finish_helper_source = Path(self.studio.__file__).with_name('tategakiXTC_gui_studio_conversion_finish_helpers.py').read_text(encoding='utf-8')
+        log_helpers_source = Path(self.studio.__file__).with_name('tategakiXTC_gui_studio_log_helpers.py').read_text(encoding='utf-8')
         self.assertIn('def _append_conversion_finish_error_log_with_fallback(', studio_source)
-        self.assertIn('self._append_conversion_finish_error_log_with_fallback(', studio_source)
+        self.assertIn('window._append_conversion_finish_error_log_with_fallback(', log_helpers_source)
         self.assertIn('def _merge_results_summary_lines_with_warnings(', studio_source)
         self.assertIn('def _build_results_summary_text(', studio_source)
         self.assertIn('def _merge_results_summary_lines_and_collect_warnings(', studio_source)
-        self.assertIn('summary_lines, final_postprocess_warnings = self._merge_results_summary_lines_and_collect_warnings(', studio_source)
-        self.assertIn('fallback_summary_text = self._build_results_summary_text(', studio_source)
-        self.assertIn('return bool(helper_succeeded or status_succeeded)', studio_source)
+        self.assertIn('summary_lines, final_postprocess_warnings = self._merge_results_summary_lines_and_collect_warnings(', finish_helper_source)
+        self.assertIn('fallback_summary_text = self._build_results_summary_text(', finish_helper_source)
+        self.assertIn('return bool(helper_succeeded or status_succeeded)', log_helpers_source)
 
     def test_conversion_error_and_startup_failure_share_failure_ui_helper(self):
         studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        runtime_helper_source = Path('tategakiXTC_gui_studio_conversion_runtime_helpers.py').read_text(encoding='utf-8')
         self.assertIn('def _build_conversion_failure_summary_text(', studio_source)
         self.assertIn('def _apply_conversion_failure_ui(', studio_source)
-        self.assertIn("failure_summary_text = self._build_conversion_failure_summary_text('エラー', message_text)", studio_source)
-        self.assertIn("failure_summary_text = self._build_conversion_failure_summary_text('開始エラー', message_text)", studio_source)
-        self.assertGreaterEqual(studio_source.count('self._apply_conversion_failure_ui('), 2)
+        self.assertIn("failure_summary_text = window._build_conversion_failure_summary_text('エラー', message_text)", runtime_helper_source)
+        self.assertIn("failure_summary_text = window._build_conversion_failure_summary_text('開始エラー', message_text)", runtime_helper_source)
+        self.assertIn('return _handle_conversion_error_impl(', studio_source)
+        self.assertGreaterEqual(runtime_helper_source.count('window._apply_conversion_failure_ui('), 2)
 
     def test_on_conversion_finished_uses_shared_unique_warning_fallback_helper(self):
         studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        finish_helper_source = Path('tategakiXTC_gui_studio_conversion_finish_helpers.py').read_text(encoding='utf-8')
         self.assertIn('def _emit_unique_postprocess_warnings_or_append_to_log(', studio_source)
-        self.assertGreaterEqual(studio_source.count('self._emit_unique_postprocess_warnings_or_append_to_log('), 2)
+        self.assertGreaterEqual(finish_helper_source.count('self._emit_unique_postprocess_warnings_or_append_to_log('), 2)
 
     def test_on_conversion_finished_uses_shared_summary_and_warning_collection_helper(self):
         studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        finish_helper_source = Path('tategakiXTC_gui_studio_conversion_finish_helpers.py').read_text(encoding='utf-8')
         self.assertIn('def _merge_results_summary_lines_and_collect_warnings(', studio_source)
-        self.assertGreaterEqual(studio_source.count('self._merge_results_summary_lines_and_collect_warnings('), 2)
+        self.assertGreaterEqual(finish_helper_source.count('self._merge_results_summary_lines_and_collect_warnings('), 2)
 
     def test_merge_results_summary_lines_and_collect_warnings_deduplicates_warning_list(self):
         window = self.make_window()
@@ -7639,18 +7763,22 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
     def test_important_error_paths_prefer_status_bar_fallback_helper(self):
         studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        runtime_helper_source = Path('tategakiXTC_gui_studio_conversion_runtime_helpers.py').read_text(encoding='utf-8')
+        result_actions_source = Path(self.studio.__file__).with_name('tategakiXTC_gui_studio_results_actions_helpers.py').read_text(encoding='utf-8')
+        log_helpers_source = Path(self.studio.__file__).with_name('tategakiXTC_gui_studio_log_helpers.py').read_text(encoding='utf-8')
         self.assertIn('def _apply_conversion_failure_ui(', studio_source)
-        self.assertIn('self._append_log_without_status_or_status_bar(summary_text)', studio_source)
-        self.assertIn("failure_summary_text = self._build_conversion_failure_summary_text('開始エラー', message_text)", studio_source)
-        self.assertIn("failure_summary_text = self._build_conversion_failure_summary_text('エラー', message_text)", studio_source)
-        self.assertIn('self._append_log_without_status_or_status_bar(log_message)', studio_source)
-        self.assertIn("APP_LOGGER.warning('非致命後処理警告: %s', warning_message)", studio_source)
+        self.assertIn('window._append_log_without_status_or_status_bar(summary_text)', runtime_helper_source)
+        self.assertIn("failure_summary_text = window._build_conversion_failure_summary_text('開始エラー', message_text)", runtime_helper_source)
+        self.assertIn("failure_summary_text = window._build_conversion_failure_summary_text('エラー', message_text)", runtime_helper_source)
+        self.assertIn('self._append_log_without_status_or_status_bar(log_message)', result_actions_source)
+        self.assertIn("APP_LOGGER.warning('非致命後処理警告: %s', warning_message)", log_helpers_source)
 
     def test_on_conversion_finished_result_view_fallback_uses_status_helper_for_warning_logging_when_outer_fallback_runs(self):
         studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        log_helpers_source = Path(self.studio.__file__).with_name('tategakiXTC_gui_studio_log_helpers.py').read_text(encoding='utf-8')
         self.assertIn('def _emit_unique_postprocess_warnings_or_append_to_log(', studio_source)
-        self.assertIn('allow_status_fallback=show_status', studio_source)
-        self.assertIn('status_timeout_ms=duration_ms,', studio_source)
+        self.assertIn('allow_status_fallback=show_status', log_helpers_source)
+        self.assertIn('status_timeout_ms=duration_ms,', log_helpers_source)
 
     def test_on_conversion_finished_keeps_stopped_status_when_only_legacy_append_log_exists(self):
         window = self.make_window()
@@ -8086,64 +8214,156 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.progress_bar.value(), 0)
         self.assertEqual(status.messages, [('更新中 (3/5, 60%)', None)])
 
-    def test_source_declares_preview_status_label_helper_is_best_effort(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def _update_preview_status_label('
-        start = source.index(marker)
-        end = source.index('    def _current_guide_margins(', start)
-        block = source[start:end]
-        self.assertIn("try:\n                self.preview_status_label.setText(label_text)\n            except Exception:\n                pass", block)
-        self.assertIn("if hasattr(self.preview_status_label, 'setToolTip'):", block)
-        self.assertIn("try:\n                if hasattr(self.preview_status_label, 'setToolTip'):\n                    self.preview_status_label.setToolTip(label_text)\n            except Exception:\n                pass", block)
+    def test_update_preview_status_label_is_best_effort_for_broken_label(self):
+        class _BrokenPreviewStatusLabel:
+            def setText(self, _text):
+                raise RuntimeError('text boom')
 
-    def test_source_declares_append_log_preserves_visible_render_failure_status(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def append_log('
-        start = source.index(marker)
-        end = source.index('    def _progress_status_text(', start)
-        block = source[start:end]
-        self.assertIn("log_widget = getattr(self, 'log_edit', None)", block)
-        self.assertIn('visible_render_failure = bool(self._visible_render_failure_status_text())', block)
-        self.assertIn('message_is_render_failure = self._is_render_failure_status_text(message_text)', block)
-        self.assertIn('preserve_visible_render_failure = visible_render_failure and not message_is_render_failure', block)
-        self.assertIn("if reflect_in_status and not self.worker and not preserve_visible_render_failure and hasattr(self, 'progress_label'):", block)
-        self.assertIn('self.progress_label.setText(message_text)', block)
-        self.assertIn('if reflect_in_status and not preserve_visible_render_failure:', block)
-        self.assertIn('self._show_ui_status_message_direct_with_reflection_best_effort(message_text, 5000)', block)
+            def setToolTip(self, _text):
+                raise RuntimeError('tooltip boom')
 
-    def test_source_declares_postprocess_warning_status_helper_preserves_visible_render_failure_status(self):
-        studio_source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        self.assertIn('def _show_ui_status_message_unless_render_failure_visible_with_reflection(', studio_source)
-        self.assertIn('or bool(self._visible_render_failure_status_text())', studio_source)
-        self.assertIn('self._show_ui_status_message_unless_render_failure_visible_with_reflection(', studio_source)
-        marker = '    def _show_ui_status_message_unless_render_failure_visible('
-        start = studio_source.index(marker)
-        end = studio_source.index('    def _status_bar_message_text(', start)
-        block = studio_source[start:end]
-        self.assertIn('self._show_ui_status_message_direct_with_reflection_best_effort(', block)
-        self.assertIn('reuse_existing_message=False,', block)
+        window = self.make_window()
+        window.preview_status_label = _BrokenPreviewStatusLabel()
 
-    def test_source_declares_status_reflection_or_direct_fallback_helper_and_call_sites(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def _show_ui_status_message_with_reflection_or_direct_fallback('
-        start = source.index(marker)
-        end = source.index('    def _show_ui_status_message_direct_with_reflection_best_effort(', start)
-        block = source[start:end]
-        self.assertIn("self._show_ui_status_message_unless_render_failure_visible_with_reflection(", block)
-        self.assertIn("self._show_ui_status_message_direct_with_reflection_best_effort(", block)
-        self.assertIn('reuse_existing_message=reuse_existing_message', block)
+        window._update_preview_status_label('プレビュー更新中')
 
-        stop_marker = '    def stop_conversion(self: MainWindow) -> None:'
-        stop_start = source.index(stop_marker)
-        stop_end = source.index('    def _schedule_cleanup_worker(', stop_start)
-        stop_block = source[stop_start:stop_end]
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback(log_message, 5000)", stop_block)
+        self.assertIs(window.preview_status_label.__class__, _BrokenPreviewStatusLabel)
 
-        open_marker = '    def open_log_folder(self: MainWindow) -> None:'
-        open_start = source.index(open_marker)
-        open_end = source.index('    def _set_results_summary_text_fallback(', open_start)
-        open_block = source[open_start:open_end]
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback(f'ログフォルダ: {target_dir}', 5000)", open_block)
+    def test_append_log_overwrites_visible_render_failure_with_a_new_render_failure(self):
+        # Behavioral complement to test_append_log_keeps_visible_render_failure_status:
+        # when the appended message is *itself* a render failure, it is not
+        # preserved away — it replaces the visible render-failure status.
+        window = self.make_window()
+        window.log_edit = _TextAppendStub()
+        window.progress_label = _LabelStub()
+        old_failure = 'ページ表示エラー（表示は book.xtc のまま）: old page'
+        window.progress_label.setText(old_failure)
+        status = _StatusBarStub()
+        status.showMessage(old_failure, 5000)
+        window.statusBar = lambda: status
+        window.worker = None
+        window._restore_shared_status_for_visible_display_context = lambda: None
+        window._visible_render_failure_status_text = lambda: old_failure
+
+        new_failure = 'ページ表示エラー（表示は book.xtc のまま）: new page'
+        window.append_log(new_failure)
+
+        self.assertEqual(window.log_edit.lines, [new_failure])
+        self.assertEqual(window.progress_label.text(), new_failure)
+        self.assertEqual(status.messages[-1], (new_failure, 5000))
+
+    def test_show_ui_status_message_unless_render_failure_visible_keeps_visible_render_failure_status(self):
+        window = self.make_window()
+        status = _StatusBarStub()
+        render_failure = 'ページ表示エラー（表示は book.xtc のまま）: broken page'
+        status.showMessage(render_failure, 5000)
+        window.statusBar = lambda: status
+        window._restore_shared_status_for_visible_display_context = lambda: None
+        window._visible_render_failure_status_text = lambda: render_failure
+
+        window._show_ui_status_message_unless_render_failure_visible('通常メッセージ', 5000)
+
+        self.assertEqual(status.messages, [(render_failure, 5000)])
+
+    def test_status_reflection_or_direct_fallback_uses_direct_when_reflection_does_not_reflect(self):
+        window = self.make_window()
+        window._ui_text = lambda text: str(text)
+        reflection_calls = []
+        direct_calls = []
+        window._show_ui_status_message_unless_render_failure_visible_with_reflection = (
+            lambda message, timeout, reuse_existing_message=True: reflection_calls.append((message, timeout, reuse_existing_message)) or False
+        )
+        window._show_ui_status_message_direct_with_reflection_best_effort = (
+            lambda message, timeout, reuse_existing_message=True: direct_calls.append((message, timeout, reuse_existing_message)) or True
+        )
+
+        reflected = window._show_ui_status_message_with_reflection_or_direct_fallback(
+            '準備完了',
+            123,
+            reuse_existing_message=False,
+        )
+
+        self.assertTrue(reflected)
+        self.assertEqual(reflection_calls, [('準備完了', 123, False)])
+        self.assertEqual(direct_calls, [('準備完了', 123, False)])
+
+    def test_direct_status_reflection_best_effort_swallows_direct_reflection_failure(self):
+        window = self.make_window()
+        window._show_ui_status_message_direct_with_reflection = (
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('direct status boom'))
+        )
+
+        reflected = window._show_ui_status_message_direct_with_reflection_best_effort('準備完了', None)
+
+        self.assertFalse(reflected)
+
+    def test_prepare_conversion_ui_for_run_reports_running_status_through_fallback(self):
+        window = self.make_window()
+        window.current_ui_language_value = lambda: 'ja'
+        window.current_output_format = lambda: 'xtch'
+        window._supported_targets_for_path = lambda _path: ['book.txt']
+        window._append_log_without_status_best_effort = lambda _message: True
+        window._hide_conversion_completion_card = lambda: None
+        window._clear_results_view = lambda _summary: True
+        window._clear_loaded_xtc_state = lambda: None
+        window._set_worker_controls_running = lambda running: setattr(window, 'worker_controls_running', running)
+        window._ui_text = lambda text: str(text)
+        window.progress_bar = _SpinStub()
+        window.progress_label = _LabelStub()
+        window.busy_badge = _LabelStub()
+        window.bottom_tabs = _StackStub()
+        window._set_bottom_tab_index_with_fallback = lambda index: window.bottom_tabs.setCurrentIndex(index)
+        status_calls = []
+        window._show_ui_status_message_with_reflection_or_direct_fallback = (
+            lambda message, timeout, **kwargs: status_calls.append((message, timeout, kwargs)) or True
+        )
+
+        window._prepare_conversion_ui_for_run({'target': 'book.txt'})
+
+        self.assertTrue(window.worker_controls_running)
+        self.assertEqual(window.progress_bar.range, (0, 0))
+        self.assertEqual(window.progress_bar.value(), 0)
+        self.assertEqual(window.progress_label.text(), '変換中…')
+        self.assertEqual(window.busy_badge.text(), '変換中')
+        self.assertEqual(status_calls, [('変換中…', None, {})])
+        self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
+
+    def test_warning_dialog_status_fallback_uses_status_helper_when_dialog_fails(self):
+        window = self.make_window()
+        status_calls = []
+        window._show_ui_status_message_with_reflection_or_direct_fallback = (
+            lambda message, duration_ms, **kwargs: status_calls.append((message, duration_ms, kwargs))
+        )
+
+        def fail_dialog(*_args):
+            raise RuntimeError('dialog failed')
+
+        original_warning = self.studio.QMessageBox.warning
+        try:
+            self.studio.QMessageBox.warning = fail_dialog
+            window._show_warning_dialog_with_status_fallback('警告', 'fallback', duration_ms=321)
+        finally:
+            self.studio.QMessageBox.warning = original_warning
+
+        self.assertEqual(status_calls, [('fallback', 321, {})])
+
+    def test_update_conversion_progress_reflects_status_through_fallback_when_no_render_failure_is_visible(self):
+        window = self.make_window()
+        window.progress_bar = _SpinStub()
+        window.progress_label = _LabelStub()
+        window._visible_render_failure_status_text = lambda: ''
+        status_calls = []
+        window._show_ui_status_message_with_reflection_or_direct_fallback = (
+            lambda message, timeout, **kwargs: status_calls.append((message, timeout, kwargs)) or True
+        )
+
+        window.update_conversion_progress(3, 5, '更新中')
+
+        self.assertEqual(window.progress_label.text(), '更新中 (3/5, 60%)')
+        self.assertEqual(status_calls, [('更新中 (3/5, 60%)', None, {})])
+        self.assertEqual(window.progress_bar.range, (0, 0))
+        self.assertEqual(window.progress_bar.value(), 0)
+
 
     def test_show_ui_status_message_direct_with_reflection_reports_success_from_status_bar_events(self):
         window = self.make_window()
@@ -8163,89 +8383,50 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(reflected)
         self.assertEqual(status.messages, [('準備完了', None)])
 
-    def test_source_declares_direct_status_reflection_helper_and_render_refresh_call_sites(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        self.assertIn('def _show_ui_status_message_direct_with_reflection_best_effort(', source)
-        self.assertIn('def _show_ui_status_message_direct_with_reflection(', source)
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback(self._ui_text('準備完了'), None)", source)
-        self.assertNotIn("self._show_ui_status_message_direct_with_reflection(self._ui_text('準備完了'), None)", source)
-
-        preview_marker = '    def _refresh_successful_preview_render_status(self: MainWindow) -> None:'
-        preview_start = source.index(preview_marker)
-        preview_end = source.index('    def render_current_preview_page(self: MainWindow) -> None:', preview_start)
-        preview_block = source[preview_start:preview_end]
-        self.assertIn('self._show_ui_status_message_direct_with_reflection_best_effort(progress_replacement, 5000)', preview_block)
-
-        restore_marker = '    def _restore_shared_status_for_visible_display_context(self: MainWindow) -> None:'
-        restore_start = source.index(restore_marker)
-        restore_end = source.index('    def _sync_active_display_context_for_visible_page(self: MainWindow) -> None:', restore_start)
-        restore_block = source[restore_start:restore_end]
-        self.assertIn('self._show_ui_status_message_direct_with_reflection_best_effort(replacement, 5000)', restore_block)
-
-        device_marker = '    def _refresh_successful_device_render_status(self: MainWindow) -> None:'
-        device_start = source.index(device_marker)
-        device_end = source.index('    def _apply_rendered_xtc_page(', device_start)
-        device_block = source[device_start:device_end]
-        self.assertIn('self._show_ui_status_message_direct_with_reflection_best_effort(replacement, 5000)', device_block)
-
-    def test_source_declares_prepare_conversion_ui_uses_direct_status_reflection_fallback(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def _prepare_conversion_ui_for_run(self: MainWindow, settings: WorkerConversionSettings) -> None:'
-        start = source.index(marker)
-        end = source.index('    def _apply_direct_conversion_terminal_fallback(', start)
-        block = source[start:end]
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback(self._ui_text('変換中…'), None)", block)
-        self.assertNotIn("self._show_ui_status_message_direct_with_reflection(self._ui_text('変換中…'), None)", block)
 
 
-    def test_source_declares_prepare_conversion_ui_tolerates_initial_clear_helper_failures(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def _prepare_conversion_ui_for_run(self: MainWindow, settings: WorkerConversionSettings) -> None:'
-        start = source.index(marker)
-        end = source.index('    def _apply_direct_conversion_terminal_fallback(', start)
-        block = source[start:end]
-        self.assertIn("""try:
-            self._clear_results_view(studio_logic.build_running_results_summary(self.current_ui_language_value()))
-        except Exception:
-            pass""", block)
-        self.assertIn("""try:
-            self._clear_loaded_xtc_state()
-        except Exception:
-            pass""", block)
 
-    def test_source_declares_dialog_status_fallback_helpers_use_reflection_or_direct_helper(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        helper_source = Path('tategakiXTC_gui_studio_dialog_helpers.py').read_text(encoding='utf-8')
-        self.assertIn("from tategakiXTC_gui_studio_dialog_helpers import", source)
-        self.assertIn("_show_warning_dialog_with_status_fallback_impl(", source)
-        self.assertIn("self._show_ui_status_message_with_reflection_or_direct_fallback,", source)
-        self.assertIn("status_func(message, duration_ms)", helper_source)
-        self.assertIn("status_func(\n            status_message,", helper_source)
-        self.assertIn("def _show_result_load_dialog_with_status_fallback(", source)
-        self.assertIn("def _show_critical_dialog_with_status_fallback(", source)
-        self.assertIn("reuse_existing_message=False", helper_source)
+    def test_prepare_conversion_ui_for_run_continues_after_both_initial_clear_helpers_fail(self):
+        # Behavioral replacement for the old source pin: startup clearing is
+        # best-effort, and the conversion UI still enters the running state.
+        window = self.make_window()
+        window.run_btn = _ButtonStub()
+        window.stop_btn = _ButtonStub()
+        window.progress_bar = _SpinStub(10)
+        window.progress_label = _LabelStub()
+        window.busy_badge = _LabelStub()
+        window.bottom_tabs = _StackStub()
+        window.current_output_format = lambda: 'xtc'
+        window.current_ui_language_value = lambda: 'ja'
+        window._supported_targets_for_path = lambda _target: [Path('book.txt')]
+        window._append_log_without_status_best_effort = lambda _message: True
+        window._show_ui_status_message_with_reflection_or_direct_fallback = lambda *_args, **_kwargs: True
+        window._clear_results_view = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('results clear failed'))
+        window._clear_loaded_xtc_state = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('xtc clear failed'))
 
-    def test_source_declares_update_conversion_progress_preserves_visible_render_failure_status(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def update_conversion_progress(self: MainWindow, current: int, total: int, message: str) -> None:'
-        start = source.index(marker)
-        end = source.index('    def open_log_folder(', start)
-        block = source[start:end]
-        self.assertIn('visible_render_failure = bool(self._visible_render_failure_status_text())', block)
-        self.assertIn("if hasattr(self, 'progress_label') and not visible_render_failure:", block)
-        self.assertIn("try:\n                self.progress_label.setText(text)\n            except Exception:\n                pass", block)
-        self.assertIn('if not visible_render_failure:', block)
-        self.assertIn('self._show_ui_status_message_with_reflection_or_direct_fallback(text, None)', block)
-        self.assertNotIn('self._show_ui_status_message_direct_with_reflection(text, None)', block)
+        window._prepare_conversion_ui_for_run({'target': 'book.txt'})
 
-    def test_source_declares_conversion_progress_bar_stays_busy_during_progress_updates(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def update_conversion_progress(self: MainWindow, current: int, total: int, message: str) -> None:'
-        start = source.index(marker)
-        end = source.index('    def open_log_folder(', start)
-        block = source[start:end]
-        self.assertIn('self.progress_bar.setRange(0, 0)', block)
-        self.assertNotIn('self.progress_bar.setRange(0, total_value)', block)
+        self.assertFalse(window.run_btn.enabled)
+        self.assertTrue(window.stop_btn.enabled)
+        self.assertEqual(window.progress_bar.range, (0, 0))
+        self.assertEqual(window.progress_label.text(), '変換中…')
+        self.assertEqual(window.busy_badge.text(), '変換中')
+        self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
+
+    def test_update_conversion_progress_keeps_progress_bar_busy_for_running_updates(self):
+        # Behavioral: while conversion is running, finite progress updates keep
+        # the bar in busy/indeterminate mode instead of switching to a determinate range.
+        window = self.make_window()
+        window.progress_bar = _SpinStub()
+        window.progress_label = _LabelStub()
+        window._visible_render_failure_status_text = lambda: ''
+        window._show_ui_status_message_with_reflection_or_direct_fallback = lambda *_args, **_kwargs: True
+
+        window.update_conversion_progress(2, 10, '処理中')
+
+        self.assertEqual(window.progress_bar.range, (0, 0))
+        self.assertEqual(window.progress_bar.value(), 0)
+        self.assertEqual(window.progress_label.text(), '処理中 (2/10, 20%)')
 
     def test_source_declares_resize_event_does_not_mutate_child_geometry(self):
         source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
@@ -8272,11 +8453,13 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn('min(int(round(logical_w * dpr)), 8192)', block)
 
     def test_source_declares_unclean_shutdown_skips_risky_restore_state(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        self.assertIn("self._previous_shutdown_clean = self._settings_bool_value('last_shutdown_clean', True)", source)
-        self.assertIn("window_payload['geometry'] = None", source)
-        self.assertIn("restore_payload['target'] = ''", source)
-        self.assertIn('self._mark_shutdown_clean(True)', source)
+        studio_source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        restore_source = Path('tategakiXTC_gui_studio_settings_restore_helpers.py').read_text(encoding='utf-8')
+        self.assertIn("self._previous_shutdown_clean = self._settings_bool_value('last_shutdown_clean', True)", studio_source)
+        self.assertIn("previous_shutdown_clean = bool(self.__dict__.get('_previous_shutdown_clean', True))", restore_source)
+        self.assertIn("window_payload['geometry'] = None", restore_source)
+        self.assertIn("restore_payload['target'] = ''", restore_source)
+        self.assertIn('self._mark_shutdown_clean(True)', studio_source + restore_source)
 
     def test_progress_status_text_includes_percent_and_counts(self):
         window = self.make_window()
@@ -10399,17 +10582,35 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         info.assert_called_once()
         self.assertIsNone(window.results_list.current_item)
 
-    def test_source_declares_load_selected_result_uses_load_result_helper_and_tab_fallback(self):
-        source = inspect.getsource(self.studio.MainWindow.load_selected_result)
+    def test_load_selected_result_switches_to_result_tab_when_load_succeeds(self):
+        window = self.make_window()
+        window.bottom_tabs = _StackStub()
+        item = _ListWidgetItemDataStub('exports/book.xtc')
+        window.results_list = _ListWidgetStub([item])
+        window.results_list.setCurrentItem(item)
+        attempted = []
+        window._load_xtc_from_path_with_result = lambda path: attempted.append(path) or True
 
-        self.assertIn("load_succeeded = self._load_xtc_from_path_with_result(path)", source)
-        self.assertIn("self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX if load_succeeded else LOG_TAB_INDEX)", source)
+        window.load_selected_result()
 
-    def test_source_declares_on_result_item_clicked_uses_load_result_helper_and_tab_fallback(self):
-        source = inspect.getsource(self.studio.MainWindow.on_result_item_clicked)
+        self.assertEqual(attempted, ['exports/book.xtc'])
+        self.assertEqual(window.bottom_tabs.index, self.studio.RESULT_TAB_INDEX)
+        self.assertEqual(window.results_list.current_row, 0)
 
-        self.assertIn("load_succeeded = self._load_xtc_from_path_with_result(path_value)", source)
-        self.assertIn("self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX if load_succeeded else LOG_TAB_INDEX)", source)
+    def test_load_selected_result_switches_to_log_tab_when_load_reports_failure(self):
+        window = self.make_window()
+        window.bottom_tabs = _StackStub()
+        item = _ListWidgetItemDataStub('exports/book.xtc')
+        window.results_list = _ListWidgetStub([item])
+        window.results_list.setCurrentItem(item)
+        attempted = []
+        window._load_xtc_from_path_with_result = lambda path: attempted.append(path) or False
+
+        window.load_selected_result()
+
+        self.assertEqual(attempted, ['exports/book.xtc'])
+        self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
+        self.assertEqual(window.results_list.current_row, 0)
 
     def test_on_result_item_clicked_loads_normalized_item_path(self):
         window = self.make_window()
@@ -10790,23 +10991,57 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(logged, [('fail:exports/error.xtc:loader boom', False)])
         self.assertEqual(shown, [])
 
-    def test_source_declares_load_xtc_from_path_with_result_respects_visible_render_failure_status(self):
-        source = inspect.getsource(self.studio.MainWindow._load_xtc_from_path_with_result)
-        self.assertIn('reflect_failure_in_status = not self._visible_render_failure_status_text()', source)
-        self.assertIn('reflect_in_status=reflect_failure_in_status', source)
+    def test_load_xtc_from_path_with_result_reflects_failure_status_when_no_render_failure_is_visible(self):
+        window = self.make_window()
+        logged = []
+        restored = []
+        window._append_log_with_status_fallback = lambda text, reflect_in_status=False: logged.append((text, reflect_in_status)) or True
+        window._restore_results_selection_after_xtc_load_failure = lambda: restored.append('restored')
+        window._xtc_load_failure_status_message = lambda path, exc: f'fail:{path}:{exc}'
+        window._visible_render_failure_status_text = lambda: ''
 
-    def test_source_declares_show_conversion_results_uses_result_tab_only_after_successful_auto_load(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _show_conversion_results('
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('def _build_conversion_failure_summary_text(', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn('result_tab_index = RESULT_TAB_INDEX', block)
-        self.assertIn('if not self._load_xtc_from_path_with_result(resolved_path):', block)
-        self.assertIn('result_tab_index = LOG_TAB_INDEX', block)
-        self.assertIn('self._set_bottom_tab_index_with_fallback(result_tab_index)', block)
+        def _boom(_path):
+            raise RuntimeError('loader boom')
+
+        window.load_xtc_from_path = _boom
+
+        result = window._load_xtc_from_path_with_result('exports/error.xtc')
+
+        self.assertFalse(result)
+        self.assertEqual(restored, ['restored'])
+        self.assertEqual(logged, [('fail:exports/error.xtc:loader boom', True)])
+
+    def test_show_conversion_results_keeps_result_tab_only_when_auto_load_succeeds(self):
+        # Behavioral: a successful auto-load leaves the result tab visible;
+        # an explicit load failure switches the visible tab to the log tab.
+        window = self.make_window()
+        window.results_list = _PopulateResultsListStub()
+        window.results_summary_label = _LabelStub()
+        window.bottom_tabs = _StackStub()
+        window._clear_loaded_xtc_state = lambda: (_ for _ in ()).throw(AssertionError('clear should not run'))
+        attempted = []
+
+        class _ItemStub:
+            def __init__(self, text):
+                self.text = text
+                self.data_map = {}
+
+            def setData(self, role, value):
+                self.data_map[role] = value
+
+        window._load_xtc_from_path_with_result = lambda path: attempted.append(path) or True
+        with mock.patch.object(self.studio, 'QListWidgetItem', _ItemStub):
+            window._show_conversion_results(['exports/book.xtc'], ['summary'])
+        self.assertEqual(attempted, ['exports/book.xtc'])
+        self.assertEqual(window.bottom_tabs.index, self.studio.RESULT_TAB_INDEX)
+
+        window.bottom_tabs = _StackStub()
+        attempted.clear()
+        window._load_xtc_from_path_with_result = lambda path: attempted.append(path) or False
+        with mock.patch.object(self.studio, 'QListWidgetItem', _ItemStub):
+            window._show_conversion_results(['exports/book.xtc'], ['summary'])
+        self.assertEqual(attempted, ['exports/book.xtc'])
+        self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
 
     def test_show_conversion_results_keeps_loaded_result_when_result_tab_switch_fails(self):
         window = self.make_window()
@@ -10868,9 +11103,9 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(logs, ['開始エラー: start failed'])
 
     def test_apply_conversion_failure_ui_clears_result_selection_in_addition_to_loaded_state(self):
-        studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
-        self.assertIn("self._clear_results_selection_with_fallback({'clear_selection': True})", studio_source)
-        self.assertIn("APP_LOGGER.exception('%s_selection_direct', clear_results_error_context)", studio_source)
+        helper_source = Path('tategakiXTC_gui_studio_conversion_runtime_helpers.py').read_text(encoding='utf-8')
+        self.assertIn("window._clear_results_selection_with_fallback({'clear_selection': True})", helper_source)
+        self.assertIn("APP_LOGGER.exception('%s_selection_direct', clear_results_error_context)", helper_source)
 
     def test_apply_conversion_failure_ui_falls_back_to_direct_selection_clear_when_selection_helper_fails(self):
         window = self.make_window()
@@ -11149,11 +11384,21 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         ])
 
 
-    def test_source_declares_clear_results_selection_with_fallback_helper(self):
-        studio_source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        self.assertIn('def _clear_results_selection_with_fallback(', studio_source)
-        self.assertIn('selection_context = results_controller.build_results_clear_selection_context()', studio_source)
-        self.assertIn('return bool(self._clear_results_selection_state())', studio_source)
+    def test_clear_results_selection_with_fallback_clears_visible_selection_without_context(self):
+        # Behavioral: with no explicit context, the helper builds the default
+        # clear-selection context and still clears the visible results list
+        # selection state.
+        window = self.make_window()
+        item = _ListWidgetItemDataStub('old.xtc')
+        window.results_list = _ListWidgetStub([item])
+        window.results_list.setCurrentItem(item)
+
+        ok = window._clear_results_selection_with_fallback()
+
+        self.assertTrue(ok)
+        self.assertTrue(window.results_list.selection_cleared)
+        self.assertIsNone(window.results_list.current_item)
+        self.assertIsNone(window.results_list.current_row)
 
     def test_set_current_xtc_display_name_uses_default_for_blank_or_bytes_values(self):
         window = self.make_window()
@@ -11192,16 +11437,26 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(window.current_xtc_label.text(), '表示中: プレビュー')
 
-    def test_source_declares_set_current_xtc_display_name_with_fallback_helper(self):
-        studio_source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _set_current_xtc_display_name_with_fallback('
-        start = studio_source.index(marker)
-        end = studio_source.index('def _sync_loaded_xtc_display_context_for_device_view(', start)
-        block = studio_source[start:end]
-        self.assertIn("expected_label = studio_logic.build_displaying_document_label(text, fallback='なし', language=self.current_ui_language_value())", block)
-        self.assertIn("self._set_current_xtc_display_name(display_name)", block)
-        self.assertIn("self.current_xtc_label.setText(expected_label)", block)
-        self.assertIn("return self._ui_widget_text(getattr(self, 'current_xtc_label', None)) == expected_label", block)
+    def test_set_current_xtc_display_name_with_fallback_updates_label_on_success_path(self):
+        # Behavioral: with the real primary helper running, the label is set to
+        # the localized "表示中:" form and the verified result is True.
+        window = self.make_window()
+        window.current_xtc_label = _LabelStub()
+
+        result = window._set_current_xtc_display_name_with_fallback('book.xtc')
+
+        self.assertTrue(result)
+        self.assertEqual(window.current_xtc_label.text(), '表示中: book.xtc')
+
+    def test_set_current_xtc_display_name_with_fallback_uses_default_for_blank(self):
+        # Behavioral: a blank display name falls back to the default "なし".
+        window = self.make_window()
+        window.current_xtc_label = _LabelStub()
+
+        result = window._set_current_xtc_display_name_with_fallback('   ')
+
+        self.assertTrue(result)
+        self.assertEqual(window.current_xtc_label.text(), '表示中: なし')
 
     def test_apply_loaded_xtc_path_failure_clears_preview_state_and_results_selection(self):
         window = self.make_window()
@@ -11490,63 +11745,106 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(direct_clears, ['direct'])
 
 
-    def test_source_declares_display_context_sync_uses_current_label_fallback_helper(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _sync_loaded_xtc_display_context_for_device_view('
-        start = source.index(marker)
-        end = source.index('def _sync_preview_display_context_for_device_view(', start)
-        block = source[start:end]
-        self.assertIn('self._set_current_xtc_display_name_with_fallback(display_name)', block)
+    def test_sync_loaded_xtc_display_context_for_device_view_sets_label_and_syncs_selection(self):
+        # Behavioral (end-to-end against real label/list stubs): a loaded XTC in
+        # device-view source labels the viewer and selects the matching row.
+        window = self.make_window()
+        window._effective_device_view_source = lambda: 'xtc'
+        window._runtime_xtc_pages = lambda: ['page1']
+        window._loaded_xtc_path_text = 'exports/book.xtc'
+        window._loaded_xtc_display_name = 'book.xtc'
+        window.current_xtc_label = _LabelStub()
+        item = _ListWidgetItemDataStub('exports/book.xtc')
+        window.results_list = _ListWidgetStub([item])
 
-    def test_source_declares_apply_results_entries_uses_summary_fallback_helper(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _apply_results_entries_to_ui('
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('def populate_results(', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn('self._set_results_summary_text_with_fallback(normalized_summary)', block)
+        window._sync_loaded_xtc_display_context_for_device_view()
 
-    def test_source_declares_prepare_and_result_flows_use_bottom_tab_fallback_helper(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        self.assertEqual(window.current_xtc_label.text(), '表示中: book.xtc')
+        self.assertEqual(window.results_list.current_row, 0)
+        self.assertFalse(window.results_list.selection_cleared)
 
-        prepare_start = source.find('def _prepare_conversion_ui_for_run(')
-        self.assertNotEqual(prepare_start, -1)
-        prepare_end = source.find('def _apply_direct_conversion_terminal_fallback(', prepare_start)
-        self.assertNotEqual(prepare_end, -1)
-        prepare_block = source[prepare_start:prepare_end]
+    def test_apply_results_entries_sets_summary_through_fallback_helper(self):
+        window = self.make_window()
+        window.results_summary_label = _LabelStub()
+        window.results_list = _PopulateResultsListStub()
+        window._sync_results_action_buttons_state = lambda: None
+        window._bind_bottom_panel_external_scrollbar = lambda: None
 
-        result_start = source.find('def _show_conversion_results(')
-        self.assertNotEqual(result_start, -1)
-        result_end = source.find('def _build_conversion_failure_summary_text(', result_start)
-        self.assertNotEqual(result_end, -1)
-        result_block = source[result_start:result_end]
+        window._apply_results_entries_to_ui([('Book', 'book.xtc')], '  1 件完了  ', 0)
 
-        failure_start = source.find('def _apply_conversion_failure_ui(')
-        self.assertNotEqual(failure_start, -1)
-        failure_end = source.find('def _handle_conversion_startup_failure(', failure_start)
-        self.assertNotEqual(failure_end, -1)
-        failure_block = source[failure_start:failure_end]
+        self.assertEqual(window.results_summary_label.text(), '  1 件完了  ')
+        self.assertEqual(window.results_list.current_row, 0)
+        self.assertEqual(window.results_list.count(), 1)
 
-        self.assertIn('try:', prepare_block)
-        self.assertIn('self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)', prepare_block)
-        self.assertIn('result_tab_index = RESULT_TAB_INDEX', result_block)
-        self.assertIn('self._set_bottom_tab_index_with_fallback(result_tab_index)', result_block)
-        self.assertIn('result_tab_index = LOG_TAB_INDEX', result_block)
-        self.assertIn('self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)', failure_block)
+    def test_prepare_conversion_ui_for_run_switches_to_log_tab(self):
+        window = self.make_window()
+        window.bottom_tabs = _StackStub()
+        window._hide_conversion_completion_card = lambda: None
+        window._clear_results_view = lambda *_args, **_kwargs: True
+        window._clear_loaded_xtc_state = lambda: None
+        window._set_worker_controls_running = lambda running: setattr(window, '_running_state', running)
+        window._supported_targets_for_path = lambda _path: ['book.txt']
+        window._append_log_without_status_best_effort = lambda _message: True
+        window.current_output_format = lambda: 'xtch'
+        window.current_ui_language_value = lambda: 'ja'
+        window._ui_text = lambda text: text
+        window._show_ui_status_message_with_reflection_or_direct_fallback = lambda *_args, **_kwargs: True
 
-    def test_source_declares_sync_results_selection_for_loaded_path_with_fallback_helper(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _sync_results_selection_for_loaded_path_with_fallback('
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('def _result_item_count(', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn('normalized_path = worker_logic._normalized_path_text(path).strip()', block)
-        self.assertIn('self._sync_results_selection_for_loaded_path(normalized_path)', block)
-        self.assertIn('return self._clear_results_selection_with_fallback(', block)
+        window._prepare_conversion_ui_for_run({'target': 'book.txt'})
+
+        self.assertFalse(window.__dict__['_conversion_stop_requested'])
+        self.assertTrue(window._running_state)
+        self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
+
+    def test_show_conversion_results_switches_to_log_tab_when_auto_load_fails(self):
+        window = self.make_window()
+        window.bottom_tabs = _StackStub()
+        window.current_ui_language_value = lambda: 'ja'
+        window.populate_results = lambda *_args, **_kwargs: None
+        window._resolved_result_load_context = lambda: {'has_path': True, 'resolved_path': 'broken.xtc'}
+        attempted = []
+        window._load_xtc_from_path_with_result = lambda path: attempted.append(path) or False
+
+        window._show_conversion_results(['broken.xtc'], ['summary'])
+
+        self.assertEqual(attempted, ['broken.xtc'])
+        self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
+
+    def test_apply_conversion_failure_ui_switches_to_log_tab(self):
+        window = self.make_window()
+        window.bottom_tabs = _StackStub()
+        window._clear_results_view = lambda _summary: True
+        window._clear_loaded_xtc_state = lambda: None
+        window._clear_results_selection_with_fallback = lambda _context: True
+        window._append_log_without_status_or_status_bar = lambda _summary: True
+        window._apply_conversion_terminal_state = lambda *_args, **_kwargs: None
+
+        window._apply_conversion_failure_ui(
+            '失敗しました',
+            status_message='失敗しました',
+            log_error_context='log',
+            terminal_state_error_context='terminal',
+            clear_results_error_context='results',
+            clear_preview_error_context='preview',
+            progress_error_context='progress',
+            tab_error_context='tab',
+        )
+
+        self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
+
+    def test_sync_results_selection_for_loaded_path_with_fallback_selects_matching_result(self):
+        # Behavioral: a loaded path that matches a results row (after whitespace
+        # normalization) selects that row and does not fall back to clearing.
+        window = self.make_window()
+        item0 = _ListWidgetItemDataStub('one.xtc')
+        item1 = _ListWidgetItemDataStub('two.xtc')
+        window.results_list = _ListWidgetStub([item0, item1])
+
+        result = window._sync_results_selection_for_loaded_path_with_fallback('  two.xtc  ')
+
+        self.assertTrue(result)
+        self.assertEqual(window.results_list.current_row, 1)
+        self.assertFalse(window.results_list.selection_cleared)
 
     def test_sync_results_selection_for_loaded_path_with_fallback_clears_selection_when_sync_is_noop(self):
         window = self.make_window()
@@ -11563,19 +11861,17 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(result)
         self.assertGreaterEqual(len(direct_clears), 1)
 
-    def test_source_declares_sync_results_selection_for_loaded_path_with_fallback_verifies_applied_index(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _sync_results_selection_for_loaded_path_with_fallback('
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('def _result_item_count(', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn('selection_context = results_controller.build_results_selection_context(', block)
-        self.assertIn("matched_index = studio_logic.payload_optional_int_value(selection_context, 'matched_index')", block)
-        self.assertIn('current_index = self._current_results_index()', block)
-        self.assertIn('if current_index == matched_index:', block)
-        self.assertIn('if matched_index in self._selected_result_indexes():', block)
+    def test_sync_results_selection_for_loaded_path_with_fallback_clears_when_path_absent(self):
+        # Behavioral: a loaded path that is not present in the results list does
+        # not leave a stale selection; it falls back to clearing the selection.
+        window = self.make_window()
+        item0 = _ListWidgetItemDataStub('one.xtc')
+        window.results_list = _ListWidgetStub([item0])
+
+        result = window._sync_results_selection_for_loaded_path_with_fallback('missing.xtc')
+
+        self.assertTrue(result)
+        self.assertTrue(window.results_list.selection_cleared)
 
     def test_apply_results_selection_context_with_fallback_clears_selection_when_apply_raises(self):
         window = self.make_window()
@@ -11601,17 +11897,30 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(apply_calls, [{'matched_index': None, 'clear_selection': True}])
         self.assertEqual(direct_clears, ['direct'])
 
-    def test_source_declares_apply_results_selection_context_with_fallback_helper(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _apply_results_selection_context_with_fallback('
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('def _sync_results_selection_for_loaded_path_with_fallback(', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn("if self._payload_bool_value(selection_context, 'clear_selection', False):", block)
-        self.assertIn('self._apply_results_selection_context(selection_context)', block)
-        self.assertIn('return self._clear_results_selection_with_fallback(', block)
+    def test_apply_results_selection_context_with_fallback_selects_requested_index(self):
+        # Behavioral: a context carrying a valid matched_index selects that row
+        # and reports success without falling back to a direct clear.
+        window = self.make_window()
+        items = [_ListWidgetItemDataStub('a.xtc'), _ListWidgetItemDataStub('b.xtc'), _ListWidgetItemDataStub('c.xtc')]
+        window.results_list = _ListWidgetStub(items)
+
+        result = window._apply_results_selection_context_with_fallback({'matched_index': 2, 'clear_selection': False})
+
+        self.assertTrue(result)
+        self.assertEqual(window.results_list.current_row, 2)
+        self.assertFalse(window.results_list.selection_cleared)
+
+    def test_apply_results_selection_context_with_fallback_clears_when_clear_requested(self):
+        # Behavioral: a clear_selection context clears the current selection.
+        window = self.make_window()
+        items = [_ListWidgetItemDataStub('a.xtc'), _ListWidgetItemDataStub('b.xtc')]
+        window.results_list = _ListWidgetStub(items)
+        window.results_list.setCurrentItem(items[0])
+
+        result = window._apply_results_selection_context_with_fallback({'clear_selection': True})
+
+        self.assertTrue(result)
+        self.assertTrue(window.results_list.selection_cleared)
 
     def test_apply_results_selection_context_with_fallback_clears_selection_when_apply_does_not_change_current_index(self):
         window = self.make_window()
@@ -11628,30 +11937,34 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(direct_clears, ['direct'])
 
-    def test_source_declares_apply_results_selection_context_with_fallback_verifies_applied_index(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _apply_results_selection_context_with_fallback('
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('def _sync_results_selection_for_loaded_path_with_fallback(', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn("matched_index = studio_logic.payload_optional_int_value(selection_context, 'matched_index')", block)
-        self.assertIn('current_index = self._current_results_index()', block)
-        self.assertIn('if current_index == matched_index:', block)
-        self.assertIn('if matched_index in self._selected_result_indexes():', block)
+    def test_apply_results_selection_context_with_fallback_clears_when_no_match(self):
+        # Behavioral: an empty/unmatched context clears rather than leaving a
+        # stale selection.
+        window = self.make_window()
+        items = [_ListWidgetItemDataStub('a.xtc'), _ListWidgetItemDataStub('b.xtc')]
+        window.results_list = _ListWidgetStub(items)
+        window.results_list.setCurrentItem(items[1])
 
-    def test_source_declares_apply_results_selection_context_uses_results_current_index_fallback_helper(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = 'def _apply_results_selection_context('
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('def _sync_results_selection_for_loaded_path(', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn('if self._set_results_current_index_with_fallback(matched_index):', block)
-        self.assertIn('self._clear_results_selection_state()', block)
-        self.assertIn('return None', block)
+        result = window._apply_results_selection_context_with_fallback({'source': 'custom-context'})
+
+        self.assertTrue(result)
+        self.assertTrue(window.results_list.selection_cleared)
+
+    def test_apply_results_selection_context_returns_matched_item_or_clears_on_bad_index(self):
+        # Behavioral: a valid matched_index returns the matched item and selects
+        # its row; an out-of-range index returns None and clears the selection.
+        window = self.make_window()
+        items = [_ListWidgetItemDataStub('a.xtc'), _ListWidgetItemDataStub('b.xtc')]
+        window.results_list = _ListWidgetStub(items)
+
+        matched = window._apply_results_selection_context({'matched_index': 1})
+        self.assertIs(matched, items[1])
+        self.assertEqual(window.results_list.current_row, 1)
+
+        window.results_list.selection_cleared = False
+        result = window._apply_results_selection_context({'matched_index': 9})
+        self.assertIsNone(result)
+        self.assertTrue(window.results_list.selection_cleared)
 
     def test_restore_results_selection_after_xtc_load_failure_falls_back_to_direct_clear_when_path_sync_raises(self):
         window = self.make_window()
@@ -14321,8 +14634,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(finalize_calls, [{'refresh_preview': False}])
 
     def test_font_section_visual_controls_are_wired_to_live_preview_scheduler(self):
-        source = inspect.getsource(self.studio.MainWindow._section_composition)
-        output_source = inspect.getsource(self.studio.MainWindow._section_output)
+        source = inspect.getsource(self.studio._section_composition_impl)
+        output_source = inspect.getsource(self.studio._section_output_impl)
 
         self.assertIn('self.output_format_combo.currentIndexChanged.connect(self._schedule_live_preview_refresh_from_signal)', output_source)
         self.assertIn('w.valueChanged.connect(self._schedule_live_preview_refresh_from_signal)', source)
@@ -15653,7 +15966,10 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         opener.assert_not_called()
 
     def test_target_placeholder_mentions_markdown_and_images(self):
-        studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        studio_source = (
+            Path(self.studio.__file__).read_text(encoding='utf-8')
+            + Path('tategakiXTC_gui_studio_top_bar_helpers.py').read_text(encoding='utf-8')
+        )
         self.assertIn('TXT / Markdown / 画像 / フォルダ', studio_source)
 
     def test_save_ui_state_normalizes_quoted_target(self):
@@ -16034,13 +16350,16 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         import inspect
 
         source = inspect.getsource(self.studio.MainWindow._set_target_path_for_normal_preview)
-        self.assertIn('_leave_file_viewer_mode_for_target_change()', source)
+        startup_preview_source = Path('tategakiXTC_gui_studio_startup_preview_helpers.py').read_text(encoding='utf-8')
+        settings_restore_source = Path('tategakiXTC_gui_studio_settings_restore_helpers.py').read_text(encoding='utf-8')
+        target_select_source = Path('tategakiXTC_gui_studio_target_select_helpers.py').read_text(encoding='utf-8')
+        self.assertIn('_leave_file_viewer_mode_for_target_change()', source + startup_preview_source)
         apply_source = inspect.getsource(self.studio.MainWindow._apply_settings_payload_to_ui)
         drop_source = inspect.getsource(self.studio.MainWindow._apply_dropped_target_path)
         select_source = inspect.getsource(self.studio.MainWindow.select_target_path)
-        self.assertIn('_set_target_path_for_normal_preview', apply_source)
-        self.assertIn('_set_target_path_for_normal_preview', drop_source)
-        self.assertIn('_set_target_path_for_normal_preview', select_source)
+        self.assertIn('_set_target_path_for_normal_preview', apply_source + settings_restore_source)
+        self.assertIn('_set_target_path_for_normal_preview', drop_source + target_select_source)
+        self.assertIn('_set_target_path_for_normal_preview', select_source + target_select_source)
 
     def test_target_editing_finished_exits_file_viewer_mode_before_deferred_preview(self):
         window = self.make_window()
@@ -16536,11 +16855,18 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(window.preview_status_label.text(), '先頭 3 / 上限 3 ページを生成しました。')
 
     def test_target_edit_editing_finished_also_saves_ui_state(self):
-        studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        studio_source = (
+            Path(self.studio.__file__).read_text(encoding='utf-8')
+            + Path('tategakiXTC_gui_studio_top_bar_helpers.py').read_text(encoding='utf-8')
+        )
         self.assertIn('self.target_edit.editingFinished.connect(self.save_ui_state)', studio_source)
 
     def test_display_control_changes_also_save_ui_state(self):
-        studio_source = Path(self.studio.__file__).read_text(encoding='utf-8')
+        studio_source = (
+            Path(self.studio.__file__).read_text(encoding='utf-8')
+            + Path('tategakiXTC_gui_studio_preview_controls_helpers.py').read_text(encoding='utf-8')
+            + Path('tategakiXTC_gui_studio_settings_sections_helpers.py').read_text(encoding='utf-8')
+        )
         self.assertIn('self.night_check.toggled.connect(self.on_night_toggled)', studio_source)
         self.assertIn('self.guides_check.toggled.connect(self.on_guides_toggled)', studio_source)
         self.assertIn('self.threshold_spin.valueChanged.connect(self.on_threshold_changed)', studio_source)
@@ -16748,10 +17074,13 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         import inspect
         import tategakiXTC_gui_studio_constants as studio_constants
 
+        import tategakiXTC_gui_studio_settings_save_helpers as settings_save_helpers
+        import tategakiXTC_gui_studio_settings_restore_helpers as settings_restore_helpers
+
         constants_source = inspect.getsource(studio_constants)
         default_source = inspect.getsource(self.studio.MainWindow._default_center_settings_splitter_sizes)
-        save_source = inspect.getsource(self.studio.MainWindow._window_state_save_payload)
-        restore_source = inspect.getsource(self.studio.MainWindow._restore_settings)
+        save_source = inspect.getsource(settings_save_helpers._window_state_save_payload)
+        restore_source = inspect.getsource(settings_restore_helpers.restore_settings)
 
         self.assertEqual(self.studio.CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY, 'left_splitter_state')
         self.assertEqual(self.studio.CENTER_SETTINGS_LEGACY_SPLITTER_SIZES_KEY, 'left_splitter_sizes')
@@ -16764,19 +17093,20 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
     def test_left_settings_combo_and_spin_wheel_events_are_scroll_guarded(self):
         import inspect
+        import tategakiXTC_gui_studio_wheel_guard_helpers as wheel_guard_helpers
 
         event_filter_source = inspect.getsource(self.studio.MainWindow.eventFilter)
-        guard_source = inspect.getsource(self.studio.MainWindow._should_suppress_center_settings_wheel_value_change)
-        legacy_guard_source = inspect.getsource(self.studio.MainWindow._should_suppress_left_settings_wheel_value_change)
-        scroll_source = inspect.getsource(self.studio.MainWindow._scroll_center_settings_from_wheel_event)
-        legacy_scroll_source = inspect.getsource(self.studio.MainWindow._scroll_left_settings_from_wheel_event)
+        guard_source = inspect.getsource(wheel_guard_helpers._should_suppress_center_settings_wheel_value_change)
+        legacy_guard_source = inspect.getsource(wheel_guard_helpers._should_suppress_left_settings_wheel_value_change)
+        scroll_source = inspect.getsource(wheel_guard_helpers._scroll_center_settings_from_wheel_event)
+        legacy_scroll_source = inspect.getsource(wheel_guard_helpers._scroll_left_settings_from_wheel_event)
 
         self.assertIn('QEvent.Wheel', event_filter_source)
         self.assertIn('_should_suppress_center_settings_wheel_value_change(obj)', event_filter_source)
         self.assertIn('_scroll_center_settings_from_wheel_event(event)', event_filter_source)
         self.assertIn('return True', event_filter_source)
-        control_source = inspect.getsource(self.studio.MainWindow._wheel_value_change_control_for_event_object)
-        install_source = inspect.getsource(self.studio.MainWindow._install_center_settings_wheel_value_guards) + inspect.getsource(self.studio.MainWindow._install_left_settings_wheel_value_guards)
+        control_source = inspect.getsource(wheel_guard_helpers._wheel_value_change_control_for_event_object)
+        install_source = inspect.getsource(wheel_guard_helpers._install_center_settings_wheel_value_guards) + inspect.getsource(wheel_guard_helpers._install_left_settings_wheel_value_guards)
         self.assertIn('_wheel_value_change_control_for_event_object(obj)', guard_source)
         self.assertIn('_center_settings_container_widget()', guard_source)
         self.assertIn('_is_widget_descendant_of(control, container)', guard_source)
@@ -16851,8 +17181,10 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(scroll.v.values, [])
 
     def test_startup_input_focus_is_cleared_after_initial_show_only(self):
+        import tategakiXTC_gui_studio_wheel_guard_helpers as wheel_guard_helpers
+
         show_source = inspect.getsource(self.studio.MainWindow.showEvent)
-        focus_source = inspect.getsource(self.studio.MainWindow._clear_startup_input_focus)
+        focus_source = inspect.getsource(wheel_guard_helpers._clear_startup_input_focus)
 
         self.assertIn('QTimer.singleShot(0, self._clear_startup_input_focus)', show_source)
         self.assertIn("'focusWidget'", focus_source)
@@ -16897,7 +17229,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_preset_section_summary_and_button_chrome_is_read_from_plan(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._section_preset)
+        source = inspect.getsource(self.studio._section_preset_impl)
         self.assertIn("preset_plan.get('button_object_name', 'smallBtn')", source)
         self.assertIn("preset_plan.get('summary_text', '')", source)
         self.assertIn("preset_plan.get('summary_label_object_name', 'presetSummaryLabel')", source)
@@ -16987,7 +17319,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_font_view_preview_pixmap_decorator_draws_border_and_optional_guides(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._decorate_font_view_pixmap)
+        source = inspect.getsource(self.studio._decorate_font_view_pixmap_impl)
         self.assertIn("painter.drawRect(rect)", source)
         self.assertIn('page_width: int = 0', source)
         self.assertIn('page_height: int = 0', source)
@@ -17221,7 +17553,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertEqual(payload['bottom_overlay_margin_auto_value'], 20)
 
     def test_preview_page_limit_spin_allows_large_manual_preview_requests(self):
-        source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
+        source = inspect.getsource(self.studio._section_preview_controls_impl)
         self.assertIn('self._spin(1, 9999, DEFAULT_PREVIEW_PAGE_LIMIT', source)
 
     def test_preset_save_confirmation_text_lists_all_major_specs(self):
@@ -17250,6 +17582,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             'punctuation_position_mode': 'down_weak',
             'ichi_position_mode': 'standard',
             'halfwidth_digit_position_mode': 'up_weak',
+            'middle_dot_position_mode': 'standard',
             'tatechuyoko_symbol_position_mode': 'down_strong',
             'lower_closing_bracket_position_mode': 'standard',
             'wave_dash_drawing_mode': 'rotate',
@@ -17258,7 +17591,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
         text = window._preset_save_confirmation_text(preset, 'プリセット1')
 
-        for token in ('[基本]', '[文字・組版]', '[画像処理]', '[禁則・補正]', 'ページ番号: ON', '余白: 上 1  /  下 13  /  左 3  /  右 4', '縦中横記号:', '波線描画:'):
+        for token in ('[基本]', '[文字・組版]', '[画像処理]', '[禁則・補正]', 'ページ番号: ON', '余白: 上 1  /  下 13  /  左 3  /  右 4', '中黒:', '縦中横記号:', '波線描画:'):
             self.assertIn(token, text)
 
     def test_guide_margins_reflect_page_number_effective_bottom_margin(self):
@@ -17286,7 +17619,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_font_view_apply_preview_pixmap_passes_original_pixmap_size_to_decorator(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._apply_preview_pixmap)
+        source = inspect.getsource(self.studio._apply_preview_pixmap_impl)
         self.assertIn('orig_w = max(1, int(pix.width()))', source)
         self.assertIn('orig_h = max(1, int(pix.height()))', source)
         self.assertIn('scaled = self._decorate_font_view_pixmap(scaled, page_width=orig_w, page_height=orig_h)', source)
@@ -17321,7 +17654,9 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             source.index('lay.addWidget(self._section_language())'),
             source.index('lay.addWidget(self._section_preset())'),
         )
-        section_source = inspect.getsource(self.studio.MainWindow._section_language)
+        wrapper_source = inspect.getsource(self.studio.MainWindow._section_language)
+        self.assertIn('return _section_language_impl(self)', wrapper_source)
+        section_source = inspect.getsource(self.studio._section_language_impl)
         self.assertIn('self.language_combo = QComboBox()', section_source)
         self.assertIn('UI_LANGUAGE_OPTIONS', section_source)
         self.assertIn('on_language_combo_changed', section_source)
@@ -17333,11 +17668,11 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_english_option_labels_are_localized_through_ui_text(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._ensure_behavior_controls)
+        source = inspect.getsource(self.studio._ensure_behavior_controls_impl)
         self.assertIn('self._ui_text(label)', source)
-        combo_source = inspect.getsource(self.studio.MainWindow._make_position_mode_combo)
+        combo_source = inspect.getsource(self.studio._make_position_mode_combo_impl)
         self.assertIn('self._ui_text(label)', combo_source)
-        position_source = inspect.getsource(self.studio.MainWindow._add_glyph_position_control)
+        position_source = inspect.getsource(self.studio._add_glyph_position_control_impl)
         self.assertIn('self._ui_text(help_text)', position_source)
 
     def test_dialog_and_help_helpers_route_strings_through_ui_text(self):
@@ -17371,7 +17706,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_build_view_toggle_bar_uses_two_rows_for_compact_preview_header(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._build_view_toggle_bar)
+        source = inspect.getsource(self.studio._build_view_toggle_bar_impl)
         self.assertIn('QVBoxLayout(bar)', source)
         self.assertIn('top_lay = QHBoxLayout()', source)
         self.assertIn('bottom_lay = QHBoxLayout()', source)
@@ -17384,7 +17719,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_preview_display_toggles_are_collected_in_right_preview_toolbar(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._build_view_toggle_bar)
+        source = inspect.getsource(self.studio._build_view_toggle_bar_impl)
         self.assertLess(
             source.index('self._add_preview_display_toggles_to_layout(top_lay)'),
             source.index('top_lay.addStretch(1)'),
@@ -17393,7 +17728,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
             source.index('top_lay.addStretch(1)'),
             source.index('top_lay.addWidget(self.view_help_btn)'),
         )
-        helper_source = inspect.getsource(self.studio.MainWindow._add_preview_display_toggles_to_layout)
+        helper_source = inspect.getsource(self.studio._add_preview_display_toggles_to_layout_impl)
         self.assertIn("self._add_optional_widget_to_layout(lay, 'actual_size_check')", helper_source)
         self.assertIn("self._add_optional_widget_to_layout(lay, 'actual_size_help_btn')", helper_source)
         self.assertIn("preview_toggle_plan = self._localized_plan(gui_layouts.build_preview_display_toggle_plan())", helper_source)
@@ -17416,8 +17751,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_display_section_no_longer_places_preview_toggles_in_left_panel(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
-        self.assertIn("preview_toggle_plan.get('actual_size_text', '実寸近似')", source)
+        source = inspect.getsource(self.studio._section_preview_controls_impl)
+        self.assertIn("preview_toggle_plan.get('actual_size_text', '実寸')", source)
         self.assertIn("object_name=preview_toggle_plan.get('actual_size_object_name', 'viewToggleBtn')", source)
         self.assertIn("self._plan_bool_value(preview_toggle_plan, 'actual_size_checkable', True)", source)
         self.assertIn("preview_toggle_plan.get('actual_size_focus_policy', 'no_focus')", source)
@@ -17428,14 +17763,14 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_preview_display_toggles_use_right_toolbar_focus_policy(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
+        source = inspect.getsource(self.studio._section_preview_controls_impl)
         self.assertIn("preview_toggle_plan.get('actual_size_focus_policy', 'no_focus')", source)
         self.assertIn("self._plan_focus_policy_value(preview_toggle_plan, 'guide_focus_policy', 'no_focus')", source)
 
     def test_actual_size_toggle_uses_view_toggle_button_style(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
+        source = inspect.getsource(self.studio._section_preview_controls_impl)
         self.assertIn('self.actual_size_check = self._make_button_from_plan(', source)
         self.assertIn("object_name=preview_toggle_plan.get('actual_size_object_name', 'viewToggleBtn')", source)
         self.assertIn("self._plan_bool_value(preview_toggle_plan, 'actual_size_checkable', True)", source)
@@ -17445,13 +17780,13 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_display_section_preview_and_legacy_calibration_chrome_is_read_from_plan(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
+        source = inspect.getsource(self.studio._section_preview_controls_impl)
         self.assertIn("display_plan.get('calibration_label_text', '実寸補正')", source)
         self.assertIn("calibration_button_object_name = str(display_plan.get('calibration_button_object_name', 'stepBtn'))", source)
         self.assertIn("display_plan.get('calibration_down_text', '−')", source)
         self.assertIn("display_plan.get('calibration_up_text', '+')", source)
         self.assertIn("self._plan_spin_button_symbols_value(display_plan, 'calibration_spin_button_symbols', 'no_buttons')", source)
-        output_source = inspect.getsource(self.studio.MainWindow._section_output)
+        output_source = inspect.getsource(self.studio._section_output_impl)
         self.assertIn("display_plan.get('custom_width_label', '幅')", output_source)
         self.assertIn("self._plan_int_value(display_plan, 'custom_size_pair_spacing', 8)", output_source)
         self.assertIn("display_plan.get('custom_height_label', '高さ')", output_source)
@@ -17467,8 +17802,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_center_results_and_log_scrollbars_are_plan_driven_and_visible(self):
         import inspect
 
-        results_source = inspect.getsource(self.studio.MainWindow._build_results_tab)
-        log_source = inspect.getsource(self.studio.MainWindow._build_log_tab)
+        results_source = inspect.getsource(self.studio._build_results_tab_impl)
+        log_source = inspect.getsource(self.studio._build_log_tab_impl)
 
         self.assertIn("summary_scroll_vertical_scroll_bar_policy", results_source)
         self.assertIn("results_list_vertical_scroll_bar_policy", results_source)
@@ -17476,24 +17811,26 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn("log_edit_vertical_scroll_bar_policy", log_source)
         self.assertIn("log_edit_horizontal_scroll_bar_policy", log_source)
 
-    def test_xtc_open_button_lives_in_top_bar_not_left_settings(self):
+    def test_xtc_open_button_lives_in_right_pane_toolbar_not_top_bar_or_left_settings(self):
         import inspect
 
-        top_source = inspect.getsource(self.studio.MainWindow._build_top_bar)
-        display_source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
+        top_source = inspect.getsource(self.studio._build_top_bar_impl)
+        right_source = inspect.getsource(self.studio._build_view_toggle_bar_impl)
+        display_source = inspect.getsource(self.studio._section_preview_controls_impl)
         layout_source = inspect.getsource(self.studio.gui_layouts.build_left_settings_section_keys)
 
         self.assertNotIn("'fileviewer'", layout_source)
         self.assertNotIn('self.open_xtc_btn = self._make_button_from_plan', display_source)
-        self.assertIn("top_bar_plan.get('xtc_open_button_text', 'XTC/XTCHを開く')", top_source)
-        self.assertIn('self.open_xtc_file', top_source)
+        self.assertNotIn("top_bar_plan.get('xtc_open_button_text'", top_source)
+        self.assertIn("toggle_plan.get('open_xtc_button_text', 'XTCファイルを開く')", right_source)
+        self.assertIn('self.open_xtc_file', right_source)
 
     def test_image_behavior_and_file_viewer_section_chrome_is_read_from_plan(self):
         import inspect
 
-        image_source = inspect.getsource(self.studio.MainWindow._section_composition)
-        behavior_source = inspect.getsource(self.studio.MainWindow._section_behavior)
-        ensure_source = inspect.getsource(self.studio.MainWindow._ensure_behavior_controls)
+        image_source = inspect.getsource(self.studio._section_composition_impl)
+        behavior_source = inspect.getsource(self.studio._section_behavior_impl)
+        ensure_source = inspect.getsource(self.studio._ensure_behavior_controls_impl)
         self.assertIn("self._plan_int_value(image_plan, 'night_mode_spacing', 16)", image_source)
         self.assertIn("self._plan_bool_value(image_plan, 'dither_checked_default', False)", image_source)
         self.assertIn("self._plan_int_value(image_plan, 'dither_spacing', 16)", image_source)
@@ -17508,14 +17845,14 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_view_and_actual_size_help_are_separated_in_right_toolbar(self):
         import inspect
 
-        build_source = inspect.getsource(self.studio.MainWindow._build_view_toggle_bar)
-        helper_source = inspect.getsource(self.studio.MainWindow._add_preview_display_toggles_to_layout)
+        build_source = inspect.getsource(self.studio._build_view_toggle_bar_impl)
+        helper_source = inspect.getsource(self.studio._add_preview_display_toggles_to_layout_impl)
         help_source = inspect.getsource(self.studio.MainWindow._preview_view_help_text)
 
         self.assertIn('build_view_toggle_bar_plan()', help_source)
         self.assertIn("'help_text'", help_source)
         self.assertIn('self._help_icon_button(self._ui_text(self._preview_view_help_text()))', build_source)
-        section_source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
+        section_source = inspect.getsource(self.studio._section_preview_controls_impl)
         layout_source = inspect.getsource(self.studio.gui_layouts.build_preview_display_toggle_plan)
         self.assertIn("self._add_optional_widget_to_layout(lay, 'actual_size_help_btn')", helper_source)
         self.assertIn("self._add_optional_widget_to_layout(lay, 'guides_help_btn')", helper_source)
@@ -17536,7 +17873,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_nav_current_label_is_width_capped_before_controls_overflow(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._add_nav_controls_to_layout)
+        source = inspect.getsource(self.studio._add_nav_controls_to_layout_impl)
         self.assertIn("self._plan_int_value(nav_bar_plan, 'current_xtc_label_min_width', 0)", source)
         self.assertIn('current_xtc_label_max_width', source)
         self.assertIn('setMaximumWidth', source)
@@ -17544,7 +17881,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_file_viewer_page_count_is_not_rendered_under_preview_panels(self):
         import inspect
 
-        panel_source = inspect.getsource(self.studio.MainWindow._build_right_preview)
+        panel_source = inspect.getsource(self.studio._build_right_preview_impl)
         full_source = inspect.getsource(self.studio.MainWindow)
         self.assertNotIn('font_view_page_indicator_label', panel_source)
         self.assertNotIn('device_view_page_indicator_label', panel_source)
@@ -17554,7 +17891,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_preview_zoom_controls_use_external_step_buttons_like_calibration(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._add_preview_zoom_controls_to_layout)
+        source = inspect.getsource(self.studio._add_preview_zoom_controls_to_layout_impl)
         self.assertIn('self.preview_zoom_down_btn', source)
         self.assertIn('self.preview_zoom_up_btn', source)
         self.assertIn("preview_zoom_button_object_name = str(toggle_plan.get('preview_zoom_button_object_name', 'stepBtn'))", source)
@@ -17760,7 +18097,9 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
     def test_sync_viewer_size_centers_scroll_area_for_three_pane_file_viewer(self):
         import inspect
 
-        source = inspect.getsource(self.studio.MainWindow._sync_viewer_size)
+        import tategakiXTC_gui_studio_preview_layout_helpers as preview_layout_helpers
+
+        source = inspect.getsource(preview_layout_helpers._sync_viewer_size)
 
         self.assertIn("v1.3.8.5: in the 3-pane file-viewer flow, center the XTC", source)
         self.assertIn("self._qt_constant('AlignHCenter'", source)
@@ -17943,7 +18282,7 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
 
     def test_font_section_keeps_browse_button_nearer_left(self):
-        source = inspect.getsource(self.studio.MainWindow._section_composition)
+        source = inspect.getsource(self.studio._section_composition_impl)
 
         self.assertIn('font_row.addWidget(self.font_combo, 2)', source)
         browse_index = source.index('font_row.addWidget(browse_btn)')
@@ -17955,22 +18294,24 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
 
     def test_three_pane_sections_place_output_and_composition_controls(self):
-        source = inspect.getsource(self.studio.MainWindow._section_composition)
+        source = inspect.getsource(self.studio._section_composition_impl)
 
-        output_source = inspect.getsource(self.studio.MainWindow._section_output)
+        output_source = inspect.getsource(self.studio._section_output_impl)
         self.assertIn("output_row = self._make_hbox_layout_from_plan(", output_source)
         self.assertIn("output_row.addWidget(self._dim_label(self._ui_text('機種')))", output_source)
         self.assertIn("self.profile_combo = QComboBox()", output_source)
         self.assertIn("output_row.addWidget(self.profile_combo)", output_source)
         self.assertIn("output_row.addWidget(self._dim_label(self._ui_text('出力形式')))", output_source)
         self.assertIn("self.custom_size_row = QWidget()", output_source)
-        self.assertIn("composition_row.addWidget(self._dim_label(self._ui_text('禁則処理')))", source)
+        self.assertNotIn("composition_row.addWidget(self._dim_label(self._ui_text('禁則処理')))", source)
+        self.assertIn("page_row.addWidget(self._dim_label(self._ui_text('禁則処理')))", source)
         self.assertIn("lay.addLayout(composition_row)", source)
+        self.assertIn("lay.addLayout(page_row)", source)
 
     def test_display_section_trial_no_longer_places_profile_combo(self):
-        source = inspect.getsource(self.studio.MainWindow._section_preview_controls)
+        source = inspect.getsource(self.studio._section_preview_controls_impl)
 
-        output_source = inspect.getsource(self.studio.MainWindow._section_output)
+        output_source = inspect.getsource(self.studio._section_output_impl)
         self.assertIn("output_row.addWidget(self._dim_label(self._ui_text('機種')))", output_source)
         self.assertIn("output_row.addWidget(self.profile_combo)", output_source)
         self.assertIn("self.custom_size_row = QWidget()", output_source)
@@ -17978,8 +18319,8 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
 
 
     def test_image_section_places_glyph_position_controls_after_image_controls(self):
-        font_source = inspect.getsource(self.studio.MainWindow._section_composition)
-        image_source = inspect.getsource(self.studio.MainWindow._section_position)
+        font_source = inspect.getsource(self.studio._section_composition_impl)
+        image_source = inspect.getsource(self.studio._section_position_impl)
 
         self.assertNotIn("font_glyph_position_row", font_source)
         self.assertNotIn("glyph_position_row.addWidget(self.punctuation_position_combo)", font_source)
@@ -17987,15 +18328,16 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertIn("image_glyph_position_row = self._make_hbox_layout_from_plan(", image_source)
         self.assertIn("gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))", image_source)
         self.assertIn("self._add_glyph_position_control(", image_source)
-        self.assertIn("image_glyph_position_row,\n            '句読点',\n            self.punctuation_position_combo", image_source)
-        self.assertIn("image_glyph_position_row,\n            '漢数字 一',\n            self.ichi_position_combo", image_source)
-        self.assertIn("image_glyph_position_row,\n            '半角数字/記号',\n            self.halfwidth_digit_position_combo", image_source)
+        self.assertIn("image_glyph_position_row,\n        '句読点',\n        self.punctuation_position_combo", image_source)
+        self.assertIn("image_glyph_position_row,\n        '漢数字 一',\n        self.ichi_position_combo", image_source)
+        self.assertIn("image_glyph_position_row,\n        '半角数字/記号',\n        self.halfwidth_digit_position_combo", image_source)
+        self.assertIn("image_tatechuyoko_symbol_row,\n        '中黒',\n        self.middle_dot_position_combo", image_source)
         first_row_source = image_source.split("lay.addLayout(image_glyph_position_row)", 1)[0]
         self.assertNotIn("image_glyph_position_row.addWidget(self._dim_label('下鍵括弧'))", first_row_source)
         self.assertIn("lay.addLayout(image_glyph_position_row)", image_source)
         self.assertIn("image_wave_dash_row = self._make_hbox_layout_from_plan(", image_source)
         self.assertIn("gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))", image_source)
-        self.assertIn("image_tatechuyoko_symbol_row,\n            '下鍵括弧',\n            self.lower_closing_bracket_position_combo", image_source)
+        self.assertIn("image_tatechuyoko_symbol_row,\n        '下鍵括弧',\n        self.lower_closing_bracket_position_combo", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self._dim_label(self._ui_text('波線描画')))", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)", image_source)
         self.assertIn("image_wave_dash_row.addWidget(self._dim_label(self._ui_text('波線位置')))", image_source)
@@ -19425,10 +19767,6 @@ class MainWindowLogicRegressionTest(unittest.TestCase):
         self.assertTrue(sample_path.exists())
         self.assertIn('第４４章第88節　全角！？と半角!?でどう？？変わるだろう??', sample_path.read_text(encoding='utf-8'))
 
-if __name__ == '__main__':
-    unittest.main()
-
-
     def test_load_xtc_from_path_failure_reuses_status_when_critical_dialog_raises(self):
         window = self.make_window()
         window.main_view_mode = 'device'
@@ -19515,7 +19853,7 @@ if __name__ == '__main__':
         self.assertEqual(window.target_edit.text(), 'current-folder')
         self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0][0], 'フォルダ選択エラー')
-        self.assertIn('変換対象フォルダの選択ダイアログを開けませんでした。', warnings[0][1])
+        self.assertIn('保存先フォルダの選択ダイアログを開けませんでした。', warnings[0][1])
         self.assertIn('boom-dir', warnings[0][1])
 
     def test_open_xtc_file_uses_warning_helper_when_file_dialog_raises(self):
@@ -19551,14 +19889,6 @@ if __name__ == '__main__':
         self.assertEqual(attempted, ['exports/book.xtc'])
         self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
 
-    def test_source_declares_open_xtc_file_uses_load_result_helper_and_tab_fallback(self):
-        source = inspect.getsource(self.studio.MainWindow.open_xtc_file)
-
-        self.assertIn("load_succeeded = self._load_xtc_from_path_with_result(path)", source)
-        self.assertIn("self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX if load_succeeded else LOG_TAB_INDEX)", source)
-
-
-
     def test_on_conversion_finished_preserves_log_tab_when_show_conversion_results_reports_auto_load_failure(self):
         window = self.make_window()
         window.progress_label = _LabelStub()
@@ -19577,19 +19907,6 @@ if __name__ == '__main__':
 
         self.assertEqual(show_calls, [(['exports/book.xtc'], ['保存 1 件'])])
         self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
-
-    def test_source_declares_on_conversion_finished_does_not_force_result_tab_after_show_conversion_results(self):
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
-        marker = '    def on_conversion_finished(self: MainWindow, result: ConversionResult) -> None:'
-        start = source.find(marker)
-        self.assertNotEqual(start, -1)
-        end = source.find('    def on_conversion_error(self: MainWindow, message: str) -> None:', start)
-        self.assertNotEqual(end, -1)
-        block = source[start:end]
-        self.assertIn('self._show_conversion_results(converted_files, summary_lines)', block)
-        self.assertIn('if stopped and not converted_files:', block)
-        self.assertNotIn('self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX)', block)
-        self.assertIn('self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)', block)
 
     def test_on_conversion_finished_keeps_stopped_status_when_result_view_fallback_has_only_status_message(self):
         window = self.make_window()
@@ -19613,7 +19930,7 @@ if __name__ == '__main__':
             'stopped': True,
         })
 
-        self.assertEqual(status.messages[-1], ('done', None))
+        self.assertEqual(status.messages[-1], ('結果表示に失敗しました', 5000))
         self.assertEqual(window.bottom_tabs.index, self.studio.LOG_TAB_INDEX)
 
     def test_on_conversion_finished_prefers_log_tab_when_stopped_without_converted_files(self):
@@ -19663,7 +19980,7 @@ if __name__ == '__main__':
         })
 
         self.assertEqual(called, [])
-        self.assertEqual(status.messages[-1], ('done', None))
+        self.assertEqual(status.messages[-1], ('警告A', 5000))
 
 
     def test_on_conversion_finished_log_only_fallback_recovers_when_statusless_log_helper_raises(self):
@@ -19750,10 +20067,23 @@ if __name__ == '__main__':
         self.assertEqual(sync_calls, ['exports/book.xtc'])
         self.assertEqual(clear_calls, [])
 
-    def test_source_declares_loaded_xtc_device_view_path_sync_uses_fallback_helper(self):
-        source = inspect.getsource(self.studio.MainWindow._sync_loaded_xtc_display_context_for_device_view)
-        self.assertIn("self._sync_results_selection_for_loaded_path_with_fallback(path_text)", source)
-        self.assertNotIn("self._sync_results_selection_for_loaded_path(path_text)", source)
+    def test_sync_loaded_xtc_display_context_for_device_view_clears_selection_for_unlisted_path(self):
+        # Behavioral proof that the fallback-aware path sync is used: a loaded
+        # path absent from the results list ends with the selection cleared
+        # rather than left stale (the non-fallback variant would leave it).
+        window = self.make_window()
+        window._effective_device_view_source = lambda: 'xtc'
+        window._runtime_xtc_pages = lambda: ['page1']
+        window._loaded_xtc_path_text = 'exports/missing.xtc'
+        window._loaded_xtc_display_name = 'missing.xtc'
+        window.current_xtc_label = _LabelStub()
+        item = _ListWidgetItemDataStub('exports/other.xtc')
+        window.results_list = _ListWidgetStub([item])
+        window.results_list.setCurrentItem(item)
+
+        window._sync_loaded_xtc_display_context_for_device_view()
+
+        self.assertTrue(window.results_list.selection_cleared)
 
     def test_on_result_item_clicked_clears_selection_when_direct_apply_raises(self):
         window = self.make_window()
@@ -19771,11 +20101,27 @@ if __name__ == '__main__':
         self.assertEqual(getattr(window, '_loaded_path', None), 'exports/book.xtc')
         self.assertEqual(direct_clears, ['direct'])
 
-    def test_source_declares_on_result_item_clicked_uses_selection_context_fallback_helper(self):
-        source = inspect.getsource(self.studio.MainWindow.on_result_item_clicked)
-        self.assertIn("self._apply_results_selection_context_with_fallback({'matched_index': matched_index, 'clear_selection': False})", source)
-        self.assertIn("self._apply_results_selection_context_with_fallback({'matched_index': preferred_index, 'clear_selection': False})", source)
-        self.assertNotIn("self._apply_results_selection_context({'matched_index': matched_index, 'clear_selection': False})", source)
+    def test_on_result_item_clicked_applies_preferred_resolved_context_with_fallback(self):
+        window = self.make_window()
+        clicked = _ListWidgetItemDataStub(None)
+        first = _ListWidgetItemDataStub('exports/first.xtc')
+        second = _ListWidgetItemDataStub('exports/second.xtc')
+        window.results_list = _ListWidgetStub([first, second])
+        window.bottom_tabs = _StackStub()
+        loaded = []
+        window._results_item_path = lambda entry: ''
+        window._resolved_result_load_context = lambda: {
+            'has_path': True,
+            'resolved_path': 'exports/second.xtc',
+            'preferred_index': 1,
+        }
+        window._load_xtc_from_path_with_result = lambda path: loaded.append(path) or True
+
+        window.on_result_item_clicked(clicked)
+
+        self.assertEqual(loaded, ['exports/second.xtc'])
+        self.assertEqual(window.results_list.current_row, 1)
+        self.assertEqual(window.bottom_tabs.index, self.studio.RESULT_TAB_INDEX)
 
     def test_metadata_only_unclean_ini_is_not_treated_as_restorable_user_state(self):
         class StoreStub:
@@ -19816,10 +20162,13 @@ if __name__ == '__main__':
             'main_three_pane_splitter_sizes',
         ))
 
+        import tategakiXTC_gui_studio_settings_save_helpers as settings_save_helpers
+        import tategakiXTC_gui_studio_settings_restore_helpers as settings_restore_helpers
+
         constants_source = Path('tategakiXTC_gui_studio_constants.py').read_text(encoding='utf-8')
-        restore_payload_source = inspect.getsource(self.studio.MainWindow._window_state_restore_payload)
-        save_payload_source = inspect.getsource(self.studio.MainWindow._window_state_save_payload)
-        restore_settings_source = inspect.getsource(self.studio.MainWindow._restore_settings)
+        restore_payload_source = inspect.getsource(settings_restore_helpers._window_state_restore_payload)
+        save_payload_source = inspect.getsource(settings_save_helpers._window_state_save_payload)
+        restore_settings_source = inspect.getsource(settings_restore_helpers.restore_settings)
         default_sizes_source = inspect.getsource(self.studio.MainWindow._default_three_pane_splitter_sizes)
 
         self.assertIn('PRESET_PANEL_WIDTH_KEY', constants_source)
@@ -19830,7 +20179,7 @@ if __name__ == '__main__':
         self.assertIn('THREE_PANE_PANEL_WIDTH_KEYS', constants_source)
         self.assertIn('THREE_PANE_SPLITTER_KEYS', constants_source)
         self.assertIn('THREE_PANE_SPLITTER_KEYS', restore_payload_source)
-        self.assertIn('MAIN_THREE_PANE_SPLITTER_SIZES_KEY', restore_payload_source)
+        self.assertIn('three_pane_sizes_key', restore_payload_source)
         self.assertIn('PRESET_PANEL_WIDTH_KEY', default_sizes_source)
         self.assertIn('CENTER_SETTINGS_PANEL_WIDTH_KEY', default_sizes_source)
         self.assertIn('PREVIEW_PANEL_WIDTH_KEY', default_sizes_source)
@@ -19838,5 +20187,5 @@ if __name__ == '__main__':
         self.assertIn('MAIN_THREE_PANE_SPLITTER_STATE_KEY', save_payload_source)
         self.assertIn('MAIN_THREE_PANE_SPLITTER_SIZES_KEY', restore_settings_source)
 
-
-
+if __name__ == '__main__':
+    unittest.main()

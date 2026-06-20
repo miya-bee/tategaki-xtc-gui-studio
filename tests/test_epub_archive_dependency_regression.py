@@ -80,15 +80,17 @@ class DependencyHelperRegressionTests(unittest.TestCase):
 
 class ArchiveErrorPathRegressionTests(unittest.TestCase):
     def setUp(self):
-        self.args = core.ConversionArgs(width=8, height=8, output_format='xtc')
+        self.args = core.ConversionArgs(width=8, height=8, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
 
     def test_load_archive_input_document_uses_patool_for_cbr(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             archive_path = tmpdir_path / 'sample.cbr'
             archive_path.write_bytes(b'not-a-real-rar')
+            seen_outdirs = []
 
             def fake_extract_archive(path, outdir, verbosity=-1):
+                seen_outdirs.append(Path(outdir))
                 Path(outdir).mkdir(parents=True, exist_ok=True)
                 img = Image.new('L', (8, 8), 255)
                 img.save(Path(outdir) / '001.png')
@@ -99,6 +101,27 @@ class ArchiveErrorPathRegressionTests(unittest.TestCase):
 
             self.assertEqual(doc.source_path, archive_path)
             self.assertEqual([p.name for p in doc.image_files], ['001.png'])
+            self.assertEqual(seen_outdirs[0].name, '_patool_extract_root')
+
+    def test_load_archive_input_document_rejects_patool_staging_escape(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            archive_path = tmpdir_path / 'sample.rar'
+            archive_path.write_bytes(b'not-a-real-rar')
+
+            def fake_extract_archive(path, outdir, verbosity=-1):
+                outdir_path = Path(outdir)
+                outdir_path.mkdir(parents=True, exist_ok=True)
+                img = Image.new('L', (8, 8), 255)
+                img.save(outdir_path / '001.png')
+                img.save(outdir_path.parent / 'escaped.png')
+
+            fake_patool = types.SimpleNamespace(extract_archive=fake_extract_archive)
+            with mock.patch.object(core, '_require_patoolib', return_value=fake_patool):
+                with self.assertRaises(RuntimeError) as ctx:
+                    core.load_archive_input_document(archive_path, tmpdir_path / 'out')
+
+            self.assertIn('安全のためアーカイブ展開を中止', str(ctx.exception))
 
     def test_process_archive_reports_extract_stage_on_load_failure(self):
         archive_path = Path('broken.zip')

@@ -26,7 +26,7 @@ def _preview_view_help_text() -> str:
     return str(toggle_plan.get(
         'help_text',
         '右ペイン: プレビュー生成後の見え方を確認します。\n'
-        'XTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。',
+        '「XTCファイルを開く」では、既存のXTC/XTCHファイルを同じ右ペインでページ送りしながら確認できます。',
     ))
 
 

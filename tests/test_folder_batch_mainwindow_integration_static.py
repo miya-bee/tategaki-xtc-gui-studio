@@ -13,7 +13,10 @@ def read_project_file(relative_path: str) -> str:
 
 class FolderBatchMainWindowIntegrationStaticTests(unittest.TestCase):
     def test_mainwindow_exposes_folder_batch_hooks_and_topbar_button(self) -> None:
-        source = read_project_file('tategakiXTC_gui_studio.py')
+        source = (
+            read_project_file('tategakiXTC_gui_studio.py')
+            + read_project_file('tategakiXTC_gui_studio_top_bar_helpers.py')
+        )
         self.assertIn('def _open_folder_batch_dialog(', source)
         self.assertIn('def _folder_batch_worker_settings(', source)
         self.assertIn("'フォルダ一括変換'", source)
@@ -26,9 +29,9 @@ class FolderBatchMainWindowIntegrationStaticTests(unittest.TestCase):
 
 
     def test_worker_running_state_disables_folder_batch_entry_points(self) -> None:
-        source = read_project_file('tategakiXTC_gui_studio.py')
-        start = source.index('def _set_worker_controls_running(')
-        end = source.index('def _prepare_conversion_ui_for_run(', start)
+        source = read_project_file('tategakiXTC_gui_studio_conversion_runtime_helpers.py')
+        start = source.index('def set_worker_controls_running(')
+        end = source.index('def prepare_conversion_ui_for_run(', start)
         body = source[start:end]
         self.assertIn("('folder_batch_btn', 'folder_batch_action')", body)
         self.assertIn('setter(not running)', body)

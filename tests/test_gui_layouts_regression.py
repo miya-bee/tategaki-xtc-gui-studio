@@ -1,3 +1,4 @@
+from pathlib import Path
 import unittest
 
 import tategakiXTC_gui_layouts as gui_layouts
@@ -68,12 +69,50 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         self.assertEqual(plan['output_reset_button_tooltip'], '保存先指定を解除し、ソースファイルと同じフォルダへ戻します')
         self.assertEqual(plan['folder_batch_button_text'], 'フォルダ一括変換')
         self.assertEqual(plan['folder_batch_button_width'], 152)
+        self.assertNotIn('xtc_open_button_text', plan)
         self.assertIn('上部ボタンの使い分け', plan['top_buttons_help_tooltip'])
         self.assertEqual(plan['top_buttons_help_title'], '上部ボタンの使い分け')
         self.assertIn('保存先リセット', plan['top_buttons_help_text'])
         self.assertIn('ソースファイルと同じフォルダへ戻します', plan['top_buttons_help_text'])
+        self.assertIn('右ペイン上部の「XTCファイルを開く」', plan['top_buttons_help_text'])
         self.assertEqual(plan['run_button_text'], '▶  変換実行')
         self.assertEqual(plan['settings_button_tooltip'], '表示設定')
+
+    def test_top_bar_plan_prefers_target_width_over_uniform_path_buttons(self):
+        plan = gui_layouts.build_top_bar_plan(path_button_width='96')
+        self.assertEqual(plan['target_minimum_width'], 240)
+        self.assertEqual(plan['top_path_button_min_width'], 0)
+        self.assertEqual(plan['folder_batch_button_min_width'], 0)
+
+    def test_top_bar_helper_keeps_source_field_expanding_without_fixed_route_buttons(self):
+        source = Path('tategakiXTC_gui_studio_top_bar_helpers.py').read_text(encoding='utf-8')
+        self.assertIn("setMinimumWidth(self._plan_int_value(top_bar_plan, 'target_minimum_width', 240))", source)
+        self.assertIn('lay.addWidget(self.target_edit, 1)', source)
+        self.assertNotIn("fixed_width=top_bar_plan.get('path_button_width'", source)
+        self.assertNotIn("fixed_width=top_bar_plan.get('aozora_button_width'", source)
+        self.assertNotIn("fixed_width=top_bar_plan.get('folder_batch_button_width'", source)
+
+
+    def test_top_bar_helper_orders_source_buttons_without_xtc_viewer_button(self):
+        source = Path('tategakiXTC_gui_studio_top_bar_helpers.py').read_text(encoding='utf-8')
+        self.assertNotIn("top_bar_plan.get('xtc_open_button_text'", source)
+        file_pos = source.index('lay.addWidget(btn_file)')
+        batch_pos = source.index('lay.addWidget(self.folder_batch_btn)')
+        save_pos = source.index('lay.addWidget(btn_folder)')
+        reset_pos = source.index('lay.addWidget(btn_output_reset)')
+        self.assertNotIn('lay.addWidget(btn_aozora)', source)
+        self.assertNotIn('lay.addWidget(btn_clipboard)', source)
+        self.assertLess(file_pos, batch_pos)
+        self.assertLess(batch_pos, save_pos)
+        self.assertLess(save_pos, reset_pos)
+
+
+    def test_top_bar_target_minimum_width_stays_below_default_startup_width(self):
+        plan = gui_layouts.build_top_bar_plan(path_button_width='96')
+        # The source field should be favored, but it must not add a large
+        # hard minimum that makes the top bar push the startup window wider
+        # than the historical/default window size on smaller displays.
+        self.assertLessEqual(plan['target_minimum_width'], 240)
 
     def test_build_language_section_plan_exposes_restart_note(self):
         plan = gui_layouts.build_language_section_plan()
@@ -89,6 +128,10 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         nav_plan = gui_layouts.build_nav_bar_plan()
         self.assertEqual(toggle_plan['font_view_text'], 'フォントビュー')
         self.assertEqual(toggle_plan['right_pane_text'], '右ペイン')
+        self.assertEqual(toggle_plan['open_xtc_button_text'], 'XTCファイルを開く')
+        self.assertEqual(toggle_plan['open_xtc_button_object_name'], 'previewToolbarButton')
+        self.assertEqual(toggle_plan['share_png_button_object_name'], 'previewToolbarButton')
+        self.assertIn('.xtc / .xtch', toggle_plan['open_xtc_button_tooltip'])
         self.assertEqual(toggle_plan['device_view_text'], '右ペイン')
         self.assertIn('右ペイン:', toggle_plan['help_text'])
         self.assertIn('XTC/XTCH', toggle_plan['help_text'])
@@ -143,7 +186,7 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
     def test_build_preview_display_toggle_plan_owns_actual_size_and_guides_help(self):
         plan = gui_layouts.build_preview_display_toggle_plan()
 
-        self.assertEqual(plan['actual_size_text'], '実寸近似')
+        self.assertEqual(plan['actual_size_text'], '実寸')
         self.assertEqual(plan['actual_size_object_name'], 'viewToggleBtn')
         self.assertTrue(plan['actual_size_checkable'])
         self.assertEqual(plan['actual_size_focus_policy'], 'no_focus')
@@ -407,7 +450,7 @@ class GuiLayoutsRegressionTests(unittest.TestCase):
         file_viewer_plan = gui_layouts.build_file_viewer_section_plan()
 
         self.assertNotIn('open_xtc_button_text', display_plan)
-        self.assertEqual(file_viewer_plan['open_xtc_button_text'], 'XTC/XTCHを開く')
+        self.assertEqual(file_viewer_plan['open_xtc_button_text'], 'XTCファイルを開く')
         self.assertEqual(file_viewer_plan['open_xtc_button_object_name'], 'smallBtn')
         self.assertEqual(file_viewer_plan['open_xtc_help_leading_spacing'], 8)
         self.assertTrue(file_viewer_plan['open_xtc_help_trailing_stretch'])

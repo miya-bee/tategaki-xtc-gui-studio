@@ -55,6 +55,9 @@ class WorkerConversionSettings(TypedDict, total=False):
     ichi_position_mode: str
     halfwidth_digit_position_mode: str
     halfwidth_alpha_position_mode: str
+    latin_orientation_mode: str
+    opening_bracket_indent_mode: str
+    middle_dot_position_mode: str
     tatechuyoko_symbol_position_mode: str
     lower_closing_bracket_position_mode: str
     wave_dash_drawing_mode: str
@@ -301,6 +304,9 @@ def build_conversion_args(cfg: WorkerConversionSettings) -> ConversionArgs:
         ichi_position_mode=_str_config_value(cfg, 'ichi_position_mode', 'standard'),
         halfwidth_digit_position_mode=_str_config_value(cfg, 'halfwidth_digit_position_mode', 'standard'),
         halfwidth_alpha_position_mode=_str_config_value(cfg, 'halfwidth_alpha_position_mode', 'standard'),
+        latin_orientation_mode=_str_config_value(cfg, 'latin_orientation_mode', 'vertical'),
+        opening_bracket_indent_mode=_str_config_value(cfg, 'opening_bracket_indent_mode', 'none'),
+        middle_dot_position_mode=_str_config_value(cfg, 'middle_dot_position_mode', 'standard'),
         tatechuyoko_symbol_position_mode=_str_config_value(cfg, 'tatechuyoko_symbol_position_mode', 'standard'),
         lower_closing_bracket_position_mode=_str_config_value(cfg, 'lower_closing_bracket_position_mode', 'standard'),
         wave_dash_drawing_mode=core._wave_dash_drawing_mode(_str_config_value(cfg, 'wave_dash_drawing_mode', 'rotate')),

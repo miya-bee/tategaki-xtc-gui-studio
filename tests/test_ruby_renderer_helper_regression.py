@@ -158,6 +158,102 @@ class RubyRendererHelperRegressionTests(unittest.TestCase):
         )
 
 
+    def test_long_ruby_group_extra_cells_expand_only_for_clearly_overlong_ruby(self):
+        args = self._args(font_size=16, ruby_size=14)
+        normal_group = {'page_index': 0, 'x': 20, 'start_y': 10, 'end_y': 28, 'base_len': 2}
+        long_group = dict(normal_group)
+
+        self.assertEqual(core._ruby_group_extra_cells_for_part(normal_group, 'けん', args), 0)
+        self.assertEqual(core._ruby_group_extra_cells_for_part(normal_group, 'わがはい', args), 0)
+        self.assertEqual(core._ruby_group_extra_cells_for_part(normal_group, 'けんこん', args), 0)
+        self.assertEqual(core._ruby_group_extra_cells_for_part(normal_group, 'あいうえお', args), 0)
+        single_base_group = {'page_index': 0, 'x': 20, 'start_y': 10, 'end_y': 10, 'base_len': 1}
+        self.assertEqual(core._ruby_group_extra_cells_for_part(single_base_group, 'じょう', args), 0)
+        self.assertEqual(core._ruby_group_extra_cells_for_part(single_base_group, 'てのひら', args), 0)
+        self.assertEqual(core._ruby_group_extra_cells_for_part(single_base_group, 'あいうえお', args), 0)
+        self.assertEqual(core._ruby_group_extra_cells_for_part(single_base_group, 'あいうえおか', args), 0)
+        self.assertEqual(core._ruby_group_extra_cells_for_part(long_group, 'けんこんこん', args), 0)
+        self.assertGreater(core._ruby_group_extra_cells_for_part(long_group, 'けんこんこんこん', args), 0)
+
+        expanded = core._expanded_ruby_overlay_groups_for_parts([long_group], ['けんこんこんこん'], args)
+        self.assertGreater(expanded[0]['end_y'], long_group['end_y'])
+        self.assertEqual(long_group['end_y'], 28)
+
+    def test_draw_runs_reserves_trailing_space_for_clearly_overlong_ruby_without_ui_setting(self):
+        args = self._args(font_size=16, ruby_size=14, height=220, margin_t=10, margin_b=10)
+        renderer = self._renderer(args)
+        base_after_two_chars = renderer.curr_y + 2 * (args.font_size + 2)
+
+        with mock.patch.object(core, 'draw_char_tate'):
+            renderer.draw_runs([{'text': '乾坤', 'ruby': 'けんこんこんこん'}], default_font=renderer.font)
+
+        self.assertGreater(renderer.curr_y, base_after_two_chars)
+
+    def test_draw_runs_keeps_two_base_four_kana_ruby_spacing_unchanged(self):
+        args = self._args(font_size=16, ruby_size=14, height=220, margin_t=10, margin_b=10)
+        renderer = self._renderer(args)
+        base_after_two_chars = renderer.curr_y + 2 * (args.font_size + 2)
+
+        with mock.patch.object(core, 'draw_char_tate'):
+            renderer.draw_runs([{'text': '吾輩', 'ruby': 'わがはい'}], default_font=renderer.font)
+
+        self.assertEqual(renderer.curr_y, base_after_two_chars)
+
+    def test_draw_runs_keeps_single_base_common_ruby_spacing_unchanged(self):
+        args = self._args(font_size=16, ruby_size=14, height=220, margin_t=10, margin_b=10)
+        renderer = self._renderer(args)
+        base_after_one_char = renderer.curr_y + args.font_size + 2
+
+        with mock.patch.object(core, 'draw_char_tate'):
+            renderer.draw_runs([{'text': '情', 'ruby': 'じょう'}], default_font=renderer.font)
+
+        self.assertEqual(renderer.curr_y, base_after_one_char)
+
+    def test_draw_runs_keeps_short_single_base_ruby_before_following_text_spacing_unchanged(self):
+        args = self._args(font_size=16, ruby_size=14, height=220, margin_t=10, margin_b=10)
+        renderer = self._renderer(args)
+        line_step = args.font_size + 2
+        body_positions = []
+
+        def capture_body_char(_draw, char, pos, _font, _size, **kwargs):
+            if not kwargs.get('ruby_mode'):
+                body_positions.append((char, pos[1]))
+
+        runs = core._aozora_inline_to_runs('漢《あいうえお》字')
+        with mock.patch.object(core, 'draw_char_tate', side_effect=capture_body_char):
+            renderer.draw_runs(runs, default_font=renderer.font)
+
+        self.assertEqual(body_positions[:2], [('漢', 10), ('字', 10 + line_step)])
+        self.assertEqual(renderer.curr_y, 10 + 2 * line_step)
+
+    def test_draw_runs_keeps_short_two_base_ruby_before_following_text_spacing_unchanged(self):
+        args = self._args(font_size=16, ruby_size=14, height=220, margin_t=10, margin_b=10)
+        renderer = self._renderer(args)
+        line_step = args.font_size + 2
+        body_positions = []
+
+        def capture_body_char(_draw, char, pos, _font, _size, **kwargs):
+            if not kwargs.get('ruby_mode'):
+                body_positions.append((char, pos[1]))
+
+        runs = core._aozora_inline_to_runs('漢字《あいうえおか》後')
+        with mock.patch.object(core, 'draw_char_tate', side_effect=capture_body_char):
+            renderer.draw_runs(runs, default_font=renderer.font)
+
+        self.assertEqual(body_positions[:3], [('漢', 10), ('字', 10 + line_step), ('後', 10 + 2 * line_step)])
+        self.assertEqual(renderer.curr_y, 10 + 3 * line_step)
+
+    def test_draw_runs_keeps_short_ruby_spacing_unchanged(self):
+        args = self._args(font_size=16, ruby_size=8, height=220, margin_t=10, margin_b=10)
+        renderer = self._renderer(args)
+        base_after_two_chars = renderer.curr_y + 2 * (args.font_size + 2)
+
+        with mock.patch.object(core, 'draw_char_tate'):
+            renderer.draw_runs([{'text': '乾坤', 'ruby': 'けん'}], default_font=renderer.font)
+
+        self.assertEqual(renderer.curr_y, base_after_two_chars)
+
+
     def test_ruby_group_capacity_and_draw_split_ruby_cover_zero_and_multi_group_paths(self):
         args = self._args(height=80, margin_t=20, margin_b=20, font_size=16, ruby_size=8)
         zero_group = {'chars': [{'y': 0}, {'y': 0}]}

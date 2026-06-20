@@ -652,7 +652,13 @@ class SettingsControllerRegressionTests(unittest.TestCase):
             ('down_weak', '下補正弱'),
             ('down_strong', '下補正強'),
         ])
-        source = Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+        # The glyph-position section construction moved into the
+        # settings-sections helper module; keep the entry module in the scan so
+        # the assertNotIn contracts also cover both locations.
+        source = (
+            Path('tategakiXTC_gui_studio.py').read_text(encoding='utf-8')
+            + Path('tategakiXTC_gui_studio_settings_sections_helpers.py').read_text(encoding='utf-8')
+        )
 
         def _control_label_index(row_name: str, label: str) -> int:
             match = re.search(

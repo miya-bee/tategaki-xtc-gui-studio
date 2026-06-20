@@ -10,6 +10,78 @@ from typing import Any
 
 import unicodedata
 
+
+# Circular-import guard for direct split-module imports.
+# ``tategakiXTC_gui_core`` re-exports many names from this module; when this
+# module is imported first, core may ask for those names before the real
+# definitions below have executed.  Placeholders let core finish importing;
+# the real objects are published back to core at module end.
+_SPLIT_IMPORT_PLACEHOLDER = object()
+_CORE_REEXPORT_NAMES = (
+    'FONT_SPEC_INDEX_TOKEN',
+    'BUNDLED_FONT_DIR_NAMES',
+    'BUNDLED_FONT_FILE_SUFFIXES',
+    '_bundled_font_dir_candidates',
+    '_existing_bundled_font_dirs',
+    '_preferred_system_font_specs',
+    '_pick_system_font_spec',
+    '_legacy_font_fallback_spec',
+    '_candidate_font_paths',
+    'parse_font_spec',
+    '_cached_build_font_spec',
+    'build_font_spec',
+    '_font_path_key',
+    '_font_name_parts',
+    '_cached_load_truetype_font',
+    'load_truetype_font',
+    'describe_font_value',
+    '_font_entries_for_value',
+    'get_font_entries_for_value',
+    '_clear_named_cache',
+    'clear_font_entry_cache',
+    '_font_scan_targets',
+    'get_font_entries',
+    'get_font_list',
+    '_cached_resolve_font_path',
+    'resolve_font_path',
+    '_cached_require_font_path',
+    'require_font_path',
+    'get_code_font_value'
+)
+_CORE_REEXPORT_ALIASES = (
+    ('FONT_SPEC_INDEX_TOKEN', 'FONT_SPEC_INDEX_TOKEN'),
+    ('BUNDLED_FONT_DIR_NAMES', 'BUNDLED_FONT_DIR_NAMES'),
+    ('BUNDLED_FONT_FILE_SUFFIXES', 'BUNDLED_FONT_FILE_SUFFIXES'),
+    ('_bundled_font_dir_candidates', '_bundled_font_dir_candidates'),
+    ('_existing_bundled_font_dirs', '_existing_bundled_font_dirs'),
+    ('_preferred_system_font_specs', '_preferred_system_font_specs'),
+    ('_pick_system_font_spec', '_pick_system_font_spec'),
+    ('_legacy_font_fallback_spec', '_legacy_font_fallback_spec'),
+    ('_candidate_font_paths', '_candidate_font_paths'),
+    ('parse_font_spec', 'parse_font_spec'),
+    ('_cached_build_font_spec', '_cached_build_font_spec'),
+    ('build_font_spec', 'build_font_spec'),
+    ('_font_path_key', '_font_path_key'),
+    ('_font_name_parts', '_font_name_parts'),
+    ('_cached_load_truetype_font', '_cached_load_truetype_font'),
+    ('load_truetype_font', 'load_truetype_font'),
+    ('describe_font_value', 'describe_font_value'),
+    ('_font_entries_for_value', '_font_entries_for_value'),
+    ('get_font_entries_for_value', 'get_font_entries_for_value'),
+    ('_clear_named_cache', '_clear_named_cache'),
+    ('clear_font_entry_cache', 'clear_font_entry_cache'),
+    ('_font_scan_targets', '_font_scan_targets'),
+    ('get_font_entries', 'get_font_entries'),
+    ('get_font_list', 'get_font_list'),
+    ('_cached_resolve_font_path', '_cached_resolve_font_path'),
+    ('resolve_font_path', 'resolve_font_path'),
+    ('_cached_require_font_path', '_cached_require_font_path'),
+    ('require_font_path', 'require_font_path'),
+    ('get_code_font_value', 'get_code_font_value')
+)
+for _name in _CORE_REEXPORT_NAMES:
+    globals().setdefault(_name, _SPLIT_IMPORT_PLACEHOLDER)
+
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
 
@@ -584,4 +656,17 @@ def get_code_font_value(primary_font_value: str = '') -> str:
         LOGGER.warning('コードブロック用フォントが見つかりませんでした。')
     return primary_font_value
 
+def _publish_core_reexports() -> None:
+    """Replace circular-import placeholders in gui_core with real split symbols."""
+    for _source_name, _core_name in _CORE_REEXPORT_ALIASES:
+        _value = globals().get(_source_name, _SPLIT_IMPORT_PLACEHOLDER)
+        if _value is _SPLIT_IMPORT_PLACEHOLDER:
+            continue
+        try:
+            setattr(_core, _core_name, _value)
+        except Exception:
+            pass
+
+
+_publish_core_reexports()
 

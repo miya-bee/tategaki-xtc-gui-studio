@@ -13,16 +13,18 @@ from pathlib import Path
 from tategakiXTC_release_metadata import (
     APP_VERSION,
     PREVIOUS_PUBLIC_VERSION,
+    PUBLIC_DISTRIBUTION_LABEL,
     PUBLIC_VERSION,
     PUBLIC_VERSION_TAG,
     RELEASE_NOTES_FILE,
     RELEASE_VERIFY_ZIP_FILE_NAME,
     RELEASE_ZIP_FILE_NAME,
+    SOURCE_ONLY_ZIP_FILE_NAME,
 )
 
 import tategakiXTC_gui_core as core
 
-APP_BASE_NAME = '縦書きXTC Studio'
+APP_BASE_NAME = f'縦書きXTC Studio {PUBLIC_DISTRIBUTION_LABEL}'
 APP_NAME = f'{APP_BASE_NAME} {APP_VERSION}'
 SETTINGS_SCHEMA_VERSION = 2
 SETTINGS_FILE = Path(__file__).with_name('tategakiXTC_gui_studio.ini')
@@ -102,6 +104,9 @@ DEFAULT_RENDER_SETTINGS: dict[str, object] = {
     'ichi_position_mode': 'standard',
     'halfwidth_digit_position_mode': 'standard',
     'halfwidth_alpha_position_mode': 'standard',
+    'latin_orientation_mode': 'vertical',
+    'opening_bracket_indent_mode': 'none',
+    'middle_dot_position_mode': 'standard',
     'tatechuyoko_symbol_position_mode': 'standard',
     'lower_closing_bracket_position_mode': 'standard',
     'wave_dash_drawing_mode': 'rotate',
@@ -208,7 +213,7 @@ PRESET_FIELDS = [
     'margin_t', 'margin_b', 'margin_r', 'margin_l',
     'night_mode', 'dither', 'threshold', 'kinsoku_mode',
     'tatechuyoko_digit_mode',
-    'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'halfwidth_alpha_position_mode', 'tatechuyoko_symbol_position_mode',
+    'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'halfwidth_alpha_position_mode', 'latin_orientation_mode', 'opening_bracket_indent_mode', 'middle_dot_position_mode', 'tatechuyoko_symbol_position_mode',
     'lower_closing_bracket_position_mode', 'wave_dash_drawing_mode', 'wave_dash_position_mode', 'output_format',
 ]
 
@@ -239,6 +244,16 @@ GLYPH_POSITION_MODE_OPTIONS = [
     ('down_strong', '下補正強'),
 ]
 GLYPH_POSITION_MODE_LABELS = {key: label for key, label in GLYPH_POSITION_MODE_OPTIONS}
+LATIN_ORIENTATION_MODE_OPTIONS = [
+    ('vertical', '縦組み'),
+    ('horizontal', '横組み'),
+]
+LATIN_ORIENTATION_MODE_LABELS = {key: label for key, label in LATIN_ORIENTATION_MODE_OPTIONS}
+OPENING_BRACKET_INDENT_MODE_OPTIONS = [
+    ('none', '空白なし'),
+    ('one_char', '1文字下げ'),
+]
+OPENING_BRACKET_INDENT_MODE_LABELS = {key: label for key, label in OPENING_BRACKET_INDENT_MODE_OPTIONS}
 CLOSING_BRACKET_POSITION_MODE_OPTIONS = [
     ('up_strong', '上補正強'),
     ('up_weak', '上補正弱'),
@@ -278,9 +293,11 @@ __all__ = [
     'APP_NAME',
     'PUBLIC_VERSION',
     'PREVIOUS_PUBLIC_VERSION',
+    'PUBLIC_DISTRIBUTION_LABEL',
     'PUBLIC_VERSION_TAG',
     'RELEASE_NOTES_FILE',
     'RELEASE_ZIP_FILE_NAME',
+    'SOURCE_ONLY_ZIP_FILE_NAME',
     'RELEASE_VERIFY_ZIP_FILE_NAME',
     'SETTINGS_SCHEMA_VERSION',
     'SETTINGS_FILE',
@@ -327,6 +344,10 @@ __all__ = [
     'TATECHUYOKO_DIGIT_MODE_LABELS',
     'GLYPH_POSITION_MODE_OPTIONS',
     'GLYPH_POSITION_MODE_LABELS',
+    'LATIN_ORIENTATION_MODE_OPTIONS',
+    'LATIN_ORIENTATION_MODE_LABELS',
+    'OPENING_BRACKET_INDENT_MODE_OPTIONS',
+    'OPENING_BRACKET_INDENT_MODE_LABELS',
     'CLOSING_BRACKET_POSITION_MODE_OPTIONS',
     'CLOSING_BRACKET_POSITION_MODE_LABELS',
     'WAVE_DASH_DRAWING_MODE_OPTIONS',

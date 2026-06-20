@@ -10,6 +10,44 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
+
+# Circular-import guard for direct split-module imports.
+# ``tategakiXTC_gui_core`` re-exports many names from this module; when this
+# module is imported first, core may ask for those names before the real
+# definitions below have executed.  Placeholders let core finish importing;
+# the real objects are published back to core at module end.
+_SPLIT_IMPORT_PLACEHOLDER = object()
+_CORE_REEXPORT_NAMES = (
+    'OUTPUT_FLAT_SEPARATOR',
+    '_natural_sort_key',
+    '_encode_output_name_part',
+    '_build_flat_output_stem_from_relative',
+    '_build_fallback_output_stem',
+    'iter_conversion_targets',
+    'should_skip_conversion_target',
+    '_normalize_output_format',
+    'get_output_path_for_target',
+    'make_unique_output_path',
+    'resolve_output_path_with_conflict',
+    'find_output_conflicts'
+)
+_CORE_REEXPORT_ALIASES = (
+    ('OUTPUT_FLAT_SEPARATOR', 'OUTPUT_FLAT_SEPARATOR'),
+    ('_natural_sort_key', '_natural_sort_key'),
+    ('_encode_output_name_part', '_encode_output_name_part'),
+    ('_build_flat_output_stem_from_relative', '_build_flat_output_stem_from_relative'),
+    ('_build_fallback_output_stem', '_build_fallback_output_stem'),
+    ('iter_conversion_targets', 'iter_conversion_targets'),
+    ('should_skip_conversion_target', 'should_skip_conversion_target'),
+    ('_normalize_output_format', '_normalize_output_format'),
+    ('get_output_path_for_target', 'get_output_path_for_target'),
+    ('make_unique_output_path', 'make_unique_output_path'),
+    ('resolve_output_path_with_conflict', 'resolve_output_path_with_conflict'),
+    ('find_output_conflicts', 'find_output_conflicts')
+)
+for _name in _CORE_REEXPORT_NAMES:
+    globals().setdefault(_name, _SPLIT_IMPORT_PLACEHOLDER)
+
 import tategakiXTC_gui_core as _core
 from tategakiXTC_gui_core_sync import core_sync_version, install_core_sync_tracker
 
@@ -197,3 +235,18 @@ def find_output_conflicts(targets: Sequence[PathLike], output_format: str = 'xtc
         if out_path and out_path.exists():
             conflicts.append((path, out_path))
     return conflicts
+
+def _publish_core_reexports() -> None:
+    """Replace circular-import placeholders in gui_core with real split symbols."""
+    for _source_name, _core_name in _CORE_REEXPORT_ALIASES:
+        _value = globals().get(_source_name, _SPLIT_IMPORT_PLACEHOLDER)
+        if _value is _SPLIT_IMPORT_PLACEHOLDER:
+            continue
+        try:
+            setattr(_core, _core_name, _value)
+        except Exception:
+            pass
+
+
+_publish_core_reexports()
+

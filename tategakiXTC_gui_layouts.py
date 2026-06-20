@@ -219,6 +219,14 @@ def build_font_section_plan() -> dict[str, Any]:
         'kinsoku_row_spacing': 6,
         'margin_rows_spacing': 2,
         'margin_pair_spacing': 16,
+        'composition_group_spacing': 8,
+        'page_option_group_spacing': 12,
+        'page_option_inner_spacing': 6,
+        'tatechuyoko_digit_mode_combo_width': 78,
+        'latin_orientation_combo_width': 78,
+        'opening_bracket_indent_combo_width': 96,
+        'kinsoku_mode_combo_width': 74,
+        'progress_bar_position_combo_width': 88,
     }
 
 
@@ -272,7 +280,7 @@ def build_display_section_plan() -> dict[str, Any]:
 
 def build_file_viewer_section_plan() -> dict[str, Any]:
     return {
-        'open_xtc_button_text': 'XTC/XTCHを開く',
+        'open_xtc_button_text': 'XTCファイルを開く',
         'open_xtc_button_object_name': 'smallBtn',
         'open_xtc_help_leading_spacing': 8,
         'open_xtc_help_trailing_stretch': True,
@@ -378,6 +386,9 @@ def build_top_bar_plan(*, path_button_width: object = 128) -> dict[str, Any]:
         'contents_margins': (16, 0, 12, 0),
         'spacing': 10,
         'path_button_width': _coerce_nonnegative_int(path_button_width, default=136) or 136,
+        'top_path_button_min_width': 0,
+        'folder_batch_button_min_width': 0,
+        'target_minimum_width': 240,
         'file_button_text': 'ファイルを開く',
         'file_button_tooltip': '1つのファイルを開いて変換します',
         'folder_button_text': '保存先を選ぶ',
@@ -387,9 +398,7 @@ def build_top_bar_plan(*, path_button_width: object = 128) -> dict[str, Any]:
         'folder_batch_button_text': 'フォルダ一括変換',
         'folder_batch_button_width': 152,
         'folder_batch_button_tooltip': 'フォルダ内の複数ファイルをまとめて変換します',
-        'xtc_open_button_text': 'XTC/XTCHを開く',
-        'xtc_open_button_tooltip': '既存の .xtc / .xtch ファイルを右ペインで確認します',
-        'top_buttons_help_text': '上部ボタンの使い分け\n\n1) ファイルを開く\n1つのファイルだけを開いて変換するときに使います。TXT / Markdown / EPUB / 画像などを個別に確認したい場合はこちらです。\n\n2) XTC/XTCHを開く\n既存の .xtc / .xtch ファイルを右ペインへ読み込んで確認します。変換設定ではなく、出力済みファイルの確認に使います。\n\n3) 保存先を選ぶ\n変換後の XTC / XTCH を保存するフォルダを選びます。単体変換では、ここで選んだ場所に出力されます。\n\n4) 保存先リセット\n保存先指定を解除し、次回の単体変換をソースファイルと同じフォルダへ戻します。別保存先で試したあと、通常の保存場所へ戻したい場合に使います。\n\n5) フォルダ一括変換\nフォルダ内の複数ファイルをまとめて変換するときに使います。サブフォルダも対象にしたい場合や、フォルダ構造を保って出力したい場合はこちらです。\n\n迷ったときの目安\n・1冊 / 1ファイルだけ試す → ファイルを開く\n・出力済み XTC/XTCH を確認 → XTC/XTCHを開く\n・保存場所を変えたい → 保存先を選ぶ\n・ソースファイルと同じフォルダへ戻したい → 保存先リセット\n・複数ファイルをまとめて処理したい → フォルダ一括変換',
+        'top_buttons_help_text': '上部ボタンの使い分け\n\n1) ファイルを開く\n1つのファイルだけを開いて変換するときに使います。TXT / Markdown / EPUB / 画像などを個別に確認したい場合はこちらです。\n\n2) フォルダ一括変換\nフォルダ内の複数ファイルをまとめて変換するときに使います。サブフォルダも対象にしたい場合や、フォルダ構造を保って出力したい場合はこちらです。\n\n3) 保存先を選ぶ\n変換後の XTC / XTCH を保存するフォルダを選びます。単体変換では、ここで選んだ場所に出力されます。\n\n4) 保存先リセット\n保存先指定を解除し、次回の単体変換をソースファイルと同じフォルダへ戻します。別保存先で試したあと、通常の保存場所へ戻したい場合に使います。\n\n補足\n既存の .xtc / .xtch ファイルを確認する場合は、右ペイン上部の「XTCファイルを開く」を使います。\n\n迷ったときの目安\n・1冊 / 1ファイルだけ試す → ファイルを開く\n・複数ファイルをまとめて処理したい → フォルダ一括変換\n・保存場所を変えたい → 保存先を選ぶ\n・ソースファイルと同じフォルダへ戻したい → 保存先リセット\n・出力済み XTC/XTCH を確認 → 右ペイン上部の XTCファイルを開く',
         'top_buttons_help_title': '上部ボタンの使い分け',
         'top_buttons_help_tooltip': '上部ボタンの使い分け',
         'target_placeholder': '変換対象のファイル / フォルダ（ここへドロップ可）',
@@ -432,7 +441,7 @@ def build_view_toggle_bar_plan() -> dict[str, Any]:
         'font_view_checked_default': True,
         'right_pane_checked_default': False,
         'device_view_checked_default': False,
-        'help_text': '右ペイン: プレビュー生成後の見え方を確認します。\nXTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。',
+        'help_text': '右ペイン: プレビュー生成後の見え方を確認します。\n「XTCファイルを開く」では、既存のXTC/XTCHファイルを同じ右ペインでページ送りしながら確認できます。',
         'preview_zoom_label_text': '表示倍率',
         'preview_zoom_label_visible': False,
         'preview_zoom_actual_size_label_text': '実寸補正',
@@ -453,17 +462,25 @@ def build_view_toggle_bar_plan() -> dict[str, Any]:
         'preview_zoom_spin_button_symbols': 'no_buttons',
         'preview_zoom_spin_suffix': '%',
         'preview_zoom_tooltip': '右ペイン表示の表示倍率です。実寸近似ONでは実寸補正として使います。',
+        'open_xtc_button_text': 'XTCファイルを開く',
+        'open_xtc_button_tooltip': '既存の .xtc / .xtch ファイルを右ペインで確認します。',
+        'open_xtc_button_object_name': 'previewToolbarButton',
+        'open_xtc_button_focus_policy': 'no_focus',
+        'share_png_button_text': 'PNG保存',
+        'share_png_button_tooltip': '現在のプレビュー1ページを枠付きPNGとして保存します。',
+        'share_png_button_object_name': 'previewToolbarButton',
+        'share_png_button_focus_policy': 'no_focus',
     }
 
 
 def build_preview_display_toggle_plan() -> dict[str, Any]:
     return {
-        'actual_size_text': '実寸近似',
+        'actual_size_text': '実寸',
         'actual_size_object_name': 'viewToggleBtn',
         'actual_size_checkable': True,
         'actual_size_focus_policy': 'no_focus',
         'actual_size_help_text': (
-            '実寸近似: PC画面上の表示サイズを、選択中の機種の実物サイズに近づける表示モードです。\n'
+            '実寸: PC画面上の表示サイズを、選択中の機種の実物サイズに近づける表示モードです。\n'
             '端末に表示したときのおおよその大きさを確認したい場合に使います。\n'
             'ONにすると右ペインの倍率欄は「実寸補正」に切り替わります。\n'
             '表示が実物より大きい/小さい場合は、この実寸補正を調整してください。\n'

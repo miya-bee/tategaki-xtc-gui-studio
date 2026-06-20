@@ -62,6 +62,27 @@ def _coerce_ui_message_text(value: object, default: str = '') -> str:
     return text if text.strip() else default
 
 
+
+def flush_pending_ui_changes(
+    focus_widget_getter: object,
+    process_events: object,
+) -> None:
+    current_focus = focus_widget_getter() if callable(focus_widget_getter) else None
+    clear_focus = getattr(current_focus, 'clearFocus', None)
+
+    if callable(clear_focus):
+        try:
+            clear_focus()
+        except Exception:
+            pass
+
+    if callable(process_events):
+        for _ in range(2):
+            try:
+                process_events()
+            except Exception:
+                break
+
 def _connect_signal_best_effort(signal: object, callback: object, *, queued: bool = False) -> bool:
     """Connect a Qt signal while tolerating lightweight test stubs.
 

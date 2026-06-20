@@ -155,11 +155,11 @@ def _run_scan_child() -> int:
                             'current_ui_language': getattr(window, 'current_ui_language', None),
                             'current_ui_language_value': window.current_ui_language_value(),
                         },
-                        ensure_ascii=False,
+                        ensure_ascii=True,
                     )
                 )
                 return 1
-            expected_title = f'TategakiXTC GUI Studio {studio.APP_VERSION}'
+            expected_title = f'TategakiXTC GUI Studio Public {studio.APP_VERSION}'
             if window.windowTitle() != expected_title:
                 print(
                     json.dumps(
@@ -168,7 +168,7 @@ def _run_scan_child() -> int:
                             'actual': window.windowTitle(),
                             'expected': expected_title,
                         },
-                        ensure_ascii=False,
+                        ensure_ascii=True,
                     )
                 )
                 return 1
@@ -215,7 +215,7 @@ def _run_scan_child() -> int:
                             'offenders': offenders[:50],
                             'offender_count': len(offenders),
                         },
-                        ensure_ascii=False,
+                        ensure_ascii=True,
                         indent=2,
                     )
                 )

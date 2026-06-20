@@ -11,9 +11,159 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence, cast
 import codecs
+import json
 import re
 
+
+# Circular-import guard for direct split-module imports.
+# ``tategakiXTC_gui_core`` re-exports many names from this module; when this
+# module is imported first, core may ask for those names before the real
+# definitions below have executed.  Placeholders let core finish importing;
+# the real objects are published back to core at module end.
+_SPLIT_IMPORT_PLACEHOLDER = object()
+_CORE_REEXPORT_NAMES = (
+    '_TEXT_INPUT_DOCUMENT_CACHE',
+    '_try_decode_bytes',
+    '_guess_utf16_without_bom',
+    '_detect_text_with_charset_normalizer',
+    'START_TEXT_RE',
+    'START_TEXT_ONLY_RE',
+    '_strip_leading_start_text',
+    '_is_start_text_only_line',
+    '_is_frontmatter_like_text_line',
+    '_can_strip_start_text_after_frontmatter',
+    '_strip_start_text_after_leading_frontmatter',
+    'AOZORA_NOTE_RE',
+    'AOZORA_NOTE_ONLY_RE',
+    'AOZORA_IMAGE_MARKER_RE',
+    'AOZORA_INSERTED_IMAGE_NOTE_RE',
+    'AOZORA_IMPLICIT_RUBY_BASE_RE',
+    'AOZORA_INDENT_RE',
+    'AOZORA_INDENT_END_RE',
+    'AOZORA_BOUTEN_NOTE_RE',
+    'AOZORA_BOUSEN_NOTE_RE',
+    'AOZORA_EMPHASIS_KIND_ALIASES',
+    'AOZORA_EMPHASIS_MARKERS',
+    'AOZORA_SIDE_LINE_KIND_ALIASES',
+    'AOZORA_EMPHASIS_SKIP_CHARS',
+    'AOZORA_SIDE_LINE_SKIP_CHARS',
+    '_zenkaku_digits_to_int',
+    '_is_aozora_pagebreak_note',
+    '_parse_aozora_indent_note',
+    '_normalize_aozora_emphasis_kind',
+    '_parse_aozora_emphasis_note',
+    '_normalize_aozora_side_line_kind',
+    '_parse_aozora_side_line_note',
+    '_merge_adjacent_runs',
+    '_apply_emphasis_to_recent_runs',
+    '_apply_side_line_to_recent_runs',
+    '_parse_aozora_note_only_line',
+    '_apply_note_to_previous_block',
+    '_flush_text_run_buffer',
+    '_append_text_run',
+    '_aozora_inline_to_runs',
+    'read_text_file_with_fallback',
+    '_markdown_inline_to_runs',
+    '_plain_inline_to_runs',
+    '_consume_plain_text_leading_fullwidth_indent',
+    '_plain_text_line_starts_with_opening_bracket',
+    '_normalize_text_line',
+    'TEXT_INPUT_SUPPORT_SUMMARY',
+    '_dedupe_preserve_order',
+    '_find_markdown_support_warnings',
+    '_find_plain_text_support_warnings',
+    '_is_plain_dialogue_compact_candidate',
+    '_blocks_from_plain_text',
+    'MARKDOWN_FOOTNOTE_DEF_RE',
+    'MARKDOWN_DEF_LIST_RE',
+    'MARKDOWN_ORDERED_LIST_RE',
+    'MARKDOWN_FENCE_RE',
+    '_markdown_text_run',
+    '_set_runs_bold',
+    '_extract_markdown_footnotes',
+    '_split_markdown_table_row',
+    '_is_markdown_table_separator',
+    '_build_markdown_table_blocks',
+    '_append_markdown_footnote_blocks',
+    '_blocks_from_markdown',
+    'load_text_input_document',
+    'process_text_file',
+    'process_markdown_file'
+)
+_CORE_REEXPORT_ALIASES = (
+    ('_TEXT_INPUT_DOCUMENT_CACHE', '_TEXT_INPUT_DOCUMENT_CACHE'),
+    ('_try_decode_bytes', '_try_decode_bytes'),
+    ('_guess_utf16_without_bom', '_guess_utf16_without_bom'),
+    ('_detect_text_with_charset_normalizer', '_detect_text_with_charset_normalizer'),
+    ('START_TEXT_RE', 'START_TEXT_RE'),
+    ('START_TEXT_ONLY_RE', 'START_TEXT_ONLY_RE'),
+    ('_strip_leading_start_text', '_strip_leading_start_text'),
+    ('_is_start_text_only_line', '_is_start_text_only_line'),
+    ('_is_frontmatter_like_text_line', '_is_frontmatter_like_text_line'),
+    ('_can_strip_start_text_after_frontmatter', '_can_strip_start_text_after_frontmatter'),
+    ('_strip_start_text_after_leading_frontmatter', '_strip_start_text_after_leading_frontmatter'),
+    ('AOZORA_NOTE_RE', 'AOZORA_NOTE_RE'),
+    ('AOZORA_NOTE_ONLY_RE', 'AOZORA_NOTE_ONLY_RE'),
+    ('AOZORA_IMAGE_MARKER_RE', 'AOZORA_IMAGE_MARKER_RE'),
+    ('AOZORA_INSERTED_IMAGE_NOTE_RE', 'AOZORA_INSERTED_IMAGE_NOTE_RE'),
+    ('AOZORA_IMPLICIT_RUBY_BASE_RE', 'AOZORA_IMPLICIT_RUBY_BASE_RE'),
+    ('AOZORA_INDENT_RE', 'AOZORA_INDENT_RE'),
+    ('AOZORA_INDENT_END_RE', 'AOZORA_INDENT_END_RE'),
+    ('AOZORA_BOUTEN_NOTE_RE', 'AOZORA_BOUTEN_NOTE_RE'),
+    ('AOZORA_BOUSEN_NOTE_RE', 'AOZORA_BOUSEN_NOTE_RE'),
+    ('AOZORA_EMPHASIS_KIND_ALIASES', 'AOZORA_EMPHASIS_KIND_ALIASES'),
+    ('AOZORA_EMPHASIS_MARKERS', 'AOZORA_EMPHASIS_MARKERS'),
+    ('AOZORA_SIDE_LINE_KIND_ALIASES', 'AOZORA_SIDE_LINE_KIND_ALIASES'),
+    ('AOZORA_EMPHASIS_SKIP_CHARS', 'AOZORA_EMPHASIS_SKIP_CHARS'),
+    ('AOZORA_SIDE_LINE_SKIP_CHARS', 'AOZORA_SIDE_LINE_SKIP_CHARS'),
+    ('_zenkaku_digits_to_int', '_zenkaku_digits_to_int'),
+    ('_is_aozora_pagebreak_note', '_is_aozora_pagebreak_note'),
+    ('_parse_aozora_indent_note', '_parse_aozora_indent_note'),
+    ('_normalize_aozora_emphasis_kind', '_normalize_aozora_emphasis_kind'),
+    ('_parse_aozora_emphasis_note', '_parse_aozora_emphasis_note'),
+    ('_normalize_aozora_side_line_kind', '_normalize_aozora_side_line_kind'),
+    ('_parse_aozora_side_line_note', '_parse_aozora_side_line_note'),
+    ('_merge_adjacent_runs', '_merge_adjacent_runs'),
+    ('_apply_emphasis_to_recent_runs', '_apply_emphasis_to_recent_runs'),
+    ('_apply_side_line_to_recent_runs', '_apply_side_line_to_recent_runs'),
+    ('_parse_aozora_note_only_line', '_parse_aozora_note_only_line'),
+    ('_apply_note_to_previous_block', '_apply_note_to_previous_block'),
+    ('_flush_text_run_buffer', '_flush_text_run_buffer'),
+    ('_append_text_run', '_append_text_run'),
+    ('_aozora_inline_to_runs', '_aozora_inline_to_runs'),
+    ('read_text_file_with_fallback', 'read_text_file_with_fallback'),
+    ('_markdown_inline_to_runs', '_markdown_inline_to_runs'),
+    ('_plain_inline_to_runs', '_plain_inline_to_runs'),
+    ('_consume_plain_text_leading_fullwidth_indent', '_consume_plain_text_leading_fullwidth_indent'),
+    ('_plain_text_line_starts_with_opening_bracket', '_plain_text_line_starts_with_opening_bracket'),
+    ('_normalize_text_line', '_normalize_text_line'),
+    ('TEXT_INPUT_SUPPORT_SUMMARY', 'TEXT_INPUT_SUPPORT_SUMMARY'),
+    ('_dedupe_preserve_order', '_dedupe_preserve_order'),
+    ('_find_markdown_support_warnings', '_find_markdown_support_warnings'),
+    ('_find_plain_text_support_warnings', '_find_plain_text_support_warnings'),
+    ('_is_plain_dialogue_compact_candidate', '_is_plain_dialogue_compact_candidate'),
+    ('_blocks_from_plain_text', '_blocks_from_plain_text'),
+    ('MARKDOWN_FOOTNOTE_DEF_RE', 'MARKDOWN_FOOTNOTE_DEF_RE'),
+    ('MARKDOWN_DEF_LIST_RE', 'MARKDOWN_DEF_LIST_RE'),
+    ('MARKDOWN_ORDERED_LIST_RE', 'MARKDOWN_ORDERED_LIST_RE'),
+    ('MARKDOWN_FENCE_RE', 'MARKDOWN_FENCE_RE'),
+    ('_markdown_text_run', '_markdown_text_run'),
+    ('_set_runs_bold', '_set_runs_bold'),
+    ('_extract_markdown_footnotes', '_extract_markdown_footnotes'),
+    ('_split_markdown_table_row', '_split_markdown_table_row'),
+    ('_is_markdown_table_separator', '_is_markdown_table_separator'),
+    ('_build_markdown_table_blocks', '_build_markdown_table_blocks'),
+    ('_append_markdown_footnote_blocks', '_append_markdown_footnote_blocks'),
+    ('_blocks_from_markdown', '_blocks_from_markdown'),
+    ('load_text_input_document', 'load_text_input_document'),
+    ('process_text_file', '_text_process_text_file'),
+    ('process_markdown_file', '_text_process_markdown_file')
+)
+for _name in _CORE_REEXPORT_NAMES:
+    globals().setdefault(_name, _SPLIT_IMPORT_PLACEHOLDER)
+
 import tategakiXTC_gui_core as _core
+from tategakiXTC_gui_studio_aozora_gaiji import replace_aozora_gaiji_notes
 from tategakiXTC_gui_core_cache import (
     _get_cached_input_document,
     _source_document_cache_key,
@@ -146,6 +296,21 @@ def _detect_text_with_charset_normalizer(raw: bytes) -> tuple[str, str] | None:
         return None
     detected_text = str(best)
     detected_encoding = best.encoding.replace('_', '-').lower()
+    if detected_encoding in {'utf-16', 'utf-16-le', 'utf-16-be'}:
+        # BOM-bearing UTF-16 has already been handled before charset-normalizer.
+        # For BOM-less files, trust UTF-16 only when our stricter Japanese text
+        # heuristic agrees.  Otherwise short CP932 Aozora TXT files with CRLF
+        # blank lines can be misdetected as UTF-16BE and lose their newlines.
+        guessed_utf16 = _guess_utf16_without_bom(raw)
+        if guessed_utf16 is None:
+            return None
+        if detected_encoding in {'utf-16-le', 'utf-16-be'} and detected_encoding != guessed_utf16:
+            return None
+        detected_encoding = guessed_utf16
+        try:
+            detected_text = raw.decode(detected_encoding)
+        except UnicodeDecodeError:
+            return None
     return detected_text, detected_encoding
 
 
@@ -221,8 +386,13 @@ def _strip_start_text_after_leading_frontmatter(text: str) -> str:
 
 AOZORA_NOTE_RE = re.compile(r'［＃([^］]+)］')
 AOZORA_NOTE_ONLY_RE = re.compile(r'^\s*［＃([^］]+)］\s*$')
+AOZORA_IMAGE_MARKER_RE = re.compile(r'^挿絵:([0-9]{1,8})$')
+AOZORA_INSERTED_IMAGE_NOTE_RE = re.compile(
+    r'^(?P<prefix>.*?(?:挿絵|図).*?)（(?P<filename>[^（）]*(?:\.png|\.jpg|\.jpeg|\.gif|\.webp))[^）]*）入る$',
+    re.IGNORECASE,
+)
 # 暗黙ルビは『漢字＋かな送り』のみを対象とし、英数字混在は誤認識を避けるため除外する。
-AOZORA_IMPLICIT_RUBY_BASE_RE = re.compile(r'[一-龯々〆ヶ]+[ぁ-ゖゝゞァ-ヺー゛゜ヽヾヿ]*$')
+AOZORA_IMPLICIT_RUBY_BASE_RE = re.compile('[\u3400-\u4DBF\u4E00-\u9FFF\U00020000-\U0002EBEF々〆ヶ]+[ぁ-ゖゝゞァ-ヺー゛゜ヽヾヿ]*※*$')
 AOZORA_INDENT_RE = re.compile(r'^(?:(ここから))?([0-9０-９]+)字下げ(?:、?折り返して([0-9０-９]+)字下げ)?$')
 AOZORA_INDENT_END_RE = re.compile(r'^(?:ここで)?字下げ終わり$')
 AOZORA_BOUTEN_NOTE_RE = re.compile(r'^[「『]([^」』]+)[」』]に(.*傍点)$')
@@ -475,12 +645,229 @@ def _apply_side_line_to_recent_runs(runs: Runs, target_text: object, side_line_k
     return True
 
 
+
+def _normalize_aozora_image_ref(value: object) -> str:
+    text = str(value if value is not None else '').strip().replace('\\', '/')
+    while text.startswith('./'):
+        text = text[2:]
+    return text
+
+
+def _aozora_image_sidecar_paths(text_path: Path) -> tuple[Path, Path]:
+    return text_path.with_name(f'{text_path.stem}_img'), text_path.with_name(f'{text_path.stem}.images.json')
+
+
+def _read_aozora_image_manifest(text_path: str | Path | None) -> tuple[Path | None, dict[str, Any]]:
+    if not text_path:
+        return None, {}
+    source_path = Path(text_path)
+    image_dir, manifest_path = _aozora_image_sidecar_paths(source_path)
+    if not manifest_path.exists():
+        return image_dir if image_dir.exists() else None, {}
+    try:
+        payload = json.loads(manifest_path.read_text(encoding='utf-8'))
+    except Exception:
+        return image_dir if image_dir.exists() else None, {}
+    if not isinstance(payload, dict):
+        return image_dir if image_dir.exists() else None, {}
+    payload_image_dir = payload.get('image_dir')
+    if isinstance(payload_image_dir, str) and payload_image_dir.strip():
+        candidate = Path(payload_image_dir)
+        if not candidate.is_absolute():
+            candidate = manifest_path.parent / candidate
+        image_dir = candidate
+    return image_dir if image_dir.exists() else None, payload
+
+
+def _manifest_images(payload: Mapping[str, Any] | None) -> dict[str, Mapping[str, Any]]:
+    if not isinstance(payload, Mapping):
+        return {}
+    images = payload.get('images')
+    if isinstance(images, Mapping):
+        return {str(key): value for key, value in images.items() if isinstance(value, Mapping)}
+    return {}
+
+
+def _matching_aozora_image_manifest_entries(
+    manifest: Mapping[str, Any] | None,
+    *,
+    image_id: object = None,
+    image_src: object = None,
+) -> list[Mapping[str, Any]]:
+    images = _manifest_images(manifest)
+    candidates: list[Mapping[str, Any]] = []
+    seen: set[int] = set()
+
+    def add(item: Mapping[str, Any]) -> None:
+        marker = id(item)
+        if marker not in seen:
+            seen.add(marker)
+            candidates.append(item)
+
+    image_id_text = str(image_id or '').strip()
+    if image_id_text and image_id_text in images:
+        add(images[image_id_text])
+    src_text = _normalize_aozora_image_ref(image_src)
+    src_base = Path(src_text).name.lower() if src_text else ''
+    if src_text:
+        for item in images.values():
+            for key in ('src', 'basename', 'file'):
+                value = _normalize_aozora_image_ref(item.get(key, ''))
+                if value and (value == src_text or Path(value).name.lower() == src_base):
+                    add(item)
+                    break
+    return candidates
+
+
+def _resolve_aozora_image_path_from_manifest(
+    *,
+    image_dir: Path | None,
+    manifest: Mapping[str, Any] | None,
+    image_id: object = None,
+    image_src: object = None,
+) -> Path | None:
+    candidates = _matching_aozora_image_manifest_entries(manifest, image_id=image_id, image_src=image_src)
+    for item in candidates:
+        file_value = str(item.get('file', '') or '').strip()
+        if not file_value:
+            continue
+        candidate = Path(file_value)
+        if not candidate.is_absolute():
+            if image_dir is None:
+                continue
+            candidate = image_dir / candidate
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def _resolve_aozora_image_path_without_manifest(source_path: Path | None, image_src: object = None) -> Path | None:
+    if source_path is None:
+        return None
+    src_text = _normalize_aozora_image_ref(image_src)
+    if not src_text:
+        return None
+    src_path = Path(src_text)
+    candidates: list[Path] = []
+    if src_path.is_absolute():
+        candidates.append(src_path)
+    else:
+        image_dir, _manifest_path = _aozora_image_sidecar_paths(source_path)
+        candidates.extend([
+            source_path.parent / src_path,
+            image_dir / src_path.name,
+            image_dir / src_path,
+        ])
+    for candidate in candidates:
+        try:
+            if candidate.exists() and candidate.is_file():
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
+def _resolve_aozora_image_block(note_block: Mapping[str, object], source_path: str | Path | None = None) -> dict[str, Any]:
+    path = Path(source_path) if source_path else None
+    image_dir, manifest = _read_aozora_image_manifest(path)
+    image_id = note_block.get('image_id')
+    image_src = note_block.get('image_src')
+    manifest_entries = _matching_aozora_image_manifest_entries(manifest, image_id=image_id, image_src=image_src)
+    image_path = _resolve_aozora_image_path_from_manifest(
+        image_dir=image_dir,
+        manifest=manifest,
+        image_id=image_id,
+        image_src=image_src,
+    )
+    if image_path is None:
+        image_path = _resolve_aozora_image_path_without_manifest(path, image_src)
+    caption = str(note_block.get('caption', '') or '').strip()
+    if not caption:
+        for item in manifest_entries:
+            manifest_caption = str(item.get('caption', '') or '').strip()
+            if manifest_caption:
+                caption = manifest_caption
+                break
+    block: dict[str, Any] = {
+        'kind': 'image',
+        'image_id': str(image_id or ''),
+        'image_src': str(image_src or ''),
+        'caption': caption,
+        'blank_before': int(note_block.get('blank_before', 1) or 1),
+    }
+    if image_path is not None:
+        block['image_path'] = str(image_path)
+    return block
+
+
+def _path_signature_for_cache(path: Path) -> tuple[object, ...]:
+    try:
+        stat = path.stat()
+        mtime_ns = getattr(stat, 'st_mtime_ns', int(stat.st_mtime * 1_000_000_000))
+        return (str(path.resolve()), int(stat.st_size), int(mtime_ns))
+    except OSError:
+        return (str(path), -1, -1)
+
+
+def _aozora_image_sidecar_cache_key(source_path: Path) -> tuple[object, ...]:
+    image_dir, manifest_path = _aozora_image_sidecar_paths(source_path)
+    parts: list[object] = []
+    parts.extend(_path_signature_for_cache(manifest_path))
+    parts.extend(_path_signature_for_cache(image_dir))
+
+    image_files: list[Path] = []
+    try:
+        payload = json.loads(manifest_path.read_text(encoding='utf-8'))
+    except Exception:
+        payload = None
+    manifest_image_dir = image_dir
+    manifest_entries = _manifest_images(payload if isinstance(payload, Mapping) else None)
+    if isinstance(payload, Mapping):
+        payload_image_dir = payload.get('image_dir')
+        if isinstance(payload_image_dir, str) and payload_image_dir.strip():
+            candidate = Path(payload_image_dir)
+            if not candidate.is_absolute():
+                candidate = manifest_path.parent / candidate
+            manifest_image_dir = candidate
+    if manifest_entries:
+        for item in manifest_entries.values():
+            file_value = str(item.get('file', '') or '').strip()
+            if not file_value:
+                continue
+            file_path = Path(file_value)
+            if not file_path.is_absolute():
+                file_path = manifest_image_dir / file_path
+            image_files.append(file_path)
+    elif image_dir.exists():
+        try:
+            image_files.extend(sorted(path for path in image_dir.iterdir() if path.is_file())[:128])
+        except OSError:
+            pass
+
+    for image_file in sorted({path for path in image_files}, key=lambda path: str(path))[:128]:
+        parts.extend(_path_signature_for_cache(image_file))
+    return tuple(parts)
+
+
 def _parse_aozora_note_only_line(value: str | None) -> AozoraNoteBlock | None:
     _refresh_core_globals()
     match = AOZORA_NOTE_ONLY_RE.match(value or '')
     if not match:
         return None
     note_text = match.group(1).strip()
+    image_marker = AOZORA_IMAGE_MARKER_RE.match(note_text)
+    if image_marker:
+        image_id = image_marker.group(1).zfill(4)
+        return {'kind': 'image', 'image_id': image_id, 'blank_before': 1}
+    image_note = AOZORA_INSERTED_IMAGE_NOTE_RE.match(note_text)
+    if image_note:
+        caption_match = re.search(r'キャプション[「『]([^」』]+)[」』]', note_text)
+        return {
+            'kind': 'image',
+            'image_src': image_note.group('filename').strip(),
+            'caption': caption_match.group(1).strip() if caption_match else '',
+            'blank_before': 1,
+        }
     if _is_aozora_pagebreak_note(note_text):
         return {'kind': 'pagebreak'}
     indent_note = _parse_aozora_indent_note(note_text)
@@ -556,6 +943,7 @@ def _aozora_inline_to_runs(value: str, *, bold: bool = False, italic: bool = Fal
     _refresh_core_globals()
     if not value:
         return []
+    value = replace_aozora_gaiji_notes(value)
 
     runs: Runs = []
     buffer = ''
@@ -847,41 +1235,75 @@ def _find_plain_text_support_warnings(text: str) -> WarningList:
     return _dedupe_preserve_order(warnings)
 
 
-def _blocks_from_plain_text(text: str) -> TextBlocks:
+def _is_plain_dialogue_compact_candidate(
+    body_text: str,
+    *,
+    explicit_indent_active: bool,
+    leading_fullwidth_indent: int,
+) -> bool:
+    """Return whether a plain-text line is a compactable dialogue row.
+
+    Aozora TXT uses blank lines to signal the places where the renderer should
+    visibly open the composition.  Consecutive dialogue lines that begin with
+    Japanese quotation marks and have no blank line between them should keep
+    their independent block identity, but they should not force a fresh vertical
+    column for every short speaker turn.  Limit this marker to unindented
+    ``「`` / ``『`` rows so headings such as ``【確認ページ】``, Aozora indent
+    blocks, quoted poems, and explicitly indented material keep the historical
+    paragraph spacing.
+    """
+    if explicit_indent_active or int(leading_fullwidth_indent or 0) > 0:
+        return False
+    return str(body_text or '').startswith(('「', '『'))
+
+
+def _blocks_from_plain_text(text: str, *, source_path: str | Path | None = None) -> TextBlocks:
     _refresh_core_globals()
     blocks: TextBlocks = []
     active_indent = None
     pending_once_indent = None
     has_started_content = False
+    previous_compactable_dialogue_index: int | None = None
     for raw_line in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
         normalized = _normalize_text_line(raw_line, has_started_document=has_started_content, strip_leading_for_indent=False)
         if not normalized:
             blocks.append({'kind': 'blank'})
+            previous_compactable_dialogue_index = None
             continue
         note_block = _parse_aozora_note_only_line(normalized)
         if note_block:
             if note_block['kind'] == 'pagebreak':
                 blocks.append(note_block)
+                previous_compactable_dialogue_index = None
             elif note_block['kind'] == 'indent_start':
                 active_indent = {
                     'indent_chars': note_block.get('indent_chars', 0),
                     'wrap_indent_chars': note_block.get('wrap_indent_chars', note_block.get('indent_chars', 0)),
                 }
+                previous_compactable_dialogue_index = None
             elif note_block['kind'] == 'indent_end':
                 active_indent = None
                 pending_once_indent = None
+                previous_compactable_dialogue_index = None
             elif note_block['kind'] == 'indent_once':
                 pending_once_indent = {
                     'indent_chars': note_block.get('indent_chars', 0),
                     'wrap_indent_chars': note_block.get('wrap_indent_chars', note_block.get('indent_chars', 0)),
                 }
+                previous_compactable_dialogue_index = None
             elif note_block['kind'] in {'emphasis', 'side_line'}:
                 _apply_note_to_previous_block(blocks, note_block)
+                previous_compactable_dialogue_index = None
+            elif note_block['kind'] == 'image':
+                blocks.append(_resolve_aozora_image_block(note_block, source_path))
+                has_started_content = True
+                previous_compactable_dialogue_index = None
             continue
         body_text, leading_fullwidth_indent = _consume_plain_text_leading_fullwidth_indent(normalized)
         runs = _plain_inline_to_runs(body_text)
         if not runs:
             blocks.append({'kind': 'blank'})
+            previous_compactable_dialogue_index = None
             continue
         indent_spec = pending_once_indent or active_indent
         explicit_indent_active = indent_spec is not None
@@ -894,16 +1316,27 @@ def _blocks_from_plain_text(text: str) -> TextBlocks:
             base_wrap_indent_chars = 0
         if leading_fullwidth_indent:
             base_indent_chars = max(int(base_indent_chars or 0), int(leading_fullwidth_indent or 0))
-        blocks.append({
+        block = {
             'kind': 'paragraph',
             'runs': runs,
             'indent': bool(explicit_indent_active or base_indent_chars > 0),
             'indent_chars': max(0, int(base_indent_chars or 0)),
             'wrap_indent_chars': base_wrap_indent_chars,
             'blank_before': 1,
-        })
+        }
+        is_compactable_dialogue = _is_plain_dialogue_compact_candidate(
+            body_text,
+            explicit_indent_active=explicit_indent_active,
+            leading_fullwidth_indent=leading_fullwidth_indent,
+        )
+        if is_compactable_dialogue and previous_compactable_dialogue_index is not None:
+            previous_block = blocks[previous_compactable_dialogue_index]
+            previous_block['compact_after'] = True
+            block['suppress_paragraph_gap_before'] = True
+        blocks.append(block)
         has_started_content = True
         pending_once_indent = None
+        previous_compactable_dialogue_index = len(blocks) - 1 if is_compactable_dialogue else None
     return blocks
 
 
@@ -1107,7 +1540,7 @@ def _append_markdown_footnote_blocks(blocks: TextBlocks, footnotes: Sequence[Foo
         blocks.append({'kind': 'paragraph', 'runs': _merge_adjacent_runs(runs), 'indent': False, 'blank_before': 1})
 
 
-def _blocks_from_markdown(text: str) -> TextBlocks:
+def _blocks_from_markdown(text: str, *, source_path: str | Path | None = None) -> TextBlocks:
     _refresh_core_globals()
     blocks: TextBlocks = []
     body_lines, footnotes, link_definitions = _extract_markdown_footnotes(text.replace('\r\n', '\n').replace('\r', '\n').split('\n'))
@@ -1164,6 +1597,9 @@ def _blocks_from_markdown(text: str) -> TextBlocks:
                 }
             elif note_block['kind'] in {'emphasis', 'side_line'}:
                 _apply_note_to_previous_block(blocks, note_block)
+            elif note_block['kind'] == 'image':
+                blocks.append(_resolve_aozora_image_block(note_block, source_path))
+                has_started_content = True
             index += 1
             continue
 
@@ -1334,7 +1770,7 @@ def load_text_input_document(text_path: PathLike, *, parser: str = 'plain') -> T
     parser_key = str(parser or 'plain').strip().lower()
     if parser_key != 'markdown':
         parser_key = 'plain'
-    cache_key = (parser_key, *_source_document_cache_key(source_path))
+    cache_key = (parser_key, *_source_document_cache_key(source_path), *_aozora_image_sidecar_cache_key(source_path))
     cached = _get_cached_input_document(_TEXT_INPUT_DOCUMENT_CACHE, cache_key)
     if isinstance(cached, TextInputDocument):
         return cached
@@ -1342,11 +1778,11 @@ def load_text_input_document(text_path: PathLike, *, parser: str = 'plain') -> T
     text, encoding = read_text_file_with_fallback(source_path)
     normalized_text = _strip_start_text_after_leading_frontmatter(text)
     if parser_key == 'markdown':
-        blocks = _blocks_from_markdown(normalized_text)
+        blocks = _blocks_from_markdown(normalized_text, source_path=source_path)
         format_label = 'Markdown'
         warnings = _find_markdown_support_warnings(normalized_text)
     else:
-        blocks = _blocks_from_plain_text(normalized_text)
+        blocks = _blocks_from_plain_text(normalized_text, source_path=source_path)
         format_label = 'テキスト'
         warnings = _find_plain_text_support_warnings(normalized_text)
     document = TextInputDocument(
@@ -1445,3 +1881,18 @@ def process_markdown_file(
         should_cancel=should_cancel,
         progress_cb=progress_cb,
     )
+
+def _publish_core_reexports() -> None:
+    """Replace circular-import placeholders in gui_core with real split symbols."""
+    for _source_name, _core_name in _CORE_REEXPORT_ALIASES:
+        _value = globals().get(_source_name, _SPLIT_IMPORT_PLACEHOLDER)
+        if _value is _SPLIT_IMPORT_PLACEHOLDER:
+            continue
+        try:
+            setattr(_core, _core_name, _value)
+        except Exception:
+            pass
+
+
+_publish_core_reexports()
+

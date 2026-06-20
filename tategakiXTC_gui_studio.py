@@ -23,7 +23,7 @@ from datetime import datetime
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence, cast
+from typing import Any, Callable, Mapping, Sequence
 
 from tategakiXTC_gui_studio_logging import (
     DEFAULT_LOG_RETENTION_DAYS as LOG_RETENTION_DAYS,
@@ -255,7 +255,14 @@ from tategakiXTC_gui_studio_ui_helpers import (
     _bulk_block_signals,
     _coerce_ui_message_text,
     _connect_signal_best_effort,
+    flush_pending_ui_changes as _flush_pending_ui_changes_impl,
     _safe_delete_qobject_later,
+)
+
+from tategakiXTC_gui_studio_dependency_helpers import (
+    check_conversion_dependencies as _check_conversion_dependencies_impl,
+    log_optional_dependency_status as _log_optional_dependency_status_impl,
+    missing_dependencies_for_targets as _missing_dependencies_for_targets_impl,
 )
 
 from tategakiXTC_gui_studio_dialog_helpers import (
@@ -269,6 +276,83 @@ from tategakiXTC_gui_studio_dialog_helpers import (
 
 from tategakiXTC_gui_studio_desktop import (
     _open_path_in_file_manager,
+)
+
+from tategakiXTC_gui_studio_display_settings_menu_helpers import (
+    show_display_settings_popup as _show_display_settings_popup_impl,
+)
+
+from tategakiXTC_gui_studio_top_bar_helpers import (
+    build_top_bar as _build_top_bar_impl,
+    _install_folder_batch_menu_action as _install_folder_batch_menu_action_impl,
+    _open_folder_batch_dialog as _open_folder_batch_dialog_impl,
+)
+
+from tategakiXTC_gui_studio_preview_controls_helpers import (
+    build_margin_rows as _build_margin_rows_impl,
+    section_preview_controls as _section_preview_controls_impl,
+)
+
+from tategakiXTC_gui_studio_settings_sections_helpers import (
+    _section_output as _section_output_impl,
+    _section_composition as _section_composition_impl,
+    _section_position as _section_position_impl,
+    _section_language as _section_language_impl,
+    _section_preset as _section_preset_impl,
+    _make_position_mode_combo as _make_position_mode_combo_impl,
+    _make_glyph_position_combo as _make_glyph_position_combo_impl,
+    _add_glyph_position_control as _add_glyph_position_control_impl,
+    _ensure_behavior_controls as _ensure_behavior_controls_impl,
+    _section_behavior as _section_behavior_impl,
+    _section_file_viewer as _section_file_viewer_impl,
+)
+
+from tategakiXTC_gui_studio_font_combo_helpers import (
+    current_font_value as current_font_value_impl,
+    _available_font_entries as _available_font_entries_impl,
+    _populate_font_combo as _populate_font_combo_impl,
+    _missing_font_combo_label as _missing_font_combo_label_impl,
+    _ensure_font_combo_value as _ensure_font_combo_value_impl,
+    _set_current_font_value as _set_current_font_value_impl,
+    _default_font_name as _default_font_name_impl,
+    _apply_default_font_selection as _apply_default_font_selection_impl,
+)
+
+from tategakiXTC_gui_studio_target_select_helpers import (
+    _apply_dropped_target_path as _apply_dropped_target_path_impl,
+    _default_output_folder_start_dir as _default_output_folder_start_dir_impl,
+    _selected_output_dir_label_text as _selected_output_dir_label_text_impl,
+    _announce_selected_output_dir as _announce_selected_output_dir_impl,
+    reset_output_folder as reset_output_folder_impl,
+    select_output_folder as select_output_folder_impl,
+    select_target_path as select_target_path_impl,
+    select_font_file as select_font_file_impl,
+)
+
+
+from tategakiXTC_gui_studio_sns_export_helpers import (
+    export_current_preview_share_png as export_current_preview_share_png_impl,
+)
+
+from tategakiXTC_gui_studio_preview_pixmap_helpers import (
+    _decorate_font_view_pixmap as _decorate_font_view_pixmap_impl,
+    _preview_pixmap_from_png_bytes as _preview_pixmap_from_png_bytes_impl,
+    _apply_preview_pixmap as _apply_preview_pixmap_impl,
+    _apply_preview_png_bytes as _apply_preview_png_bytes_impl,
+    _apply_preview_page_base64_to_label as _apply_preview_page_base64_to_label_impl,
+    _render_current_xtc_page_in_font_view as _render_current_xtc_page_in_font_view_impl,
+    render_current_preview_page as render_current_preview_page_impl,
+)
+
+from tategakiXTC_gui_studio_bottom_panel_helpers import (
+    build_bottom_panel as _build_bottom_panel_impl,
+    build_results_tab as _build_results_tab_impl,
+    build_log_tab as _build_log_tab_impl,
+    active_bottom_panel_scrollbar as _active_bottom_panel_scrollbar_impl,
+    bind_bottom_panel_external_scrollbar as _bind_bottom_panel_external_scrollbar_impl,
+    set_bottom_panel_external_scrollbar_range as _set_bottom_panel_external_scrollbar_range_impl,
+    sync_bottom_panel_external_scrollbar as _sync_bottom_panel_external_scrollbar_impl,
+    apply_bottom_panel_external_scroll_value as _apply_bottom_panel_external_scroll_value_impl,
 )
 
 from tategakiXTC_gui_studio_preview_helpers import (
@@ -307,6 +391,59 @@ from tategakiXTC_gui_completion_helpers import (
     completion_card_result_item_texts,
 )
 
+from tategakiXTC_gui_studio_conversion_finish_helpers import (
+    handle_conversion_finished as _handle_conversion_finished_impl,
+    build_conversion_completion_summary_lines as _build_conversion_completion_summary_lines_impl,
+    apply_conversion_completion_guidance_to_results_view as _apply_conversion_completion_guidance_to_results_view_impl,
+)
+
+from tategakiXTC_gui_studio_conversion_runtime_helpers import (
+    set_worker_controls_running as _set_worker_controls_running_impl,
+    prepare_conversion_ui_for_run as _prepare_conversion_ui_for_run_impl,
+    apply_direct_conversion_terminal_fallback as _apply_direct_conversion_terminal_fallback_impl,
+    apply_conversion_terminal_state as _apply_conversion_terminal_state_impl,
+    build_conversion_failure_summary_text as _build_conversion_failure_summary_text_impl,
+    apply_conversion_failure_ui as _apply_conversion_failure_ui_impl,
+    handle_conversion_startup_failure as _handle_conversion_startup_failure_impl,
+    next_conversion_run_token as _next_conversion_run_token_impl,
+    clear_active_conversion_run_token as _clear_active_conversion_run_token_impl,
+    is_active_conversion_run_token as _is_active_conversion_run_token_impl,
+    connect_worker_dispatch_signals as _connect_worker_dispatch_signals_impl,
+    emit_worker_finished_request as _emit_worker_finished_request_impl,
+    emit_worker_error_request as _emit_worker_error_request_impl,
+    emit_worker_log_request as _emit_worker_log_request_impl,
+    emit_worker_progress_request as _emit_worker_progress_request_impl,
+    emit_worker_cleanup_request as _emit_worker_cleanup_request_impl,
+    dispatch_worker_cleanup as _dispatch_worker_cleanup_impl,
+    dispatch_worker_log as _dispatch_worker_log_impl,
+    dispatch_conversion_progress as _dispatch_conversion_progress_impl,
+    dispatch_conversion_finished as _dispatch_conversion_finished_impl,
+    dispatch_conversion_error as _dispatch_conversion_error_impl,
+    start_conversion as _start_conversion_impl,
+    stop_conversion as _stop_conversion_impl,
+    schedule_cleanup_worker as _schedule_cleanup_worker_impl,
+    cleanup_worker as _cleanup_worker_impl,
+    handle_conversion_error as _handle_conversion_error_impl,
+    update_conversion_progress as _update_conversion_progress_impl,
+)
+
+from tategakiXTC_gui_studio_startup_preview_helpers import (
+    _startup_target_text as _startup_target_text_impl,
+    _startup_target_path_exists as _startup_target_path_exists_impl,
+    _startup_previous_target_display_text as _startup_previous_target_display_text_impl,
+    _confirm_startup_previous_target_preview as _confirm_startup_previous_target_preview_impl,
+    _set_target_path_for_normal_preview as _set_target_path_for_normal_preview_impl,
+    on_target_text_changed as on_target_text_changed_impl,
+    _clear_startup_target_for_sample_preview as _clear_startup_target_for_sample_preview_impl,
+    _show_startup_sample_preview_status as _show_startup_sample_preview_status_impl,
+    _request_startup_sample_preview as _request_startup_sample_preview_impl,
+    _schedule_startup_preview_idle_reconcile as _schedule_startup_preview_idle_reconcile_impl,
+    _reconcile_startup_preview_idle_state as _reconcile_startup_preview_idle_state_impl,
+    _request_startup_preview_after_restore as _request_startup_preview_after_restore_impl,
+    _request_startup_sample_preview_if_no_target as _request_startup_sample_preview_if_no_target_impl,
+    _startup_font_combo_scroll_reset as _startup_font_combo_scroll_reset_impl,
+)
+
 from tategakiXTC_gui_studio_view_helpers import (
     _normalized_main_view_mode,
     _preview_view_help_text,
@@ -331,6 +468,363 @@ from tategakiXTC_gui_studio_settings_helpers import (
 from tategakiXTC_gui_studio_runtime import (
     _iter_runtime_xtc_page_items,
     _normalize_runtime_xtc_pages,
+)
+
+from tategakiXTC_gui_studio_render_status_helpers import (
+    _current_preview_success_status_message as _current_preview_success_status_message_impl,
+    _current_preview_render_status_message as _current_preview_render_status_message_impl,
+    _refresh_successful_preview_render_status as _refresh_successful_preview_render_status_impl,
+    _refresh_successful_device_render_status as _refresh_successful_device_render_status_impl,
+    _render_failure_status_message as _render_failure_status_message_impl,
+    _handle_xtc_render_failure as _handle_xtc_render_failure_impl,
+)
+
+from tategakiXTC_gui_studio_display_context_helpers import (
+    _set_current_xtc_display_name as _set_current_xtc_display_name_impl,
+    _set_current_xtc_display_name_with_fallback as _set_current_xtc_display_name_with_fallback_impl,
+    _sync_loaded_xtc_display_context_for_device_view as _sync_loaded_xtc_display_context_for_device_view_impl,
+    _sync_preview_display_context_for_device_view as _sync_preview_display_context_for_device_view_impl,
+    _sync_blank_device_display_context as _sync_blank_device_display_context_impl,
+    _restore_shared_status_for_visible_display_context as _restore_shared_status_for_visible_display_context_impl,
+    _sync_active_display_context_for_visible_page as _sync_active_display_context_for_visible_page_impl,
+)
+
+from tategakiXTC_gui_studio_preview_context_helpers import (
+    _normalized_preview_page_cache_tokens as _normalized_preview_page_cache_tokens_impl,
+    _normalized_right_pane_source_value as _normalized_right_pane_source_value_impl,
+    _normalized_device_view_source_value as _normalized_device_view_source_value_impl,
+    _effective_right_pane_source as _effective_right_pane_source_impl,
+    _effective_device_view_source as _effective_device_view_source_impl,
+    _is_preview_display_active as _is_preview_display_active_impl,
+    _apply_preview_page_cache_tokens_context as _apply_preview_page_cache_tokens_context_impl,
+    _apply_preview_button_context as _apply_preview_button_context_impl,
+    _apply_preview_progress_bar_context as _apply_preview_progress_bar_context_impl,
+    _apply_preview_progress_context as _apply_preview_progress_context_impl,
+    _apply_preview_pending_progress_context as _apply_preview_pending_progress_context_impl,
+    _apply_preview_finish_context_after_running_flags_clear as _apply_preview_finish_context_after_running_flags_clear_impl,
+    _apply_preview_success_context as _apply_preview_success_context_impl,
+    _preview_failure_display_name as _preview_failure_display_name_impl,
+    _preview_failure_loaded_path as _preview_failure_loaded_path_impl,
+    _apply_preview_failure_context as _apply_preview_failure_context_impl,
+)
+
+from tategakiXTC_gui_studio_preview_refresh_helpers import (
+    mark_preview_dirty_for_target_change as _mark_preview_dirty_for_target_change_impl,
+    mark_preview_dirty as _mark_preview_dirty_impl,
+    request_preview_refresh as _request_preview_refresh_impl,
+    schedule_target_preview_refresh as _schedule_target_preview_refresh_impl,
+    refresh_active_view_after_mode_change as _refresh_active_view_after_mode_change_impl,
+    refresh_font_preview_display_if_needed as _refresh_font_preview_display_if_needed_impl,
+)
+
+from tategakiXTC_gui_studio_preview_button_helpers import (
+    _apply_manual_preview_required_context as _apply_manual_preview_required_context_impl,
+    _cancel_auto_live_preview_due_to_large_limit as _cancel_auto_live_preview_due_to_large_limit_impl,
+    _set_preview_update_button_visual_state as _set_preview_update_button_visual_state_impl,
+    _has_loaded_xtc_viewer_document as _has_loaded_xtc_viewer_document_impl,
+    _is_file_viewer_mode_active as _is_file_viewer_mode_active_impl,
+    _apply_file_viewer_mode_preview_button_state as _apply_file_viewer_mode_preview_button_state_impl,
+    _restore_preview_update_button_from_file_viewer_state as _restore_preview_update_button_from_file_viewer_state_impl,
+    _refresh_preview_update_button_for_current_state as _refresh_preview_update_button_for_current_state_impl,
+    _mark_preview_update_button_pending as _mark_preview_update_button_pending_impl,
+)
+
+from tategakiXTC_gui_studio_overlay_margin_helpers import (
+    _minimum_bottom_overlay_margin as _minimum_bottom_overlay_margin_impl,
+    _effective_bottom_overlay_margin as _effective_bottom_overlay_margin_impl,
+    _current_bottom_overlay_margin_auto_state as _current_bottom_overlay_margin_auto_state_impl,
+    _restore_bottom_overlay_margin_auto_state_from_payload as _restore_bottom_overlay_margin_auto_state_from_payload_impl,
+    _bottom_overlay_margin_auto_save_payload as _bottom_overlay_margin_auto_save_payload_impl,
+    _clear_bottom_overlay_margin_auto_state_if_bottom_margin_was_edited as _clear_bottom_overlay_margin_auto_state_if_bottom_margin_was_edited_impl,
+    _sync_bottom_overlay_margin_to_ui as _sync_bottom_overlay_margin_to_ui_impl,
+)
+
+from tategakiXTC_gui_studio_live_preview_helpers import (
+    _mark_preview_dirty_from_signal as _mark_preview_dirty_from_signal_impl,
+    _current_preview_page_limit_value as _current_preview_page_limit_value_impl,
+    _should_auto_live_preview_refresh as _should_auto_live_preview_refresh_impl,
+    _manual_preview_required_status_message as _manual_preview_required_status_message_impl,
+    _mark_preview_dirty_without_auto_refresh as _mark_preview_dirty_without_auto_refresh_impl,
+    _schedule_live_preview_refresh_from_signal as _schedule_live_preview_refresh_from_signal_impl,
+    _has_refreshable_preview_target as _has_refreshable_preview_target_impl,
+    _has_active_preview_for_live_refresh as _has_active_preview_for_live_refresh_impl,
+    _cancel_pending_settings_live_preview_refresh as _cancel_pending_settings_live_preview_refresh_impl,
+    _schedule_live_preview_refresh as _schedule_live_preview_refresh_impl,
+)
+
+from tategakiXTC_gui_studio_settings_save_helpers import (
+    _current_render_settings_base as _current_render_settings_base_impl,
+    current_settings_dict as current_settings_dict_impl,
+    _folder_batch_worker_settings as _folder_batch_worker_settings_impl,
+    _window_state_save_payload as _window_state_save_payload_impl,
+    _settings_save_payload as _settings_save_payload_impl,
+    prepare_conversion_settings as _prepare_conversion_settings_impl,
+)
+
+from tategakiXTC_gui_studio_settings_restore_helpers import (
+    apply_settings_payload_to_ui as _apply_settings_payload_to_ui_impl,
+    restore_settings as _restore_settings_impl,
+    _has_restorable_user_settings as _has_restorable_user_settings_impl,
+    _window_state_restore_payload as _window_state_restore_payload_impl,
+    _settings_restore_payload as _settings_restore_payload_impl,
+    _startup_preview_defaults_payload as _startup_preview_defaults_payload_impl,
+)
+
+from tategakiXTC_gui_studio_navigation_helpers import (
+    _xtc_page_count as _xtc_page_count_impl,
+    _normalized_device_preview_page_index as _normalized_device_preview_page_index_impl,
+    _normalized_xtc_page_index as _normalized_xtc_page_index_impl,
+    _xtc_page_state_payload as _xtc_page_state_payload_impl,
+    _xtc_navigation_payload as _xtc_navigation_payload_impl,
+    _apply_xtc_navigation_ui as _apply_xtc_navigation_ui_impl,
+    update_navigation_ui as update_navigation_ui_impl,
+)
+
+from tategakiXTC_gui_studio_preset_actions_helpers import (
+    verify_preset_save_readback as _verify_preset_save_readback_impl,
+    show_preset_save_failed as _show_preset_save_failed_impl,
+    request_preview_refresh_after_preset_apply as _request_preview_refresh_after_preset_apply_impl,
+    preset_save_confirmation_text as _preset_save_confirmation_text_impl,
+    preset_rename_dialog_result as _preset_rename_dialog_result_impl,
+    rename_preset_display_name as rename_preset_display_name_impl,
+    save_preset as save_preset_impl,
+    apply_preset as apply_preset_impl,
+)
+
+from tategakiXTC_gui_studio_navigation_action_helpers import (
+    update_nav_button_texts as _update_nav_button_texts_impl,
+    on_nav_reverse_toggled as _on_nav_reverse_toggled_impl,
+    on_nav_button_clicked as _on_nav_button_clicked_impl,
+    on_page_input_changed as _on_page_input_changed_impl,
+    change_page as _change_page_impl,
+)
+
+from tategakiXTC_gui_studio_preview_zoom_helpers import (
+    _normalize_preview_zoom_pct as _normalize_preview_zoom_pct_impl,
+    _preview_zoom_factor as _preview_zoom_factor_impl,
+    _actual_size_uses_preview_zoom_calibration as _actual_size_uses_preview_zoom_calibration_impl,
+    _actual_size_calibration_factor as _actual_size_calibration_factor_impl,
+    _sync_legacy_calibration_control_state as _sync_legacy_calibration_control_state_impl,
+    _sync_preview_zoom_control_state as _sync_preview_zoom_control_state_impl,
+    _preview_zoom_left_bias as _preview_zoom_left_bias_impl,
+    _viewport_width_for_scroll_area as _viewport_width_for_scroll_area_impl,
+    _font_preview_leading_gap as _font_preview_leading_gap_impl,
+    _viewer_preview_leading_gap as _viewer_preview_leading_gap_impl,
+)
+
+
+from tategakiXTC_gui_studio_wheel_guard_helpers import (
+    _combo_popup_is_visible as _combo_popup_is_visible_impl,
+    _is_open_combo_popup_wheel_target as _is_open_combo_popup_wheel_target_impl,
+    _wheel_value_change_control_for_event_object as _wheel_value_change_control_for_event_object_impl,
+    _should_suppress_center_settings_wheel_value_change as _should_suppress_center_settings_wheel_value_change_impl,
+    _should_suppress_left_settings_wheel_value_change as _should_suppress_left_settings_wheel_value_change_impl,
+    _should_scroll_center_settings_from_wheel_event as _should_scroll_center_settings_from_wheel_event_impl,
+    _should_scroll_left_settings_from_wheel_event as _should_scroll_left_settings_from_wheel_event_impl,
+    _install_center_settings_wheel_value_guards as _install_center_settings_wheel_value_guards_impl,
+    _install_left_settings_wheel_value_guards as _install_left_settings_wheel_value_guards_impl,
+    _scroll_center_settings_from_wheel_event as _scroll_center_settings_from_wheel_event_impl,
+    _scroll_left_settings_from_wheel_event as _scroll_left_settings_from_wheel_event_impl,
+    _is_widget_descendant_of as _is_widget_descendant_of_impl,
+    _clear_startup_input_focus as _clear_startup_input_focus_impl,
+)
+
+from tategakiXTC_gui_studio_preview_layout_helpers import (
+    _set_horizontal_scrollbar_to_zoom_bias_later as _set_horizontal_scrollbar_to_zoom_bias_later_impl,
+    _set_horizontal_scrollbar_to_center_later as _set_horizontal_scrollbar_to_center_later_impl,
+    _set_horizontal_scrollbar_to_minimum_later as _set_horizontal_scrollbar_to_minimum_later_impl,
+    _sync_font_preview_scroll_placement as _sync_font_preview_scroll_placement_impl,
+    _sync_preview_size as _sync_preview_size_impl,
+    _sync_viewer_size as _sync_viewer_size_impl,
+)
+
+from tategakiXTC_gui_studio_right_pane_build_helpers import (
+    _build_right_preview as _build_right_preview_impl,
+    _build_view_toggle_bar as _build_view_toggle_bar_impl,
+    _add_preview_display_toggles_to_layout as _add_preview_display_toggles_to_layout_impl,
+    _build_conversion_completion_card as _build_conversion_completion_card_impl,
+    _hide_conversion_completion_card as _hide_conversion_completion_card_impl,
+    _show_results_tab_from_completion_card as _show_results_tab_from_completion_card_impl,
+    _completion_card_parent_texts as _completion_card_parent_texts_impl,
+    _completion_card_result_item_texts as _completion_card_result_item_texts_impl,
+    _build_conversion_completion_card_message as _build_conversion_completion_card_message_impl,
+    _meaningful_open_folder_target_text as _meaningful_open_folder_target_text_impl,
+    _source_target_parent_text as _source_target_parent_text_impl,
+    _planned_open_folder_target_from_settings as _planned_open_folder_target_from_settings_impl,
+    _resolve_conversion_open_folder_target as _resolve_conversion_open_folder_target_impl,
+    _show_conversion_completion_card as _show_conversion_completion_card_impl,
+    _build_nav_bar as _build_nav_bar_impl,
+    _ensure_nav_reverse_control as _ensure_nav_reverse_control_impl,
+    _add_nav_controls_to_layout as _add_nav_controls_to_layout_impl,
+    _nav_section_separator as _nav_section_separator_impl,
+    _add_preview_zoom_controls_to_layout as _add_preview_zoom_controls_to_layout_impl,
+)
+
+from tategakiXTC_gui_studio_viewer_profile_helpers import (
+    _current_viewer_profile as _current_viewer_profile_impl,
+    _preview_viewer_profile as _preview_viewer_profile_impl,
+    _loaded_xtc_document_viewer_profile as _loaded_xtc_document_viewer_profile_impl,
+    _refresh_loaded_xtc_viewer_profile_cache as _refresh_loaded_xtc_viewer_profile_cache_impl,
+    _sync_loaded_xtc_profile_ui_override as _sync_loaded_xtc_profile_ui_override_impl,
+    _active_device_viewer_profile as _active_device_viewer_profile_impl,
+    _font_preview_viewer_profile as _font_preview_viewer_profile_impl,
+    _apply_viewer_display_runtime_state as _apply_viewer_display_runtime_state_impl,
+    _apply_profile_runtime_state as _apply_profile_runtime_state_impl,
+    _page_image_dimensions as _page_image_dimensions_impl,
+    _viewer_profile_for_dimensions as _viewer_profile_for_dimensions_impl,
+    _custom_viewer_profile_for_dimensions as _custom_viewer_profile_for_dimensions_impl,
+    _viewer_profile_for_xtc_pages as _viewer_profile_for_xtc_pages_impl,
+    _viewer_profile_for_page_image as _viewer_profile_for_page_image_impl,
+    _viewer_profile_for_preview_payload as _viewer_profile_for_preview_payload_impl,
+)
+
+from tategakiXTC_gui_studio_xtc_load_helpers import (
+    _xtc_source_payload as _xtc_source_payload_impl,
+    _normalized_xtc_bytes as _normalized_xtc_bytes_impl,
+    _xtc_document_payload as _xtc_document_payload_impl,
+    _xtc_source_document_payload as _xtc_source_document_payload_impl,
+    _xtc_display_name as _xtc_display_name_impl,
+    _reset_xtc_page_input as _reset_xtc_page_input_impl,
+    _apply_xtc_document_payload as _apply_xtc_document_payload_impl,
+    _apply_loaded_xtc_document as _apply_loaded_xtc_document_impl,
+    _current_xtc_page_blob as _current_xtc_page_blob_impl,
+    _clear_xtc_viewer_page as _clear_xtc_viewer_page_impl,
+    _apply_rendered_xtc_page as _apply_rendered_xtc_page_impl,
+    _set_current_device_preview_page_index as _set_current_device_preview_page_index_impl,
+    _set_current_page_index as _set_current_page_index_impl,
+    load_xtc_from_path as load_xtc_from_path_impl,
+    load_xtc_from_bytes as load_xtc_from_bytes_impl,
+    render_current_page as render_current_page_impl,
+    clear_loaded_xtc_state as clear_loaded_xtc_state_impl,
+    leave_file_viewer_mode_for_target_change as leave_file_viewer_mode_for_target_change_impl,
+    _apply_loaded_xtc_view_mode as _apply_loaded_xtc_view_mode_impl,
+    open_xtc_file as open_xtc_file_impl,
+    _apply_loaded_xtc_path_success as _apply_loaded_xtc_path_success_impl,
+    _apply_loaded_xtc_path_failure as _apply_loaded_xtc_path_failure_impl,
+    _restore_results_selection_after_xtc_load_failure as _restore_results_selection_after_xtc_load_failure_impl,
+    _xtc_load_failure_preserved_display_name as _xtc_load_failure_preserved_display_name_impl,
+    _xtc_load_failure_status_message as _xtc_load_failure_status_message_impl,
+    _apply_loaded_xtc_bytes_success as _apply_loaded_xtc_bytes_success_impl,
+)
+
+from tategakiXTC_gui_studio_preview_cache_helpers import (
+    _rebuild_preview_page_cache_tokens as _rebuild_preview_page_cache_tokens_impl,
+    _clear_font_preview_page_pixmap_cache as _clear_font_preview_page_pixmap_cache_impl,
+    _font_preview_page_pixmap_cache_key as _font_preview_page_pixmap_cache_key_impl,
+    _cached_font_preview_page_pixmap as _cached_font_preview_page_pixmap_impl,
+    _store_font_preview_page_pixmap as _store_font_preview_page_pixmap_impl,
+    _clear_xtc_page_qimage_cache as _clear_xtc_page_qimage_cache_impl,
+    _clear_device_preview_page_qimage_cache as _clear_device_preview_page_qimage_cache_impl,
+    _device_preview_page_qimage_cache_key as _device_preview_page_qimage_cache_key_impl,
+    _cached_device_preview_page_qimage as _cached_device_preview_page_qimage_impl,
+    _store_device_preview_page_qimage as _store_device_preview_page_qimage_impl,
+    _xtc_page_qimage_cache_key as _xtc_page_qimage_cache_key_impl,
+    _cached_xtc_page_qimage as _cached_xtc_page_qimage_impl,
+    _store_xtc_page_qimage as _store_xtc_page_qimage_impl,
+)
+
+from tategakiXTC_gui_studio_preset_payload_helpers import (
+    _live_preset_widget_payload as _live_preset_widget_payload_impl,
+    _normalize_preset_payload as _normalize_preset_payload_impl,
+    _default_preset_display_name as _default_preset_display_name_impl,
+    _load_preset_definitions as _load_preset_definitions_impl,
+    _preset_display_name as _preset_display_name_impl,
+    _preset_summary_plain_text as _preset_summary_plain_text_impl,
+    _preset_summary_text as _preset_summary_text_impl,
+    _current_settings_summary_payload as _current_settings_summary_payload_impl,
+)
+
+from tategakiXTC_gui_studio_preset_summary_layout_helpers import (
+    preset_summary_label_measurement_width as _preset_summary_label_measurement_width_impl,
+    queue_preset_summary_label_layout_retry as _queue_preset_summary_label_layout_retry_impl,
+    update_preset_summary_label_layout as _update_preset_summary_label_layout_impl,
+    sync_summary_payload as _sync_summary_payload_impl,
+    sync_current_settings_summary as _sync_current_settings_summary_impl,
+    sync_selected_preset_summary as _sync_selected_preset_summary_impl,
+    refresh_preset_ui as _refresh_preset_ui_impl,
+)
+
+from tategakiXTC_gui_studio_results_helpers import (
+    _set_results_summary_text_fallback as _set_results_summary_text_fallback_impl,
+    _set_results_summary_text_with_fallback as _set_results_summary_text_with_fallback_impl,
+    _set_bottom_tab_index_with_fallback as _set_bottom_tab_index_with_fallback_impl,
+    _clear_results_view as _clear_results_view_impl,
+    _sync_results_action_buttons_state as _sync_results_action_buttons_state_impl,
+    _normalize_results_path_key as _normalize_results_path_key_impl,
+    _clear_results_selection_state as _clear_results_selection_state_impl,
+    _clear_results_selection_with_fallback as _clear_results_selection_with_fallback_impl,
+    _apply_results_selection_context_with_fallback as _apply_results_selection_context_with_fallback_impl,
+    _sync_results_selection_for_loaded_path_with_fallback as _sync_results_selection_for_loaded_path_with_fallback_impl,
+    _result_item_count as _result_item_count_impl,
+    _result_item_at as _result_item_at_impl,
+    _result_item_paths as _result_item_paths_impl,
+    _result_item_path_keys as _result_item_path_keys_impl,
+    _set_results_current_index_with_fallback as _set_results_current_index_with_fallback_impl,
+    _apply_results_selection_context as _apply_results_selection_context_impl,
+    _sync_results_selection_for_loaded_path as _sync_results_selection_for_loaded_path_impl,
+    _selected_result_indexes as _selected_result_indexes_impl,
+    _current_results_index as _current_results_index_impl,
+    _resolved_result_load_context as _resolved_result_load_context_impl,
+    _resolved_results_item_for_loading as _resolved_results_item_for_loading_impl,
+    _fallback_loaded_result_load_context as _fallback_loaded_result_load_context_impl,
+)
+
+from tategakiXTC_gui_studio_results_actions_helpers import (
+    _load_xtc_from_path_with_result as _load_xtc_from_path_with_result_impl,
+    _show_conversion_results as _show_conversion_results_impl,
+    _preferred_result_path_for_action as _preferred_result_path_for_action_impl,
+    open_results_folder_from_results as open_results_folder_from_results_impl,
+    open_selected_result_from_results as open_selected_result_from_results_impl,
+    _result_display_name as _result_display_name_impl,
+    _normalized_result_entries as _normalized_result_entries_impl,
+    _apply_results_entries_to_ui as _apply_results_entries_to_ui_impl,
+    populate_results as populate_results_impl,
+    on_result_item_clicked as on_result_item_clicked_impl,
+    _show_result_load_dialog_with_status_fallback as _show_result_load_dialog_with_status_fallback_impl,
+    load_selected_result as load_selected_result_impl,
+    _results_item_path as _results_item_path_impl,
+    _apply_loaded_xtc_ui_context as _apply_loaded_xtc_ui_context_impl,
+)
+
+from tategakiXTC_gui_studio_status_helpers import (
+    _ui_widget_text as _ui_widget_text_impl,
+    _ui_widget_index as _ui_widget_index_impl,
+    _is_render_failure_status_text as _is_render_failure_status_text_impl,
+    _is_preview_render_failure_status_text as _is_preview_render_failure_status_text_impl,
+    _is_device_render_failure_status_text as _is_device_render_failure_status_text_impl,
+    _display_context_name_from_label_text as _display_context_name_from_label_text_impl,
+    _render_failure_preserved_display_name as _render_failure_preserved_display_name_impl,
+    _device_render_failure_matches_visible_display_context as _device_render_failure_matches_visible_display_context_impl,
+    _preview_render_failure_matches_visible_display_context as _preview_render_failure_matches_visible_display_context_impl,
+    _visible_render_failure_status_text as _visible_render_failure_status_text_impl,
+    _show_ui_status_message_unless_render_failure_visible as _show_ui_status_message_unless_render_failure_visible_impl,
+    _status_bar_message_text as _status_bar_message_text_impl,
+    _show_ui_status_message_unless_render_failure_visible_with_reflection as _show_ui_status_message_unless_render_failure_visible_with_reflection_impl,
+    _show_ui_status_message_with_reflection_or_direct_fallback as _show_ui_status_message_with_reflection_or_direct_fallback_impl,
+    _show_ui_status_message_direct_with_reflection_best_effort as _show_ui_status_message_direct_with_reflection_best_effort_impl,
+    _show_ui_status_message_direct_with_reflection as _show_ui_status_message_direct_with_reflection_impl,
+)
+
+from tategakiXTC_gui_studio_log_helpers import (
+    _merge_results_summary_lines_with_warnings as _merge_results_summary_lines_with_warnings_impl,
+    _merge_results_summary_lines_and_collect_warnings as _merge_results_summary_lines_and_collect_warnings_impl,
+    _build_results_summary_text as _build_results_summary_text_impl,
+    _append_conversion_finish_error_log_with_fallback as _append_conversion_finish_error_log_with_fallback_impl,
+    _handle_conversion_finish_ui_error as _handle_conversion_finish_ui_error_impl,
+    append_log as append_log_impl,
+    open_log_folder as open_log_folder_impl,
+    _append_log_without_status as _append_log_without_status_impl,
+    _append_log_with_status_fallback as _append_log_with_status_fallback_impl,
+    _append_log_without_status_best_effort as _append_log_without_status_best_effort_impl,
+    _append_log_without_status_or_status_bar as _append_log_without_status_or_status_bar_impl,
+    _append_log_without_status_with_optional_status_fallback as _append_log_without_status_with_optional_status_fallback_impl,
+    _emit_postprocess_warning as _emit_postprocess_warning_impl,
+    _emit_postprocess_warning_via_log_and_optional_status_fallback as _emit_postprocess_warning_via_log_and_optional_status_fallback_impl,
+    _emit_postprocess_warnings_and_collect as _emit_postprocess_warnings_and_collect_impl,
+    _emit_postprocess_warnings as _emit_postprocess_warnings_impl,
+    _emit_unique_postprocess_warnings_with_fallback as _emit_unique_postprocess_warnings_with_fallback_impl,
+    _append_unique_postprocess_warnings_to_log_with_fallback as _append_unique_postprocess_warnings_to_log_with_fallback_impl,
+    _emit_unique_postprocess_warnings_or_append_to_log as _emit_unique_postprocess_warnings_or_append_to_log_impl,
 )
 
 MissingDependencyItem = dict[str, object]
@@ -388,6 +882,7 @@ from tategakiXTC_gui_studio_constants import (
     PROGRESS_BAR_POSITION_LABELS,
     GLYPH_POSITION_MODE_OPTIONS,
     GLYPH_POSITION_MODE_LABELS,
+    OPENING_BRACKET_INDENT_MODE_LABELS,
     CLOSING_BRACKET_POSITION_MODE_OPTIONS,
     CLOSING_BRACKET_POSITION_MODE_LABELS,
     WAVE_DASH_DRAWING_MODE_OPTIONS,
@@ -521,38 +1016,10 @@ class MainWindow(QMainWindow):
         self._restore_settings()
 
     def _log_optional_dependency_status(self: MainWindow) -> None:
-        statuses = core.list_optional_dependency_status()
-        missing = [item for item in statuses if not item.get('available')]
-        if not missing:
-            return
-
-        grouped: dict[str, list[MissingDependencyItem]] = {
-            'feature': [],
-            'performance': [],
-            'convenience': [],
-        }
-        for item in missing:
-            impact = str(item.get('impact') or 'feature')
-            grouped.setdefault(impact, []).append(item)
-
-        lines: list[str] = []
-        if grouped.get('feature'):
-            lines.append('一部の追加ライブラリが未導入です。使えない機能があります。')
-            for item in grouped['feature']:
-                lines.append(f"- {item['label']}（{item['purpose']}）")
-        if grouped.get('performance'):
-            lines.append('高速化用の追加ライブラリが未導入です。変換速度が低下することがあります。')
-            for item in grouped['performance']:
-                lines.append(f"- {item['label']}（{item['purpose']}）")
-        if grouped.get('convenience'):
-            lines.append('任意の補助ライブラリが未導入です。進捗表示などが簡略化される場合があります。')
-            for item in grouped['convenience']:
-                lines.append(f"- {item['label']}（{item['purpose']}）")
-        self._append_log_without_status_best_effort(' / '.join(lines))
+        return _log_optional_dependency_status_impl(self, core.list_optional_dependency_status)
 
     def _missing_dependencies_for_targets(self: MainWindow, targets: list[Path]) -> list[MissingDependencyItem]:
-        suffixes = {p.suffix.lower() for p in targets}
-        return core.get_missing_dependencies_for_suffixes(suffixes)
+        return _missing_dependencies_for_targets_impl(targets, core.get_missing_dependencies_for_suffixes)
 
     def _show_warning_dialog_with_status_fallback(
         self: MainWindow,
@@ -678,63 +1145,13 @@ class MainWindow(QMainWindow):
         )
 
     def _install_folder_batch_menu_action(self: MainWindow) -> None:
-        """Add the first low-risk UI entry point for folder batch conversion."""
-        try:
-            from tategakiXTC_folder_batch_mainwindow_launcher import (
-                install_folder_batch_menu_action_best_effort,
-            )
-
-            install_folder_batch_menu_action_best_effort(self)
-        except Exception:
-            APP_LOGGER.exception('フォルダ一括変換メニューの追加に失敗しました')
+        return _install_folder_batch_menu_action_impl(self)
 
     def _open_folder_batch_dialog(self: MainWindow) -> None:
-        """Open the folder batch dialog and run it through the worker bridge."""
-        if bool(self.__dict__.get('_folder_batch_running', False)):
-            try:
-                self._show_ui_status_message_with_reflection_or_direct_fallback(
-                    'フォルダ一括変換はすでに実行中です。',
-                    5000,
-                )
-            except Exception:
-                pass
-            return
-        if self.__dict__.get('worker') is not None:
-            try:
-                self._show_warning_dialog_with_status_fallback(
-                    'フォルダ一括変換',
-                    '通常変換の実行中は、フォルダ一括変換を開始できません。現在の変換が終わってからもう一度実行してください。',
-                )
-            except Exception:
-                pass
-            return
-        try:
-            from tategakiXTC_folder_batch_mainwindow_launcher import (
-                open_folder_batch_dialog_for_mainwindow_real_or_warn,
-            )
-
-            open_folder_batch_dialog_for_mainwindow_real_or_warn(self)
-        except Exception as exc:
-            try:
-                self.__dict__['_folder_batch_running'] = False
-                self.__dict__['_folder_batch_cancel_requested'] = False
-            except Exception:
-                pass
-            APP_LOGGER.exception('フォルダ一括変換ダイアログの起動に失敗しました')
-            self._show_warning_dialog_with_status_fallback(
-                'フォルダ一括変換',
-                f'フォルダ一括変換を開始できませんでした: {exc}',
-            )
+        return _open_folder_batch_dialog_impl(self)
 
     def _check_conversion_dependencies(self: MainWindow, cfg: WorkerConversionSettings) -> bool:
-        supported = self._supported_targets_for_path(cfg.get('target', ''))
-        missing = self._missing_dependencies_for_targets(supported)
-        if not missing:
-            return True
-        self._show_warning_dialog_with_status_fallback('ライブラリ不足', _format_missing_dependency_message(missing))
-        missing_log_message = '不足ライブラリ: ' + ', '.join(item['label'] for item in missing)
-        self._append_log_without_status_best_effort(missing_log_message)
-        return False
+        return _check_conversion_dependencies_impl(self, cfg, _format_missing_dependency_message)
 
     def _settings_raw_value(self: MainWindow, key: str, default: object = None) -> object:
         return _settings_raw_value_from_store(self.settings_store, key, default)
@@ -749,33 +1166,7 @@ class MainWindow(QMainWindow):
         return _settings_bool_value_from_store(self.settings_store, key, default)
 
     def _has_restorable_user_settings(self: MainWindow) -> bool:
-        """Return True when the ini contains user-facing state worth restoring.
-
-        A crash or interrupted startup can leave only lifecycle metadata such as
-        ``last_shutdown_clean=false`` in a freshly created ini.  Treating that
-        bare marker as a full previous session forces the abnormal-shutdown
-        restore path even though there is nothing to restore.  Keep that path for
-        real saved settings, but allow a metadata-only ini to boot with normal
-        defaults.
-        """
-        keys_getter = getattr(self.settings_store, 'allKeys', None)
-        if not callable(keys_getter):
-            return True
-        try:
-            raw_keys = list(keys_getter())
-        except Exception:
-            return True
-        if not raw_keys:
-            return False
-        lifecycle_leaf_keys = {'last_shutdown_clean', 'settings_schema_version', 'last_app_version'}
-        for raw_key in raw_keys:
-            key = str(raw_key or '').strip().replace('\\', '/')
-            if not key:
-                continue
-            leaf = key.rsplit('/', 1)[-1]
-            if leaf not in lifecycle_leaf_keys:
-                return True
-        return False
+        return _has_restorable_user_settings_impl(self)
 
     def _settings_str_value(self: MainWindow, key: str, default: str = '') -> str:
         return _settings_str_value_from_store(self.settings_store, key, default)
@@ -1111,77 +1502,13 @@ class MainWindow(QMainWindow):
         return result
 
     def _window_state_restore_payload(self: MainWindow) -> dict[str, object]:
-        default_size = self._default_window_size()
-        default_width = int(default_size.width())
-        default_height = int(default_size.height())
-        raw_payload = {
-            'geometry': self._settings_raw_value('geometry', None),
-            'window_width': self._settings_raw_value('window_width', default_width),
-            'window_height': self._settings_raw_value('window_height', default_height),
-            'is_maximized': self._settings_raw_value('is_maximized', False),
-            'left_panel_width': self._settings_raw_value('left_panel_width', DEFAULT_LEFT_PANEL_WIDTH),
-            CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY: self._settings_raw_value(CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY, None),
-            CENTER_SETTINGS_LEGACY_SPLITTER_SIZES_KEY: self._default_left_splitter_sizes(),
-            'left_panel_visible': self._settings_raw_value('left_panel_visible', True),
-        }
-        payload = studio_logic.build_window_state_restore_payload(
-            raw_payload,
-            default_width=default_width,
-            default_height=default_height,
-            default_left_panel_width=DEFAULT_LEFT_PANEL_WIDTH,
-            default_left_splitter_sizes=self._default_left_splitter_sizes(),
-        )
-        raw_payload['preset_settings_splitter_state'] = self._settings_raw_value('preset_settings_splitter_state', None)
-        raw_payload['preset_settings_splitter_sizes'] = self._default_preset_settings_splitter_sizes()
-        payload['preset_settings_splitter_state'] = raw_payload.get('preset_settings_splitter_state')
-        payload['preset_settings_splitter_sizes'] = studio_logic.payload_splitter_sizes_value(
-            raw_payload,
-            'preset_settings_splitter_sizes',
-            self._default_preset_settings_splitter_sizes(),
-            min_top=240,
-            min_bottom=560,
-        )
-        three_pane_state_key, three_pane_sizes_key = THREE_PANE_SPLITTER_KEYS
-        raw_payload[three_pane_state_key] = self._settings_raw_value(three_pane_state_key, None)
-        raw_payload[three_pane_sizes_key] = self._default_three_pane_splitter_sizes()
-        payload[three_pane_state_key] = raw_payload.get(three_pane_state_key)
-        payload[three_pane_sizes_key] = self._payload_three_pane_splitter_sizes_value(
-            raw_payload,
-            three_pane_sizes_key,
-            self._default_three_pane_splitter_sizes(),
-        )
-        return payload
+        return _window_state_restore_payload_impl(self)
 
     def _settings_restore_payload(self: MainWindow) -> dict[str, object]:
-        payload = settings_controller.build_settings_restore_payload(
-            read_default_value=self._settings_default_value,
-            default_font_name=self._default_font_name(),
-            default_preview_page_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
-            allowed_view_modes={'font'},
-            allowed_profiles=DEVICE_PROFILES,
-            allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
-            allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
-            allowed_output_formats=OUTPUT_FORMAT_LABELS,
-            allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
-            normalize_font_setting_value=self._normalize_font_setting_value,
-            normalize_target_path_text=worker_logic.normalize_target_path_text,
-            resolve_profile_dimensions=self._resolved_profile_and_dimensions,
-        )
-        payload['preview_zoom_pct'] = self._normalize_preview_zoom_pct(
-            self._settings_raw_value('preview_zoom_pct', 100)
-        )
-        if not self._settings_contains_key('ui_language'):
-            payload['ui_language'] = self._os_default_ui_language()
-        else:
-            payload['ui_language'] = self._normalize_ui_language(payload.get('ui_language'), self._os_default_ui_language())
-        return payload
+        return _settings_restore_payload_impl(self)
 
     def _startup_preview_defaults_payload(self: MainWindow, payload: Mapping[str, object]) -> dict[str, object]:
-        # sweep348: 通常倍率UIは実寸近似OFFのフォントビュー用。
-        # 起動直後に保存済みの実寸近似/実機ビューを復元すると、倍率ボタンが
-        # 近くにあるのに効かない状態に見えるため、起動時だけ右ペインを
-        # 通常フォントビューへ戻す。通常倍率値そのものは別途復元する。
-        return studio_logic.build_startup_preview_defaults_payload(payload)
+        return _startup_preview_defaults_payload_impl(self, payload)
 
     def _existing_widgets(self: MainWindow, *names: str) -> tuple[object, ...]:
         widgets: list[object] = []
@@ -1232,7 +1559,7 @@ class MainWindow(QMainWindow):
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
             'threshold_spin', 'width_spin', 'height_spin', 'preview_page_limit_spin', 'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'progress_bar_check', 'progress_bar_position_combo', 'dither_check', 'night_check',
             'open_folder_check', 'output_conflict_combo', 'output_format_combo',
-            'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
+            'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'latin_orientation_combo', 'opening_bracket_indent_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'middle_dot_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'target_edit', 'preset_combo',
         )
 
     def _preset_apply_widgets(self: MainWindow) -> tuple[object, ...]:
@@ -1240,7 +1567,7 @@ class MainWindow(QMainWindow):
             'profile_combo', 'width_spin', 'height_spin', 'font_combo',
             'font_size_spin', 'ruby_size_spin', 'line_spacing_spin',
             'margin_t_spin', 'margin_b_spin', 'margin_r_spin', 'margin_l_spin',
-            'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'progress_bar_check', 'progress_bar_position_combo', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
+            'ruby_hide_check', 'page_number_check', 'page_number_font_size_spin', 'progress_bar_check', 'progress_bar_position_combo', 'night_check', 'dither_check', 'kinsoku_mode_combo', 'tatechuyoko_digit_mode_combo', 'latin_orientation_combo', 'opening_bracket_indent_combo', 'punctuation_position_combo', 'ichi_position_combo', 'halfwidth_digit_position_combo', 'halfwidth_alpha_position_combo', 'middle_dot_position_combo', 'tatechuyoko_symbol_position_combo', 'lower_closing_bracket_position_combo', 'wave_dash_drawing_combo', 'wave_dash_position_combo', 'output_format_combo',
         )
 
     def _apply_profile_dimensions_to_ui(
@@ -1268,186 +1595,7 @@ class MainWindow(QMainWindow):
         return resolved_key, profile, resolved_width, resolved_height
 
     def _apply_settings_payload_to_ui(self: MainWindow, payload: dict[str, object]) -> None:
-        apply_defaults = settings_controller.build_settings_ui_apply_defaults(
-            actual_size=self._safe_widget_checked('actual_size_check'),
-            show_guides=self._safe_widget_checked('guides_check'),
-            calibration_pct=self._safe_widget_value('calib_spin', 100),
-            nav_buttons_reversed=getattr(self, 'nav_buttons_reversed', False),
-            font_size=self._safe_widget_value('font_size_spin', 26),
-            ruby_size=self._safe_widget_value('ruby_size_spin', 12),
-            ruby_hide=self._safe_widget_checked('ruby_hide_check'),
-            page_number_enabled=self._safe_widget_checked('page_number_check'),
-            page_number_font_size=self._safe_widget_value('page_number_font_size_spin', 12),
-            progress_bar_enabled=self._safe_widget_checked('progress_bar_check'),
-            progress_bar_position=self._safe_combo_data('progress_bar_position_combo', 'center'),
-            line_spacing=self._safe_widget_value('line_spacing_spin', 44),
-            margin_t=self._safe_widget_value('margin_t_spin', 12),
-            margin_b=self._safe_widget_value('margin_b_spin', 14),
-            margin_r=self._safe_widget_value('margin_r_spin', 12),
-            margin_l=self._safe_widget_value('margin_l_spin', 12),
-            threshold=self._safe_widget_value('threshold_spin', 128),
-            preview_page_limit=self._safe_widget_value('preview_page_limit_spin', DEFAULT_PREVIEW_PAGE_LIMIT),
-            dither=self._safe_widget_checked('dither_check'),
-            night_mode=self._safe_widget_checked('night_check'),
-            open_folder=self._safe_widget_checked('open_folder_check'),
-            output_conflict=self._safe_combo_data('output_conflict_combo', 'rename'),
-            output_format=self._safe_combo_data('output_format_combo', 'xtch'),
-            kinsoku_mode=self._safe_combo_data('kinsoku_mode_combo', 'standard'),
-            tatechuyoko_digit_mode=self._safe_combo_data('tatechuyoko_digit_mode_combo', '2'),
-            punctuation_position_mode=self._safe_combo_data('punctuation_position_combo', 'standard'),
-            ichi_position_mode=self._safe_combo_data('ichi_position_combo', 'standard'),
-            halfwidth_digit_position_mode=self._safe_combo_data('halfwidth_digit_position_combo', 'standard'),
-            halfwidth_alpha_position_mode=self._safe_combo_data('halfwidth_alpha_position_combo', 'standard'),
-            tatechuyoko_symbol_position_mode=self._safe_combo_data('tatechuyoko_symbol_position_combo', 'standard'),
-            lower_closing_bracket_position_mode=self._safe_combo_data('lower_closing_bracket_position_combo', 'standard'),
-            wave_dash_drawing_mode=self._safe_combo_data('wave_dash_drawing_combo', 'rotate'),
-            wave_dash_position_mode=self._safe_combo_data('wave_dash_position_combo', 'standard'),
-            main_view_mode=getattr(self, 'main_view_mode', 'font'),
-        )
-        apply_plan = settings_controller.build_settings_ui_apply_plan(
-            raw_payload=payload,
-            defaults=apply_defaults,
-            allowed_view_modes={'font'},
-            allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
-            allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
-            allowed_output_formats=OUTPUT_FORMAT_LABELS,
-            allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
-            bottom_tab_count=self.bottom_tabs.count() if hasattr(self, 'bottom_tabs') else 0,
-        )
-
-        if 'ui_language' in apply_plan:
-            self._set_language_combo_value(apply_plan.get('ui_language'))
-
-        profile_value = apply_plan.get('profile', self._current_profile_key_or_default())
-        width = apply_plan.get('width')
-        height = apply_plan.get('height')
-        if any(key in apply_plan for key in ('profile', 'width', 'height')):
-            self._apply_profile_dimensions_to_ui(profile_value, width, height)
-
-        if 'actual_size' in apply_plan:
-            getattr(self, 'actual_size_check', None) is not None and self.actual_size_check.setChecked(bool(apply_plan['actual_size']))
-        if 'show_guides' in apply_plan:
-            getattr(self, 'guides_check', None) is not None and self.guides_check.setChecked(bool(apply_plan['show_guides']))
-        if 'calibration_pct' in apply_plan:
-            getattr(self, 'calib_spin', None) is not None and self.calib_spin.setValue(int(apply_plan['calibration_pct']))
-        if 'preview_zoom_pct' in payload:
-            zoom_spin = getattr(self, 'preview_zoom_spin', None)
-            if zoom_spin is not None:
-                zoom_spin.setValue(self._normalize_preview_zoom_pct(payload.get('preview_zoom_pct')))
-        self._sync_preview_zoom_control_state()
-        if 'nav_buttons_reversed' in apply_plan:
-            nav_reversed = bool(apply_plan['nav_buttons_reversed'])
-            self.nav_buttons_reversed = nav_reversed
-            getattr(self, 'nav_reverse_check', None) is not None and self.nav_reverse_check.setChecked(nav_reversed)
-            self._update_nav_button_texts()
-
-        if 'font_file' in apply_plan:
-            font_value = self._normalize_font_setting_value(
-                apply_plan.get('font_file'),
-                self._default_font_name(),
-            ) or self._default_font_name()
-            if font_value:
-                font_combo = getattr(self, 'font_combo', None)
-                signals_blocked_getter = getattr(font_combo, 'signalsBlocked', None)
-                signals_blocked = False
-                if callable(signals_blocked_getter):
-                    try:
-                        signals_blocked = bool(signals_blocked_getter())
-                    except Exception:
-                        signals_blocked = False
-                if signals_blocked and font_combo is not None:
-                    self._ensure_font_combo_value(font_value)
-                    find_data = getattr(font_combo, 'findData', None)
-                    idx = find_data(font_value) if callable(find_data) else -1
-                    if isinstance(idx, int) and idx >= 0:
-                        font_combo.setCurrentIndex(idx)
-                        reset_popup_scroll = getattr(font_combo, '_reset_popup_scroll_to_top', None)
-                        if callable(reset_popup_scroll):
-                            reset_popup_scroll()
-                    else:
-                        self._set_current_font_value(font_value)
-                else:
-                    self._set_current_font_value(font_value)
-
-        for key, widget in [
-            ('font_size', getattr(self, 'font_size_spin', None)),
-            ('ruby_size', getattr(self, 'ruby_size_spin', None)),
-            ('page_number_font_size', getattr(self, 'page_number_font_size_spin', None)),
-            ('line_spacing', getattr(self, 'line_spacing_spin', None)),
-            ('margin_t', getattr(self, 'margin_t_spin', None)),
-            ('margin_b', getattr(self, 'margin_b_spin', None)),
-            ('margin_r', getattr(self, 'margin_r_spin', None)),
-            ('margin_l', getattr(self, 'margin_l_spin', None)),
-            ('threshold', getattr(self, 'threshold_spin', None)),
-            ('preview_page_limit', getattr(self, 'preview_page_limit_spin', None)),
-        ]:
-            if key in apply_plan and widget is not None:
-                widget.setValue(int(apply_plan[key]))
-
-        if 'ruby_hide' in apply_plan:
-            getattr(self, 'ruby_hide_check', None) is not None and self.ruby_hide_check.setChecked(bool(apply_plan['ruby_hide']))
-        if 'page_number_enabled' in apply_plan:
-            getattr(self, 'page_number_check', None) is not None and self.page_number_check.setChecked(bool(apply_plan['page_number_enabled']))
-        if getattr(self, 'page_number_font_size_spin', None) is not None and getattr(self, 'page_number_check', None) is not None:
-            self.page_number_font_size_spin.setEnabled(bool(self.page_number_check.isChecked()))
-        if 'progress_bar_enabled' in apply_plan:
-            getattr(self, 'progress_bar_check', None) is not None and self.progress_bar_check.setChecked(bool(apply_plan['progress_bar_enabled']))
-        if 'progress_bar_position' in apply_plan:
-            getattr(self, 'progress_bar_position_combo', None) is not None and self._set_combo_to_data(self.progress_bar_position_combo, str(apply_plan['progress_bar_position']))
-        if getattr(self, 'progress_bar_position_combo', None) is not None and getattr(self, 'progress_bar_check', None) is not None:
-            self.progress_bar_position_combo.setEnabled(bool(self.progress_bar_check.isChecked()))
-        self._restore_bottom_overlay_margin_auto_state_from_payload(payload)
-        if 'dither' in apply_plan:
-            getattr(self, 'dither_check', None) is not None and self.dither_check.setChecked(bool(apply_plan['dither']))
-        self._apply_render_option_ui_state()
-        if 'night_mode' in apply_plan:
-            getattr(self, 'night_check', None) is not None and self.night_check.setChecked(bool(apply_plan['night_mode']))
-        if 'open_folder' in apply_plan:
-            getattr(self, 'open_folder_check', None) is not None and self.open_folder_check.setChecked(bool(apply_plan['open_folder']))
-        if 'output_conflict' in apply_plan:
-            getattr(self, 'output_conflict_combo', None) is not None and self._set_combo_to_data(self.output_conflict_combo, str(apply_plan['output_conflict']))
-        if 'output_format' in apply_plan:
-            getattr(self, 'output_format_combo', None) is not None and self._set_combo_to_data(self.output_format_combo, str(apply_plan['output_format']))
-        if 'kinsoku_mode' in apply_plan:
-            getattr(self, 'kinsoku_mode_combo', None) is not None and self._set_combo_to_data(self.kinsoku_mode_combo, str(apply_plan['kinsoku_mode']))
-        if 'tatechuyoko_digit_mode' in apply_plan:
-            getattr(self, 'tatechuyoko_digit_mode_combo', None) is not None and self._set_combo_to_data(self.tatechuyoko_digit_mode_combo, str(apply_plan['tatechuyoko_digit_mode']))
-        if 'punctuation_position_mode' in apply_plan:
-            getattr(self, 'punctuation_position_combo', None) is not None and self._set_combo_to_data(self.punctuation_position_combo, str(apply_plan['punctuation_position_mode']))
-        if 'ichi_position_mode' in apply_plan:
-            getattr(self, 'ichi_position_combo', None) is not None and self._set_combo_to_data(self.ichi_position_combo, str(apply_plan['ichi_position_mode']))
-        if 'halfwidth_digit_position_mode' in apply_plan:
-            getattr(self, 'halfwidth_digit_position_combo', None) is not None and self._set_combo_to_data(self.halfwidth_digit_position_combo, str(apply_plan['halfwidth_digit_position_mode']))
-        if 'halfwidth_alpha_position_mode' in apply_plan:
-            getattr(self, 'halfwidth_alpha_position_combo', None) is not None and self._set_combo_to_data(self.halfwidth_alpha_position_combo, str(apply_plan['halfwidth_alpha_position_mode']))
-        if 'tatechuyoko_symbol_position_mode' in apply_plan:
-            getattr(self, 'tatechuyoko_symbol_position_combo', None) is not None and self._set_combo_to_data(self.tatechuyoko_symbol_position_combo, str(apply_plan['tatechuyoko_symbol_position_mode']))
-        if 'lower_closing_bracket_position_mode' in apply_plan:
-            getattr(self, 'lower_closing_bracket_position_combo', None) is not None and self._set_combo_to_data(self.lower_closing_bracket_position_combo, str(apply_plan['lower_closing_bracket_position_mode']))
-        if 'wave_dash_drawing_mode' in apply_plan:
-            getattr(self, 'wave_dash_drawing_combo', None) is not None and self._set_combo_to_data(self.wave_dash_drawing_combo, str(apply_plan['wave_dash_drawing_mode']))
-        if 'wave_dash_position_mode' in apply_plan:
-            getattr(self, 'wave_dash_position_combo', None) is not None and self._set_combo_to_data(self.wave_dash_position_combo, str(apply_plan['wave_dash_position_mode']))
-
-        if 'target' in apply_plan:
-            # プリセット/設定復元で変換対象が変わる場合も、ファイル選択・
-            # ドロップ・手入力と同じ target 変更 helper を通して通常
-            # プレビューへ戻す。
-            self._set_target_path_for_normal_preview(
-                str(apply_plan.get('target') or '').strip(),
-                block_signals=False,
-            )
-        if 'output_dir' in apply_plan:
-            self.selected_output_dir = worker_logic.normalize_target_path_text(str(apply_plan.get('output_dir') or ''))
-
-        if 'main_view_mode' in apply_plan:
-            hasattr(self, 'set_main_view_mode') and self.set_main_view_mode(str(apply_plan['main_view_mode']), initial=True)
-
-        if 'bottom_tab_index' in apply_plan:
-            hasattr(self, '_set_bottom_tab_index_with_fallback') and self._set_bottom_tab_index_with_fallback(int(apply_plan['bottom_tab_index']))
-
-        if 'nav_buttons_reversed' in apply_plan:
-            hasattr(self, 'update_navigation_ui') and self.update_navigation_ui()
+        _apply_settings_payload_to_ui_impl(self, payload)
 
     def _apply_render_option_ui_state(self: MainWindow, checked: object = None) -> None:
         if not hasattr(self, 'threshold_spin'):
@@ -1460,49 +1608,10 @@ class MainWindow(QMainWindow):
         self.threshold_spin.setEnabled(not bool(checked))
 
     def _apply_viewer_display_runtime_state(self: MainWindow) -> None:
-        if not hasattr(self, 'viewer_widget'):
-            return
-
-        actual_size = False
-        if hasattr(self, 'actual_size_check') and hasattr(self.actual_size_check, 'isChecked'):
-            actual_size = bool(self.actual_size_check.isChecked())
-
-        calibration_pct = 100
-        if hasattr(self, 'calib_spin') and hasattr(self.calib_spin, 'value'):
-            try:
-                calibration_pct = int(self.calib_spin.value())
-            except Exception:
-                calibration_pct = 100
-
-        show_guides = False
-        if hasattr(self, 'guides_check') and hasattr(self.guides_check, 'isChecked'):
-            show_guides = bool(self.guides_check.isChecked())
-
-        margin_t, margin_b, margin_r, margin_l = self._current_guide_margins()
-
-        self.viewer_widget.set_actual_size(actual_size)
-        self.viewer_widget.set_calibration(1.0 if actual_size else calibration_pct / 100.0)
-        if hasattr(self.viewer_widget, 'set_preview_zoom_factor'):
-            self.viewer_widget.set_preview_zoom_factor(self._preview_zoom_factor())
-        self.viewer_widget.set_show_guides(show_guides)
-        self.viewer_widget.set_guide_margins(margin_t, margin_b, margin_r, margin_l)
-        try:
-            self.viewer_widget.set_profile(self._active_device_viewer_profile())
-        except Exception:
-            pass
+        _apply_viewer_display_runtime_state_impl(self)
 
     def _apply_profile_runtime_state(self: MainWindow) -> None:
-        profile_key, profile, _width, _height = self._resolved_profile_and_dimensions()
-        self.current_profile_key = profile_key
-        if hasattr(self, 'viewer_widget'):
-            self.viewer_widget.set_profile(self._active_device_viewer_profile())
-        try:
-            self._sync_preview_size()
-        except Exception:
-            pass
-        if hasattr(self, 'profile_hint'):
-            self.profile_hint.setText(profile.tagline)
-            self.profile_hint.setVisible(bool(profile.tagline))
+        _apply_profile_runtime_state_impl(self)
 
     def _finalize_setting_change(
         self: MainWindow,
@@ -1678,274 +1787,46 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self._ensure_window_inside_available_area)
 
     def _startup_target_text(self: MainWindow) -> str:
-        try:
-            return worker_logic.normalize_target_path_text(self.target_edit.text())
-        except Exception:
-            return ''
+        return _startup_target_text_impl(self)
 
     def _startup_target_path_exists(self: MainWindow, target_text: str) -> bool:
-        if not target_text:
-            return False
-        try:
-            return Path(target_text).exists()
-        except (OSError, ValueError):
-            return False
+        return _startup_target_path_exists_impl(self, target_text)
 
     def _startup_previous_target_display_text(self: MainWindow, target_text: str) -> str:
-        try:
-            name = Path(target_text).name
-        except (OSError, ValueError):
-            name = ''
-        return name or target_text or self._ui_text('前回の作業ファイル')
+        return _startup_previous_target_display_text_impl(self, target_text)
 
     def _confirm_startup_previous_target_preview(self: MainWindow, target_text: str) -> bool:
-        question = getattr(QMessageBox, 'question', None)
-        standard_buttons = getattr(QMessageBox, 'StandardButton', None)
-        yes_button = getattr(QMessageBox, 'Yes', getattr(standard_buttons, 'Yes', None))
-        no_button = getattr(QMessageBox, 'No', getattr(standard_buttons, 'No', None))
-        if not callable(question) or yes_button is None or no_button is None:
-            return False
-        display_name = self._startup_previous_target_display_text(target_text)
-        if self._normalize_ui_language(getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE), DEFAULT_UI_LANGUAGE) == 'en':
-            dialog_title = 'Previous Work'
-            message = (
-                'A previous work file was found.\n\n'
-                f'{display_name}\n'
-                f'{target_text}\n\n'
-                'Do you want to continue from the previous work?'
-            )
-        else:
-            dialog_title = '前回の作業'
-            message = (
-                '前回の作業ファイルが見つかりました。\n\n'
-                f'{display_name}\n'
-                f'{target_text}\n\n'
-                '前回の作業の続きを行いますか？'
-            )
-        try:
-            buttons = yes_button | no_button
-        except Exception:
-            buttons = yes_button
-        try:
-            response = question(self, dialog_title, message, buttons, yes_button)
-        except TypeError:
-            try:
-                response = question(self, dialog_title, message)
-            except Exception:
-                return False
-        except Exception:
-            return False
-        return response == yes_button
+        return _confirm_startup_previous_target_preview_impl(self, target_text)
 
-    def _set_target_path_for_normal_preview(
-        self: MainWindow,
-        path: object,
-        *,
-        block_signals: bool = True,
-        exit_file_viewer: bool = True,
-    ) -> str:
-        """Set the normal conversion target through one guarded path.
-
-        Target changes are initiated by several UI routes: file dialog, drag
-        and drop, manual entry, preset restore, and startup helpers.  The
-        XTC/XTCH file viewer owns the right-pane page source while it is
-        active, so every normal target change must first leave viewer mode.
-        Keeping the setText + viewer-exit sequence here prevents the same
-        cleanup from being forgotten by a future target-change route.
-        """
-        normalized_path = worker_logic.normalize_target_path_text(path)
-        if exit_file_viewer:
-            self._leave_file_viewer_mode_for_target_change()
-        target_edit = getattr(self, 'target_edit', None)
-        setter = getattr(target_edit, 'setText', None)
-        if not callable(setter):
-            return normalized_path
-        if block_signals:
-            try:
-                with _bulk_block_signals(target_edit):
-                    setter(normalized_path)
-                return normalized_path
-            except Exception:
-                pass
-        try:
-            setter(normalized_path)
-        except Exception:
-            pass
-        return normalized_path
+    def _set_target_path_for_normal_preview(self: MainWindow, path: object, *, block_signals: bool = True, exit_file_viewer: bool = True) -> str:
+        return _set_target_path_for_normal_preview_impl(self, path, block_signals=block_signals, exit_file_viewer=exit_file_viewer)
 
     def on_target_text_changed(self: MainWindow, text: object = '') -> None:
-        """Leave XTC/XTCH viewer mode as soon as the target field changes.
-
-        Programmatic target updates should normally use
-        _set_target_path_for_normal_preview(), but this signal-level guard is
-        a low-cost safety net for manual edits or future UI paths that touch
-        target_edit directly.
-        """
-        del text
-        try:
-            if self._is_file_viewer_mode_active():
-                self._leave_file_viewer_mode_for_target_change()
-        except Exception:
-            APP_LOGGER.exception('変換対象テキスト変更時のファイルビューワー状態解除に失敗しました')
+        return on_target_text_changed_impl(self, text)
 
     def _clear_startup_target_for_sample_preview(self: MainWindow) -> None:
-        self._set_target_path_for_normal_preview('', exit_file_viewer=False)
+        return _clear_startup_target_for_sample_preview_impl(self)
 
     def _show_startup_sample_preview_status(self: MainWindow, message: str) -> None:
-        try:
-            self._show_ui_status_message_with_reflection_or_direct_fallback(message, 5000)
-        except Exception:
-            APP_LOGGER.info(message)
+        return _show_startup_sample_preview_status_impl(self, message)
 
     def _request_startup_sample_preview(self: MainWindow) -> bool:
-        try:
-            refreshed = bool(self.request_preview_refresh(reset_page=True))
-        except Exception:
-            APP_LOGGER.exception('起動時サンプルプレビューの生成に失敗しました')
-            refreshed = False
-        try:
-            self._schedule_startup_preview_idle_reconcile()
-        except Exception:
-            pass
-        return refreshed
+        return _request_startup_sample_preview_impl(self)
 
     def _schedule_startup_preview_idle_reconcile(self: MainWindow) -> None:
-        """Finalize startup preview UI after delayed showEvent work has settled.
+        return _schedule_startup_preview_idle_reconcile_impl(self)
 
-        The startup sample/restore preview runs from ``showEvent`` through a
-        deferred ``QTimer.singleShot(0, ...)`` path.  On Windows/PySide6, early
-        repaint/resize events can leave the preview progress controls showing
-        the start-context text even after the synchronous preview bundle was
-        applied.  Keep this guard scoped to startup preview: it only runs after
-        the initial sample/restore request and reconciles the controls once all
-        running flags are down.
-        """
-
-        def _run() -> None:
-            self._reconcile_startup_preview_idle_state(remaining_retries=3)
-
-        single_shot = getattr(QTimer, 'singleShot', None)
-        if callable(single_shot):
-            try:
-                single_shot(0, _run)
-                return
-            except Exception:
-                pass
-        _run()
-
-    def _reconcile_startup_preview_idle_state(
-        self: MainWindow, *, remaining_retries: int = 0
-    ) -> None:
-        """Force startup preview controls out of stale generating state safely."""
-        running = bool(
-            getattr(self, '_preview_running', False)
-            or getattr(self, '_target_preview_refresh_running', False)
-        )
-        if running and remaining_retries > 0:
-            single_shot = getattr(QTimer, 'singleShot', None)
-            if callable(single_shot):
-                try:
-                    single_shot(80, lambda: self._reconcile_startup_preview_idle_state(remaining_retries=remaining_retries - 1))
-                    return
-                except Exception:
-                    pass
-        if running:
-            return
-
-        finish_context = preview_controller.build_preview_finish_context()
-        try:
-            self._apply_preview_progress_bar_context(finish_context)
-        except Exception:
-            pass
-        try:
-            self._refresh_preview_update_button_for_current_state(finish_context)
-        except Exception:
-            pass
-
-        try:
-            preview_pages = self._runtime_preview_pages()
-        except Exception:
-            preview_pages = []
-        if preview_pages:
-            try:
-                requested_limit = max(
-                    len(preview_pages),
-                    int(getattr(self, 'last_preview_requested_limit', 0) or 0),
-                )
-            except Exception:
-                requested_limit = len(preview_pages)
-            status_state = studio_logic.build_preview_success_status_state(
-                page_count=len(preview_pages),
-                requested_limit=requested_limit,
-                truncated=getattr(self, 'preview_pages_truncated', False),
-                language=self.current_ui_language_value(),
-            )
-            try:
-                self._update_preview_status_label(str(status_state.get('status_message', '')))
-            except Exception:
-                pass
-            self.preview_dirty = False
+    def _reconcile_startup_preview_idle_state(self: MainWindow, *, remaining_retries: int = 0) -> None:
+        return _reconcile_startup_preview_idle_state_impl(self, remaining_retries=remaining_retries)
 
     def _request_startup_preview_after_restore(self: MainWindow) -> None:
-        target_text = self._startup_target_text()
-        if not target_text:
-            self._request_startup_sample_preview()
-            return
-
-        if not self._startup_target_path_exists(target_text):
-            self._clear_startup_target_for_sample_preview()
-            self._request_startup_sample_preview()
-            self._show_startup_sample_preview_status('前回の作業ファイルが見つからないため、サンプルを表示しました。')
-            try:
-                self.save_ui_state()
-            except Exception:
-                pass
-            return
-
-        if not self._confirm_startup_previous_target_preview(target_text):
-            self._clear_startup_target_for_sample_preview()
-            self._request_startup_sample_preview()
-            self._show_startup_sample_preview_status('サンプルを表示しました。')
-            try:
-                self.save_ui_state()
-            except Exception:
-                pass
-            return
-
-        try:
-            if self.request_preview_refresh(reset_page=True):
-                try:
-                    self._schedule_startup_preview_idle_reconcile()
-                except Exception:
-                    pass
-                return
-        except Exception:
-            APP_LOGGER.exception('前回作業ファイルの起動時プレビュー生成に失敗しました')
-
-        self._clear_startup_target_for_sample_preview()
-        self._request_startup_sample_preview()
-        self._show_startup_sample_preview_status('前回の作業ファイルをプレビューできなかったため、サンプルを表示しました。')
-        try:
-            self.save_ui_state()
-        except Exception:
-            pass
+        return _request_startup_preview_after_restore_impl(self)
 
     def _request_startup_sample_preview_if_no_target(self: MainWindow) -> None:
-        # 旧テスト/互換用の薄い wrapper。現在は target 復元時の確認もここで扱う。
-        self._request_startup_preview_after_restore()
+        return _request_startup_sample_preview_if_no_target_impl(self)
 
     def _startup_font_combo_scroll_reset(self: MainWindow) -> None:
-        """起動直後にフォントコンボの内部ビューを先頭へ戻す。"""
-        font_combo = getattr(self, 'font_combo', None)
-        if font_combo is None:
-            return
-        _scroll_combo_popup_to_top_now(font_combo)
-        reset_popup_scroll = getattr(font_combo, '_reset_popup_scroll_to_top', None)
-        if callable(reset_popup_scroll):
-            try:
-                QTimer.singleShot(50, reset_popup_scroll)
-            except Exception:
-                pass
+        return _startup_font_combo_scroll_reset_impl(self)
 
     def resizeEvent(self: MainWindow, event: object) -> None:
         super().resizeEvent(event)
@@ -2066,221 +1947,53 @@ class MainWindow(QMainWindow):
 
 
     def _combo_popup_is_visible(self: MainWindow, combo: object) -> bool:
-        if not isinstance(combo, QComboBox):
-            return False
-        view_getter = getattr(combo, 'view', None)
-        if not callable(view_getter):
-            return False
-        try:
-            view = view_getter()
-        except Exception:
-            return False
-        is_visible = getattr(view, 'isVisible', None)
-        if callable(is_visible):
-            try:
-                return bool(is_visible())
-            except Exception:
-                return False
-        return False
+        return _combo_popup_is_visible_impl(self, combo)
+
 
     def _is_open_combo_popup_wheel_target(self: MainWindow, obj: object) -> bool:
-        """Allow wheel scrolling inside an opened combo-box popup list."""
-        if obj is None:
-            return False
-        widget = obj
-        visited_widget_ids: set[int] = set()
-        while widget is not None and id(widget) not in visited_widget_ids:
-            visited_widget_ids.add(id(widget))
-            if isinstance(widget, QComboBox) and self._combo_popup_is_visible(widget):
-                return True
-            class_names = {cls.__name__ for cls in type(widget).__mro__}
-            if class_names & {'QAbstractItemView', 'QListView', 'QTreeView', 'QTableView'}:
-                try:
-                    container = self._center_settings_container_widget()
-                    combos = container.findChildren(QComboBox) if container is not None else []
-                    for combo in combos:
-                        if self._combo_popup_is_visible(combo):
-                            view = combo.view()
-                            if widget is view or self._is_widget_descendant_of(widget, view):
-                                return True
-                except Exception:
-                    pass
-            parent_getter = getattr(widget, 'parentWidget', None)
-            if callable(parent_getter):
-                try:
-                    widget = parent_getter()
-                    continue
-                except Exception:
-                    return False
-            parent_getter = getattr(widget, 'parent', None)
-            widget = parent_getter() if callable(parent_getter) else None
-        return False
+        return _is_open_combo_popup_wheel_target_impl(self, obj)
+
 
     def _wheel_value_change_control_for_event_object(self: MainWindow, obj: object) -> object | None:
-        widget = obj
-        visited_widget_ids: set[int] = set()
-        while widget is not None and id(widget) not in visited_widget_ids:
-            visited_widget_ids.add(id(widget))
-            if isinstance(widget, (QComboBox, QSpinBox)):
-                return widget
-            class_names = {cls.__name__ for cls in type(widget).__mro__}
-            if 'QAbstractSpinBox' in class_names:
-                return widget
-            parent_getter = getattr(widget, 'parentWidget', None)
-            if callable(parent_getter):
-                try:
-                    widget = parent_getter()
-                    continue
-                except Exception:
-                    return None
-            parent_getter = getattr(widget, 'parent', None)
-            widget = parent_getter() if callable(parent_getter) else None
-        return None
+        return _wheel_value_change_control_for_event_object_impl(self, obj)
+
 
     def _should_suppress_center_settings_wheel_value_change(self: MainWindow, obj: object) -> bool:
-        """Return True when a center-pane wheel event must not edit a value.
+        return _should_suppress_center_settings_wheel_value_change_impl(self, obj)
 
-        ``left_settings_container`` is still supported by
-        _center_settings_container_widget() as a legacy alias, but the active
-        v1.3.8 three-pane code should go through this center-named helper.
-        """
-        control = self._wheel_value_change_control_for_event_object(obj)
-        if control is None:
-            return False
-        container = self._center_settings_container_widget()
-        if container is None:
-            return False
-        return self._is_widget_descendant_of(control, container)
 
     def _should_suppress_left_settings_wheel_value_change(self: MainWindow, obj: object) -> bool:
-        """Compatibility wrapper for pre-v1.3.8 left-settings tests/helpers."""
-        return self._should_suppress_center_settings_wheel_value_change(obj)
+        return _should_suppress_left_settings_wheel_value_change_impl(self, obj)
+
 
     def _should_scroll_center_settings_from_wheel_event(self: MainWindow, obj: object) -> bool:
-        """Return True when a wheel event should scroll the center settings pane.
+        return _should_scroll_center_settings_from_wheel_event_impl(self, obj)
 
-        Qt does not always bubble wheel events from child widgets back to the
-        QScrollArea on every Windows/PySide6 combination.  Installing this
-        narrow filter on the upper settings container keeps labels, whitespace,
-        checkboxes and buttons scrollable while value-changing controls are
-        still protected by _should_suppress_center_settings_wheel_value_change().
-        """
-        container = self._center_settings_container_widget()
-        scroll = self._center_settings_scroll_area()
-        if container is None or scroll is None or obj is None:
-            return False
-        if obj is scroll:
-            return True
-        try:
-            if obj is scroll.viewport():
-                return True
-        except Exception:
-            pass
-        if isinstance(obj, QScrollBar):
-            return False
-        return self._is_widget_descendant_of(obj, container)
 
     def _should_scroll_left_settings_from_wheel_event(self: MainWindow, obj: object) -> bool:
-        """Compatibility wrapper for pre-v1.3.8 left-settings tests/helpers."""
-        return self._should_scroll_center_settings_from_wheel_event(obj)
+        return _should_scroll_left_settings_from_wheel_event_impl(self, obj)
+
 
     def _install_center_settings_wheel_value_guards(self: MainWindow) -> None:
-        """Install wheel guards through the current three-pane naming."""
-        container = self._center_settings_container_widget()
-        if container is None:
-            return
-        candidates: list[object] = [container]
-        try:
-            candidates.extend(list(container.findChildren(QWidget)))
-        except Exception:
-            pass
-        scroll = self._center_settings_scroll_area()
-        if scroll is not None:
-            candidates.append(scroll)
-            try:
-                candidates.append(scroll.viewport())
-            except Exception:
-                pass
-        seen: set[int] = set()
-        for target in candidates:
-            if target is None or id(target) in seen:
-                continue
-            seen.add(id(target))
-            install = getattr(target, 'installEventFilter', None)
-            if callable(install):
-                try:
-                    install(self)
-                except Exception:
-                    pass
+        _install_center_settings_wheel_value_guards_impl(self)
+
 
     def _install_left_settings_wheel_value_guards(self: MainWindow) -> None:
-        """Compatibility wrapper for pre-v1.3.8 left-settings tests/helpers."""
-        self._install_center_settings_wheel_value_guards()
+        _install_left_settings_wheel_value_guards_impl(self)
+
 
     def _scroll_center_settings_from_wheel_event(self: MainWindow, event: object) -> None:
-        """Scroll the center settings pane from a wheel event."""
-        scroll = self._center_settings_scroll_area()
-        if scroll is None:
-            return
-        try:
-            delta = event.angleDelta()
-        except Exception:
-            delta = None
-        dy = 0
-        dx = 0
-        if delta is not None:
-            try:
-                dy = int(delta.y())
-                dx = int(delta.x())
-            except Exception:
-                dy = 0
-                dx = 0
-        horizontal_requested = False
-        try:
-            modifiers = event.modifiers()
-            horizontal_requested = bool(modifiers & Qt.ShiftModifier)
-        except Exception:
-            horizontal_requested = False
-        use_horizontal = horizontal_requested or abs(dx) > abs(dy)
-        units = dy if horizontal_requested and dy else (dx if use_horizontal else dy)
-        try:
-            target_bar = scroll.horizontalScrollBar() if use_horizontal else scroll.verticalScrollBar()
-        except Exception:
-            return
-        if target_bar is None or units == 0:
-            return
-        try:
-            step = int(target_bar.singleStep() or 20)
-            # Qt wheel deltas are normally 120 units per notch. Keep fractional
-            # devices responsive by falling back to one step for small deltas.
-            notches = units / 120.0
-            amount = int(round(notches * step * 3))
-            if amount == 0:
-                amount = step if units > 0 else -step
-            target_bar.setValue(int(target_bar.value()) - amount)
-        except Exception:
-            return
+        _scroll_center_settings_from_wheel_event_impl(self, event)
+
 
     def _scroll_left_settings_from_wheel_event(self: MainWindow, event: object) -> None:
-        """Compatibility wrapper for pre-v1.3.8 left-settings tests/helpers."""
-        self._scroll_center_settings_from_wheel_event(event)
+        _scroll_left_settings_from_wheel_event_impl(self, event)
+
 
     @staticmethod
     def _is_widget_descendant_of(widget: object, ancestor: object) -> bool:
-        if widget is ancestor:
-            return True
-        parent_getter = getattr(widget, 'parentWidget', None)
-        while callable(parent_getter):
-            try:
-                widget = parent_getter()
-            except Exception:
-                return False
-            if widget is None:
-                return False
-            if widget is ancestor:
-                return True
-            parent_getter = getattr(widget, 'parentWidget', None)
-        return False
+        return _is_widget_descendant_of_impl(widget, ancestor)
+
 
     def _center_settings_container_widget(self: MainWindow) -> object | None:
         """Return the v1.3.8 center settings container.
@@ -2378,64 +2091,8 @@ class MainWindow(QMainWindow):
             self._set_center_settings_splitter_sizes(splitter_sizes)
 
     def _clear_startup_input_focus(self: MainWindow) -> None:
-        """Move startup focus away from editable fields without changing normal editing."""
-        active_modal_getter = getattr(QApplication, 'activeModalWidget', None)
-        try:
-            active_modal = active_modal_getter() if callable(active_modal_getter) else None
-        except Exception:
-            active_modal = None
-        if active_modal is not None and active_modal is not self:
-            return
+        _clear_startup_input_focus_impl(self)
 
-        focus_widget_getter = getattr(QApplication, 'focusWidget', None)
-        try:
-            current_focus = focus_widget_getter() if callable(focus_widget_getter) else None
-        except Exception:
-            current_focus = None
-        if current_focus is None:
-            return
-        try:
-            if not self._is_widget_descendant_of(current_focus, self):
-                return
-        except Exception:
-            return
-
-        widget = current_focus
-        should_clear = False
-        visited_widget_ids: set[int] = set()
-        while widget is not None and id(widget) not in visited_widget_ids:
-            visited_widget_ids.add(id(widget))
-            if isinstance(widget, (QLineEdit, QSpinBox, QComboBox)):
-                should_clear = True
-                break
-            class_names = {cls.__name__ for cls in type(widget).__mro__}
-            if 'QAbstractSpinBox' in class_names:
-                should_clear = True
-                break
-            parent_getter = getattr(widget, 'parentWidget', None)
-            widget = parent_getter() if callable(parent_getter) else None
-        if not should_clear:
-            return
-
-        clear_focus = getattr(current_focus, 'clearFocus', None)
-        if callable(clear_focus):
-            try:
-                clear_focus()
-            except Exception:
-                pass
-
-        for candidate in (
-            getattr(self, 'preview_scroll', None),
-            getattr(self, 'viewer_scroll', None),
-            self,
-        ):
-            set_focus = getattr(candidate, 'setFocus', None)
-            if callable(set_focus):
-                try:
-                    set_focus(Qt.OtherFocusReason)
-                    break
-                except Exception:
-                    continue
 
 
     def _can_handle_right_pane_arrow_key(self: MainWindow) -> bool:
@@ -2578,151 +2235,7 @@ class MainWindow(QMainWindow):
     # ── トップバー ─────────────────────────────────────────
 
     def _build_top_bar(self):
-        top_bar_plan = self._localized_plan(gui_layouts.build_top_bar_plan(path_button_width=DEFAULT_TOP_PATH_BUTTON_WIDTH))
-        bar = QFrame()
-        bar.setObjectName('topBar')
-        bar.setFixedHeight(self._plan_int_value(top_bar_plan, 'bar_height', 56))
-        lay = QHBoxLayout(bar)
-        lay.setContentsMargins(*self._plan_int_tuple_value(top_bar_plan, 'contents_margins', (16, 0, 12, 0), expected_length=4))
-        lay.setSpacing(self._plan_int_value(top_bar_plan, 'spacing', 10))
-
-        # v1.3.8.5: remove the subtle version label from the top bar.
-        # Keep version information in dialogs/docs, but reserve this row for
-        # file controls now that the 3-pane UI needs more horizontal room.
-
-        btn_file = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('file_button_text', 'ファイルを開く'),
-                object_name='topBtn',
-                tooltip=top_bar_plan.get('file_button_tooltip', '1つのファイルを読み込みます'),
-                fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
-            ),
-            lambda: self.select_target_path(True),
-        )
-
-        btn_xtc_open = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('xtc_open_button_text', 'XTC/XTCHを開く'),
-                object_name='topBtn',
-                tooltip=top_bar_plan.get('xtc_open_button_tooltip', '既存の .xtc / .xtch ファイルを右ペインで確認します'),
-                fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
-            ),
-            self.open_xtc_file,
-        )
-
-        btn_folder = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('folder_button_text', '保存先を選ぶ'),
-                object_name='topBtn',
-                tooltip=top_bar_plan.get('folder_button_tooltip', '変換後のXTC保存先を選びます'),
-                fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
-            ),
-            self.select_output_folder,
-        )
-
-        btn_output_reset = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('output_reset_button_text', '保存先リセット'),
-                object_name='topBtn',
-                tooltip=top_bar_plan.get('output_reset_button_tooltip', '保存先指定を解除し、ソースファイルと同じフォルダへ戻します'),
-                fixed_width=top_bar_plan.get('path_button_width', DEFAULT_TOP_PATH_BUTTON_WIDTH),
-            ),
-            self.reset_output_folder,
-        )
-
-        self.folder_batch_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('folder_batch_button_text', 'フォルダ一括変換'),
-                object_name='topBtn',
-                tooltip=top_bar_plan.get('folder_batch_button_tooltip', 'フォルダ内のファイルをまとめて変換します'),
-                fixed_width=top_bar_plan.get('folder_batch_button_width', 168),
-            ),
-            self._open_folder_batch_dialog,
-        )
-
-        lay.addWidget(btn_file)
-        lay.addWidget(btn_xtc_open)
-        lay.addWidget(btn_folder)
-        lay.addWidget(btn_output_reset)
-        lay.addWidget(self.folder_batch_btn)
-        lay.addWidget(self._help_icon_button(
-            str(top_bar_plan.get('top_buttons_help_text', '上部3ボタンの違いを説明します。')),
-            tooltip=str(top_bar_plan.get('top_buttons_help_tooltip', '上部3ボタンの違い')),
-            title=str(top_bar_plan.get('top_buttons_help_title', '上部ボタンの使い分け')),
-        ))
-
-        self.target_edit = SourceDropLineEdit()
-        self.target_edit.setObjectName('targetEdit')
-        self.target_edit.setPlaceholderText(str(top_bar_plan.get('target_placeholder', 'EPUB / ZIP / CBZ / CBR / RAR / TXT / Markdown / 画像 / フォルダ')))
-        self.target_edit.setToolTip(str(top_bar_plan.get('target_tooltip', '変換対象のファイルまたはフォルダを入力します。ソースファイルはここへドラッグ＆ドロップできます。')))
-        self.target_edit.textChanged.connect(self.on_target_text_changed)
-        self.target_edit.editingFinished.connect(self._update_top_status)
-        self.target_edit.editingFinished.connect(self.save_ui_state)
-        self.target_edit.editingFinished.connect(self.on_target_editing_finished)
-        self.target_edit.sourcePathDropped.connect(self._apply_dropped_target_path)
-        lay.addWidget(self.target_edit, 1)
-
-        lay.addWidget(self._v_sep())
-
-        self.run_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('run_button_text', '▶  変換実行'),
-                object_name='runBtn',
-                fixed_width=top_bar_plan.get('run_button_width', 130),
-            ),
-            self.start_conversion,
-        )
-        lay.addWidget(self.run_btn)
-
-        self.stop_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('stop_button_text', '■  停止'),
-                object_name='stopBtn',
-                fixed_width=top_bar_plan.get('stop_button_width', 90),
-                enabled=False,
-            ),
-            self.stop_conversion,
-        )
-        lay.addWidget(self.stop_btn)
-        lay.addWidget(self._v_sep())
-
-        self.panel_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('panel_button_text', '≡'),
-                object_name='iconBtn',
-                tooltip=top_bar_plan.get('panel_button_tooltip', '左パネルの表示/非表示'),
-                fixed_size=top_bar_plan.get('panel_button_size', (36, 36)),
-                focus_policy='no_focus',
-            ),
-            self.toggle_left_panel,
-        )
-        lay.addWidget(self.panel_btn)
-
-        help_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('help_button_text', '?'),
-                object_name='iconBtn',
-                tooltip=top_bar_plan.get('help_button_tooltip', '使い方の流れ'),
-                fixed_size=top_bar_plan.get('help_button_size', (36, 36)),
-                focus_policy='no_focus',
-            ),
-            self.show_help_dialog,
-        )
-        lay.addWidget(help_btn)
-
-        self.settings_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                top_bar_plan.get('settings_button_text', '⚙'),
-                object_name='iconBtn',
-                tooltip=top_bar_plan.get('settings_button_tooltip', '表示設定'),
-                fixed_size=top_bar_plan.get('settings_button_size', (36, 36)),
-                focus_policy='no_focus',
-            ),
-            self.show_display_settings_popup,
-        )
-        lay.addWidget(self.settings_btn)
-
-        return bar
+        return _build_top_bar_impl(self)
 
     @staticmethod
     def _v_sep():
@@ -2905,192 +2418,12 @@ class MainWindow(QMainWindow):
     # ── 設定セクション：出力先 ──────────────────────────
 
     def _section_output(self):
-        font_plan = self._localized_plan(gui_layouts.build_font_section_plan())
-        display_plan = self._localized_plan(gui_layouts.build_display_section_plan())
-        box, lay, _section_plan = self._build_section_box_layout(
-            'output',
-            '出力先',
-            default_margins=(8, 12, 8, 7),
-            default_spacing=6,
-        )
-
-        output_row = self._make_hbox_layout_from_plan(
-            gui_layouts.build_row_layout_plan(spacing=font_plan.get('output_profile_row_spacing', 6))
-        )
-        output_row.addWidget(self._dim_label(self._ui_text('機種')))
-        self.profile_combo = QComboBox()
-        for label, key in tuple(display_plan.get('profile_items', ())):
-            self.profile_combo.addItem(str(label), key)
-        self.profile_combo.setMinimumWidth(self._plan_int_value(display_plan, 'profile_combo_min_width', 130))
-        self.profile_combo.currentIndexChanged.connect(self.on_profile_changed)
-        output_row.addWidget(self.profile_combo)
-        output_row.addWidget(self._help_icon_button(self._ui_text('機種: 選ぶと解像度が自動設定されます。\nCustom: 手動で幅・高さを指定します。')))
-        output_row.addSpacing(12)
-
-        output_row.addWidget(self._dim_label(self._ui_text('出力形式')))
-        self.output_format_combo = QComboBox()
-        for key, label in OUTPUT_FORMAT_LABELS.items():
-            self.output_format_combo.addItem(self._ui_text(label), key)
-        self.output_format_combo.currentIndexChanged.connect(self._schedule_live_preview_refresh_from_signal)
-        self.output_format_combo.currentIndexChanged.connect(lambda _i, self=self: self.save_ui_state())
-        output_row.addWidget(self.output_format_combo)
-        output_row.addWidget(self._help_icon_button(self._ui_text('XTC: 2 階調（白黒）で保存します。\nXTCH: 4 階調（白黒 4 段階）で保存します。\n使い分け: 通常の白黒表示なら XTC、階調を残したい画像寄りの用途では XTCH を選びます。')))
-        output_row.addStretch(1)
-        lay.addLayout(output_row)
-
-        row_custom = self._make_hbox_layout_from_plan()
-        self.width_spin = self._spin(240, 2000, 480)
-        self.height_spin = self._spin(240, 2000, 800)
-        self.custom_size_row = QWidget()
-        self.custom_size_row.setVisible(False)
-        cs_lay = QHBoxLayout(self.custom_size_row)
-        cs_lay.setContentsMargins(*tuple(display_plan.get('custom_size_row_margins', (0, 0, 0, 0))))
-        cs_lay.setSpacing(self._plan_int_value(display_plan, 'custom_size_row_spacing', 8))
-        cs_lay.addWidget(self._dim_label(str(display_plan.get('custom_width_label', '幅'))))
-        cs_lay.addWidget(self.width_spin)
-        cs_lay.addSpacing(self._plan_int_value(display_plan, 'custom_size_pair_spacing', 8))
-        cs_lay.addWidget(self._dim_label(str(display_plan.get('custom_height_label', '高さ'))))
-        cs_lay.addWidget(self.height_spin)
-        row_custom.addWidget(self.custom_size_row)
-        row_custom.addStretch(1)
-        lay.addLayout(row_custom)
-
-        self.width_spin.valueChanged.connect(self._on_custom_size_changed)
-        self.height_spin.valueChanged.connect(self._on_custom_size_changed)
-        return box
+        return _section_output_impl(self)
 
     # ── 設定セクション：組版 ────────────────────────────
 
     def _section_composition(self):
-        font_plan = self._localized_plan(gui_layouts.build_font_section_plan())
-        image_plan = self._localized_plan(gui_layouts.build_image_section_plan())
-        box, lay, _section_plan = self._build_section_box_layout(
-            'composition',
-            '組版',
-            default_margins=(8, 12, 8, 7),
-            default_spacing=6,
-        )
-
-        font_row = self._make_hbox_layout_from_plan()
-        self.font_combo = FontPopupTopComboBox()
-        self._populate_font_combo()
-        self._apply_default_font_selection()
-        self.font_combo.currentIndexChanged.connect(self.on_font_changed)
-        font_row.addWidget(self.font_combo, 2)
-        browse_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                font_plan.get('browse_button_text', '参照'),
-                object_name='smallBtn',
-            ),
-            self.select_font_file,
-        )
-        font_row.addWidget(browse_btn)
-        font_row.addStretch(1)
-        lay.addLayout(font_row)
-
-        self.font_size_spin = self._spin(18, 72, 26, compact=True, buttons=True)
-        self.ruby_size_spin = self._spin(8, 32, 12, compact=True, buttons=True)
-        self.line_spacing_spin = self._spin(24, 80, 44, compact=True, buttons=True)
-        lay.addLayout(self._spin_row([
-            (self._ui_text('本文'), self.font_size_spin),
-            (self._ui_text('ルビ'), self.ruby_size_spin),
-            (self._ui_text('行間'), self.line_spacing_spin),
-        ]))
-
-        self.margin_t_spin = self._spin(0, 80, 12, compact=True, buttons=True)
-        self.margin_b_spin = self._spin(0, 80, 14, compact=True, buttons=True)
-        self.margin_r_spin = self._spin(0, 80, 12, compact=True, buttons=True)
-        self.margin_l_spin = self._spin(0, 80, 12, compact=True, buttons=True)
-        lay.addWidget(self._build_margin_rows())
-
-        self._ensure_behavior_controls()
-        composition_row = self._make_hbox_layout_from_plan(
-            gui_layouts.build_row_layout_plan(spacing=font_plan.get('format_kinsoku_row_spacing', 6))
-        )
-        composition_row.addWidget(self._dim_label(self._ui_text('縦中横')))
-        self.tatechuyoko_digit_mode_combo.setMaximumWidth(self._plan_int_value(font_plan, 'tatechuyoko_digit_mode_combo_width', 92))
-        composition_row.addWidget(self.tatechuyoko_digit_mode_combo)
-        composition_row.addWidget(self._help_icon_button(self._ui_text('半角数字を1文字分に横組みする上限です。\n4文字: 4桁までを縦中横にします。\n3文字: 3桁までを縦中横にします。\n2文字: 2桁までを縦中横にします。\n無し: 半角数字を縦中横にしません。')))
-        composition_row.addSpacing(12)
-        composition_row.addWidget(self._dim_label(self._ui_text('禁則処理')))
-        composition_row.addWidget(self.kinsoku_mode_combo)
-        composition_row.addWidget(self._help_icon_button(self._ui_text('オフ: 禁則処理を行わず機械的に流し込みます。\n簡易: 行頭禁則・行末禁則・句読点のぶら下げのみ行います。\n標準: 連続約物や閉じ括弧＋句読点のまとまりも含めて、現在の禁則処理を有効にします。')))
-        composition_row.addStretch(1)
-        lay.addLayout(composition_row)
-
-        page_row = self._make_hbox_layout_from_plan()
-        self.page_number_check = QCheckBox(self._ui_text('ページ番号'))
-        self.page_number_check.setChecked(False)
-        page_row.addWidget(self.page_number_check)
-        page_row.addSpacing(8)
-        page_row.addWidget(self._dim_label(self._ui_text('サイズ')))
-        self.page_number_font_size_spin = self._spin(1, 29, 12, compact=True, buttons=True)
-        self.page_number_font_size_spin.setEnabled(False)
-        page_row.addWidget(self.page_number_font_size_spin)
-        page_row.addWidget(self._help_icon_button(self._ui_text('ページ番号: チェックすると各ページ右下に「現在ページ/総ページ」を表示します。\nサイズ: 1〜29 の数値を指定します。30以上はエラーです。\nページ番号ON時は、下余白を「サイズ+1」以上に自動確保します。')))
-        page_row.addSpacing(16)
-        self.progress_bar_check = QCheckBox(self._ui_text('進捗バー'))
-        self.progress_bar_check.setChecked(False)
-        page_row.addWidget(self.progress_bar_check)
-        page_row.addSpacing(8)
-        page_row.addWidget(self._dim_label(self._ui_text('位置')))
-        self.progress_bar_position_combo = QComboBox()
-        for key, label in PROGRESS_BAR_POSITION_OPTIONS:
-            self.progress_bar_position_combo.addItem(self._ui_text(label), key)
-        self._set_combo_to_data(self.progress_bar_position_combo, 'center')
-        self.progress_bar_position_combo.setEnabled(False)
-        page_row.addWidget(self.progress_bar_position_combo)
-        page_row.addWidget(self._help_icon_button(self._ui_text('進捗バー: チェックすると下部に読書位置を示す黒い横棒を表示します。\n位置: 下中央または下左を選べます。\n進捗バーON時は、下余白を最低10px程度に自動確保します。')))
-        page_row.addStretch(1)
-        self.page_number_check.toggled.connect(self.page_number_font_size_spin.setEnabled)
-        self.page_number_check.toggled.connect(self.on_page_number_setting_changed)
-        self.page_number_font_size_spin.valueChanged.connect(self.on_page_number_setting_changed)
-        self.progress_bar_check.toggled.connect(self.progress_bar_position_combo.setEnabled)
-        self.progress_bar_check.toggled.connect(self.on_progress_bar_setting_changed)
-        self.progress_bar_position_combo.currentIndexChanged.connect(self.on_progress_bar_setting_changed)
-        lay.addLayout(page_row)
-
-        image_row = self._make_hbox_layout_from_plan()
-        self.ruby_hide_check = QCheckBox(str(image_plan.get('ruby_hide_label', 'ルビ消し')))
-        self.ruby_hide_check.setChecked(self._plan_bool_value(image_plan, 'ruby_hide_checked_default', False))
-        self.ruby_hide_check.toggled.connect(self.on_ruby_hide_toggled)
-        image_row.addWidget(self.ruby_hide_check)
-        image_row.addSpacing(self._plan_int_value(image_plan, 'night_mode_spacing', 16))
-        self.night_check = QCheckBox(str(image_plan.get('night_mode_text', '白黒反転')))
-        self.night_check.toggled.connect(self.on_night_toggled)
-        image_row.addWidget(self.night_check)
-        image_row.addSpacing(self._plan_int_value(image_plan, 'night_mode_spacing', 16))
-        self.dither_check = QCheckBox(str(image_plan.get('dither_text', 'ディザリング')))
-        self.dither_check.setChecked(self._plan_bool_value(image_plan, 'dither_checked_default', False))
-        self.dither_check.toggled.connect(self.on_dither_toggled)
-        image_row.addWidget(self.dither_check)
-        image_row.addSpacing(self._plan_int_value(image_plan, 'dither_spacing', 16))
-        image_row.addWidget(self._dim_label(str(image_plan.get('threshold_label', 'しきい値'))))
-        self.threshold_spin = self._spin(0, 255, 128, compact=True)
-        self.threshold_spin.setEnabled(self._plan_bool_value(image_plan, 'threshold_enabled', False))
-        self.threshold_spin.valueChanged.connect(self.on_threshold_changed)
-        image_row.addWidget(self.threshold_spin)
-        image_row.addSpacing(self._plan_int_value(image_plan, 'threshold_help_spacing', 6))
-        image_row.addWidget(self._help_icon_button(str(image_plan.get('help_text', self._ui_text('ルビ消し: チェックした場合だけ、親文字は残したままルビを表示しない変換モードにします。\n白黒反転: 白と黒を入れ替えて出力します。プレビューにも反映されます。\nディザリング: 粒状感と引き換えに濃淡感を残します。\nしきい値: 白と黒の分かれ目を調整します。')))))
-        if self._plan_bool_value(image_plan, 'trailing_stretch', True):
-            image_row.addStretch(1)
-        lay.addLayout(image_row)
-
-        self.profile_hint = QLabel(DEVICE_PROFILES['x4'].tagline)
-        self.profile_hint.setObjectName('hintLabel')
-        self.profile_hint.setVisible(bool(DEVICE_PROFILES['x4'].tagline))
-        lay.addWidget(self.profile_hint)
-
-        for w in [
-            self.font_size_spin, self.ruby_size_spin, self.line_spacing_spin,
-        ]:
-            w.valueChanged.connect(self._schedule_live_preview_refresh_from_signal)
-            w.valueChanged.connect(lambda _v, self=self: self.save_ui_state())
-        for w in [
-            self.margin_t_spin, self.margin_b_spin, self.margin_r_spin, self.margin_l_spin,
-        ]:
-            w.valueChanged.connect(self.on_margin_changed)
-        return box
+        return _section_composition_impl(self)
 
     # Backward-compatible alias for older tests/probes. v1.3.8.6 splits
     # the old combined section into 出力先 + 組版.
@@ -3099,177 +2432,11 @@ class MainWindow(QMainWindow):
         return self._section_composition()
 
     def _build_margin_rows(self):
-        font_plan = self._localized_plan(gui_layouts.build_font_section_plan())
-        margin_rows_plan = self._localized_plan(gui_layouts.build_margin_rows_plan(
-            row_spacing=font_plan.get('margin_rows_spacing', 2),
-            pair_spacing=font_plan.get('margin_pair_spacing', 16),
-        ))
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(*self._plan_int_tuple_value(margin_rows_plan, 'container_margins', (0, 0, 0, 0), expected_length=4))
-        lay.setSpacing(self._plan_int_value(margin_rows_plan, 'row_spacing', 2))
-
-        row_plan = gui_layouts.build_row_layout_plan(
-            contents_margins=margin_rows_plan.get('row_contents_margins', (0, 0, 0, 0))
-        )
-        row = self._make_hbox_layout_from_plan(row_plan)
-        row.addWidget(self._dim_label(str(margin_rows_plan.get('labels', ('上余白', '下余白', '左余白', '右余白'))[0])))
-        row.addWidget(self.margin_t_spin)
-        row.addSpacing(self._plan_int_value(margin_rows_plan, 'pair_spacing', 16))
-        row.addWidget(self._dim_label(str(margin_rows_plan.get('labels', ('上余白', '下余白', '左余白', '右余白'))[1])))
-        row.addWidget(self.margin_b_spin)
-        row.addSpacing(self._plan_int_value(margin_rows_plan, 'pair_spacing', 16))
-        row.addWidget(self._dim_label(str(margin_rows_plan.get('labels', ('上余白', '下余白', '左余白', '右余白'))[2])))
-        row.addWidget(self.margin_l_spin)
-        row.addSpacing(self._plan_int_value(margin_rows_plan, 'pair_spacing', 16))
-        row.addWidget(self._dim_label(str(margin_rows_plan.get('labels', ('上余白', '下余白', '左余白', '右余白'))[3])))
-        row.addWidget(self.margin_r_spin)
-        if self._plan_bool_value(margin_rows_plan, 'trailing_stretch', True):
-            row.addStretch(1)
-
-        lay.addLayout(row)
-        return w
-
-    # ── プレビュー更新コントロール（セクション外） ────────────────
+        return _build_margin_rows_impl(self)
 
     def _section_preview_controls(self):
-        display_plan = self._localized_plan(gui_layouts.build_display_section_plan())
+        return _section_preview_controls_impl(self)
 
-        # sweep363/sweep365: 実寸近似/ガイドは右ペインの表示ツールバーへ集約する。
-        # v1.3.8.6: 中央ペインでは「プレビュー」セクションを廃止するが、
-        # 右ペインへ移す既存 widget と設定互換はここで生成する。
-        preview_toggle_plan = self._localized_plan(gui_layouts.build_preview_display_toggle_plan())
-        self.actual_size_check = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                preview_toggle_plan.get('actual_size_text', '実寸近似'),
-                object_name=preview_toggle_plan.get('actual_size_object_name', 'viewToggleBtn'),
-                checkable=self._plan_bool_value(preview_toggle_plan, 'actual_size_checkable', True),
-                focus_policy=preview_toggle_plan.get('actual_size_focus_policy', 'no_focus'),
-            ),
-        )
-        actual_size_help_text = str(preview_toggle_plan.get('actual_size_help_text', '実寸近似の表示モードです。'))
-        self.actual_size_check.setToolTip(actual_size_help_text)
-        self.actual_size_help_btn = self._help_icon_button(actual_size_help_text)
-        self.actual_size_check.toggled.connect(self.on_actual_size_toggled)
-
-        guide_help_text = str(preview_toggle_plan.get('guide_help_text', 'ガイド表示の切り替えです。'))
-        self.guides_check = QCheckBox(str(preview_toggle_plan.get('guide_text', 'ガイド')))
-        self.guides_check.setObjectName(str(preview_toggle_plan.get('guide_object_name', 'previewToolbarToggle')))
-        self.guides_check.setFocusPolicy(
-            self._plan_focus_policy_value(preview_toggle_plan, 'guide_focus_policy', 'no_focus')
-        )
-        self.guides_check.setToolTip(guide_help_text)
-        self.guides_check.setChecked(self._plan_bool_value(preview_toggle_plan, 'guide_checked_default', True))
-        self.guides_help_btn = self._help_icon_button(guide_help_text)
-
-        wrapper = QWidget()
-        wrapper.setObjectName('previewUpdateRowContainer')
-
-        # 旧左ペインの実寸補正UIは、設定互換用に保持するが表示しない。
-        # v1.3.8.8: 親なしトップレベル widget にならないよう、返却する
-        # wrapper を親にして作る。UIには追加せず、設定値の互換だけ維持する。
-        self.calib_label = self._dim_label(str(display_plan.get('calibration_label_text', '実寸補正')))
-        self.calib_label.setParent(wrapper)
-        calibration_button_object_name = str(display_plan.get('calibration_button_object_name', 'stepBtn'))
-        self.calib_down_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                display_plan.get('calibration_down_text', '−'),
-                object_name=calibration_button_object_name,
-                fixed_size=display_plan.get('calibration_button_size', (24, 24)),
-            ),
-        )
-        self.calib_down_btn.setParent(wrapper)
-        self.calib_spin = QSpinBox(wrapper)
-        self.calib_spin.setRange(
-            self._plan_int_value(display_plan, 'calibration_spin_minimum', 50),
-            self._plan_int_value(display_plan, 'calibration_spin_maximum', 300),
-        )
-        self.calib_spin.setSingleStep(self._plan_int_value(display_plan, 'calibration_spin_step', 5))
-        self.calib_spin.setAccelerated(
-            self._plan_bool_value(display_plan, 'calibration_spin_accelerated', True)
-        )
-        self.calib_spin.setButtonSymbols(
-            self._plan_spin_button_symbols_value(display_plan, 'calibration_spin_button_symbols', 'no_buttons')
-        )
-        self.calib_spin.setValue(self._plan_int_value(display_plan, 'calibration_spin_default', 100))
-        self.calib_spin.setSuffix(str(display_plan.get('calibration_spin_suffix', '%')))
-        self.calib_spin.setFixedWidth(self._plan_int_value(display_plan, 'calibration_spin_width', 62))
-        self.calib_spin.valueChanged.connect(self.on_calibration_changed)
-        self.calib_up_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                display_plan.get('calibration_up_text', '+'),
-                object_name=calibration_button_object_name,
-                fixed_size=display_plan.get('calibration_button_size', (24, 24)),
-            ),
-        )
-        self.calib_up_btn.setParent(wrapper)
-        self.calib_help_btn = self._help_icon_button(
-            str(display_plan.get('calibration_help_text', '実寸補正は右ペインの倍率UIで調整します。'))
-        )
-        self.calib_help_btn.setParent(wrapper)
-        self._sync_legacy_calibration_control_state()
-
-        self.guides_check.toggled.connect(self.on_guides_toggled)
-        self.calib_down_btn.clicked.connect(lambda: self.calib_spin.stepBy(-1))
-        self.calib_up_btn.clicked.connect(lambda: self.calib_spin.stepBy(1))
-
-        outer = QVBoxLayout(wrapper)
-        outer.setContentsMargins(0, 3, 0, 3)
-        outer.setSpacing(3)
-
-        sep_top = QFrame()
-        sep_top.setFrameShape(self._qframe_shape_constant('HLine', self._qframe_shape_constant('NoFrame', 0)))
-        sep_top.setObjectName('leftSettingsBottomSep')
-        sep_top.setFixedHeight(1)
-        outer.addWidget(sep_top)
-
-        row = self._make_hbox_layout_from_plan()
-        row.addWidget(self._dim_label(str(display_plan.get('preview_page_limit_label', '更新対象'))))
-        self.preview_page_limit_spin = self._spin(1, 9999, DEFAULT_PREVIEW_PAGE_LIMIT, compact=True, buttons=True)
-        self.preview_page_limit_spin.setProperty('miniSpinButtons', True)
-        self.preview_page_limit_spin.setFixedWidth(self._plan_int_value(display_plan, 'preview_page_limit_width', 68))
-        self.preview_page_limit_spin.valueChanged.connect(self._mark_preview_dirty_from_signal)
-        self.preview_page_limit_spin.valueChanged.connect(lambda _v, self=self: self.save_ui_state())
-        row.addWidget(self.preview_page_limit_spin)
-        page_limit_unit_label = QLabel(str(display_plan.get('preview_page_limit_unit_text', 'ページ')))
-        page_limit_unit_label.setObjectName(str(display_plan.get('preview_page_limit_unit_object_name', 'dimLabel')))
-        row.addWidget(page_limit_unit_label)
-        self.preview_update_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                display_plan.get('preview_update_button_text', 'プレビュー更新'),
-                object_name=display_plan.get('preview_update_button_object_name', 'smallBtn'),
-            ),
-            self.manual_refresh_preview,
-        )
-        row.addWidget(self.preview_update_btn)
-        self.preview_refresh_btn = self.preview_update_btn
-        self.preview_progress_bar = QProgressBar()
-        self.preview_progress_bar.setObjectName(str(display_plan.get('preview_progress_object_name', 'previewProgressBar')))
-        self.preview_progress_bar.setTextVisible(True)
-        self.preview_progress_bar.setFixedWidth(self._plan_int_value(display_plan, 'preview_progress_width', 118))
-        self.preview_progress_bar.setRange(0, 1)
-        self.preview_progress_bar.setValue(0)
-        self.preview_progress_bar.setFormat(str(display_plan.get('preview_progress_idle_format', '')))
-        self.preview_progress_bar.setVisible(False)
-        row.addWidget(self.preview_progress_bar)
-        self.preview_status_label = QLabel(str(display_plan.get('preview_status_text', '')))
-        self.preview_status_label.setObjectName(str(display_plan.get('preview_status_object_name', 'hintLabel')))
-        self.preview_status_label.setMinimumWidth(self._plan_int_value(display_plan, 'preview_status_min_width', 220))
-        self.preview_status_label.setMaximumWidth(self._plan_int_value(display_plan, 'preview_status_max_width', 260))
-        row.addWidget(self.preview_status_label)
-        row.addSpacing(self._plan_int_value(display_plan, 'preview_status_help_spacing', 4))
-        row.addWidget(self._help_icon_button(str(display_plan.get('preview_update_help_text', 'ファイル読込時: プレビューを自動生成します。\n設定変更後: 更新対象が20ページ以下なら自動更新します。21ページ以上では自動更新せず、「プレビュー更新が必要です」と表示し、［プレビュー更新］を押した時点で再生成します。\n更新対象: プレビュー上限を増やすほど確認範囲は広がりますが、読込・再描画・メモリ使用量は重くなります。最大9999ページまで指定できます。'))))
-        row.addStretch(1)
-        outer.addLayout(row)
-
-        sep_bottom = QFrame()
-        sep_bottom.setFrameShape(self._qframe_shape_constant('HLine', self._qframe_shape_constant('NoFrame', 0)))
-        sep_bottom.setObjectName('leftSettingsBottomSep')
-        sep_bottom.setFixedHeight(1)
-        outer.addWidget(sep_bottom)
-        return wrapper
-
-    # Backward-compatible alias for tests and older layout probes.
     def _section_display(self):
         """Legacy probe hook; section factories recreate widgets and are not idempotent."""
         return self._section_preview_controls()
@@ -3277,92 +2444,7 @@ class MainWindow(QMainWindow):
     # ── 設定セクション：位置補正 ──────────────────────────
 
     def _section_position(self):
-        image_plan = self._localized_plan(gui_layouts.build_image_section_plan())
-        box, lay, _section_plan = self._build_section_box_layout(
-            'position',
-            '位置補正',
-            default_margins=(8, 12, 8, 7),
-            default_spacing=5,
-        )
-
-        self._ensure_behavior_controls()
-        image_glyph_position_row = self._make_hbox_layout_from_plan(
-            gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))
-        )
-        glyph_combo_width = self._plan_int_value(image_plan, 'glyph_position_combo_width', 92)
-        closing_bracket_combo_width = self._plan_int_value(image_plan, 'closing_bracket_position_combo_width', glyph_combo_width)
-        glyph_group_spacing = self._plan_int_value(image_plan, 'glyph_position_group_spacing', 8)
-        for combo in (self.punctuation_position_combo, self.ichi_position_combo, self.halfwidth_digit_position_combo, self.halfwidth_alpha_position_combo, self.tatechuyoko_symbol_position_combo):
-            combo.setMaximumWidth(glyph_combo_width)
-        self.lower_closing_bracket_position_combo.setMaximumWidth(closing_bracket_combo_width)
-        self._add_glyph_position_control(
-            image_glyph_position_row,
-            '句読点',
-            self.punctuation_position_combo,
-            '対象: ぶら下がり句読点のみです。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
-        )
-        image_glyph_position_row.addSpacing(glyph_group_spacing)
-        self._add_glyph_position_control(
-            image_glyph_position_row,
-            '漢数字 一',
-            self.ichi_position_combo,
-            '対象: 文中すべての漢数字「一」です。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
-        )
-        image_glyph_position_row.addSpacing(glyph_group_spacing)
-        self._add_glyph_position_control(
-            image_glyph_position_row,
-            '半角数字/記号',
-            self.halfwidth_digit_position_combo,
-            '対象: 文中の半角数字、数値記号（/ . , : ; + - = % など）、縦中横の半角数字です。\n全角数字とルビ内数字は対象外です。\n!! / !? / ?? などの記号ペアは「縦中横記号」で補正します。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
-        )
-        image_glyph_position_row.addStretch(1)
-        lay.addLayout(image_glyph_position_row)
-
-        image_tatechuyoko_symbol_row = self._make_hbox_layout_from_plan(
-            gui_layouts.build_row_layout_plan(spacing=image_plan.get('glyph_position_row_spacing', 6))
-        )
-        self.halfwidth_alpha_position_combo.setMaximumWidth(glyph_combo_width)
-        self.tatechuyoko_symbol_position_combo.setMaximumWidth(glyph_combo_width)
-        self._add_glyph_position_control(
-            image_tatechuyoko_symbol_row,
-            '半角英字',
-            self.halfwidth_alpha_position_combo,
-            '対象: 文中の半角英字（A-Z / a-z）です。\n半角数字、数値記号、全角英字、ルビ内英字は対象外です。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
-        )
-        image_tatechuyoko_symbol_row.addSpacing(glyph_group_spacing)
-        self._add_glyph_position_control(
-            image_tatechuyoko_symbol_row,
-            '縦中横記号',
-            self.tatechuyoko_symbol_position_combo,
-            '対象: 縦中横で描画される記号ペア（！？/？？/！！/？！/!?/??/!!/?!）のみです。\n数字の縦中横には影響しません。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
-        )
-        image_tatechuyoko_symbol_row.addSpacing(glyph_group_spacing)
-        self._add_glyph_position_control(
-            image_tatechuyoko_symbol_row,
-            '下鍵括弧',
-            self.lower_closing_bracket_position_combo,
-            '対象: 閉じ鍵括弧（」/﹂）と二重閉じ鍵括弧（』/﹄）のみです。\n下補正強/弱: 標準より下へ寄せます。\n標準: これまでと同じ位置で描画します。\n上補正弱/強: 標準より上へ寄せます。',
-        )
-        image_tatechuyoko_symbol_row.addStretch(1)
-        lay.addLayout(image_tatechuyoko_symbol_row)
-
-        image_wave_dash_row = self._make_hbox_layout_from_plan(
-            gui_layouts.build_row_layout_plan(spacing=image_plan.get('wave_dash_row_spacing', 6))
-        )
-        self.wave_dash_drawing_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_drawing_combo_width', 108))
-        self.wave_dash_position_combo.setMaximumWidth(self._plan_int_value(image_plan, 'wave_dash_position_combo_width', 92))
-        wave_dash_group_spacing = self._plan_int_value(image_plan, 'wave_dash_group_spacing', 8)
-        image_wave_dash_row.addWidget(self._dim_label(self._ui_text('波線描画')))
-        image_wave_dash_row.addWidget(self.wave_dash_drawing_combo)
-        image_wave_dash_row.addWidget(self._help_icon_button(self._ui_text('対象: 波線系記号（～/〜/〰/~ など）の描画方式です。\n回転グリフ: フォントの質感を保って90度回転します。\n別描画: アプリ側で縦波線を描きます。\n自動フォールバック: 回転グリフに失敗した場合は別描画へ切り替えます。')))
-        image_wave_dash_row.addSpacing(wave_dash_group_spacing)
-        image_wave_dash_row.addWidget(self._dim_label(self._ui_text('波線位置')))
-        image_wave_dash_row.addWidget(self.wave_dash_position_combo)
-        image_wave_dash_row.addWidget(self._help_icon_button(self._ui_text('対象: 波線系記号の縦位置だけを補正します。\n標準: これまでの位置です。\n下補正弱/強: 標準より下へ寄せます。')))
-        image_wave_dash_row.addStretch(1)
-        lay.addLayout(image_wave_dash_row)
-
-        return box
+        return _section_position_impl(self)
 
     # Backward-compatible alias for older tests/probes. v1.3.8.6 moved the
     # image-processing toggles into _section_composition() and kept this slot
@@ -3374,469 +2456,55 @@ class MainWindow(QMainWindow):
     # ── 設定セクション：表示言語 ────────────────────────
 
     def _section_language(self):
-        language_plan = self._localized_plan(gui_layouts.build_language_section_plan())
-        box, lay, section_plan = self._build_section_box_layout(
-            'language',
-            '表示言語 / Language',
-            default_margins=(8, 12, 8, 8),
-            default_spacing=5,
-        )
-        row = self._make_hbox_layout_from_plan(
-            gui_layouts.build_row_layout_plan(
-                spacing=self._plan_int_value(language_plan, 'row_spacing', self._plan_int_value(section_plan, 'row_spacing', 8))
-            )
-        )
-        row.addWidget(self._dim_label(str(language_plan.get('label_text', '表示言語'))))
-        self.language_combo = QComboBox()
-        self.language_combo.setObjectName('languageCombo')
-        for key, label in UI_LANGUAGE_OPTIONS:
-            self.language_combo.addItem(self._ui_text(label), key)
-        combo_width = self._plan_int_value(language_plan, 'combo_width', 170)
-        if combo_width > 0:
-            self.language_combo.setMinimumWidth(combo_width)
-            self.language_combo.setMaximumWidth(combo_width)
-        self.language_combo.setToolTip(str(language_plan.get('combo_tooltip', 'UI表示言語を選びます。変更は次回起動時に反映されます。')))
-        self._set_language_combo_value(getattr(self, 'current_ui_language', self._initial_ui_language()))
-        self.language_combo.currentIndexChanged.connect(self.on_language_combo_changed)
-        row.addWidget(self.language_combo)
-        row.addStretch(1)
-        lay.addLayout(row)
-
-        note = QLabel(str(language_plan.get('restart_note_text', '変更は次回起動時に反映されます。')))
-        note.setObjectName(str(language_plan.get('restart_note_object_name', 'hintLabel')))
-        note.setWordWrap(True)
-        self.language_restart_note_label = note
-        self._update_language_restart_note_label(getattr(self, 'current_ui_language', DEFAULT_UI_LANGUAGE))
-        lay.addWidget(note)
-        return box
+        return _section_language_impl(self)
 
     # ── 設定セクション：プリセット ────────────────────────
 
     def _section_preset(self):
-        preset_plan = self._localized_plan(gui_layouts.build_preset_section_plan(minimum_button_width=104))
-        box, lay, section_plan = self._build_section_box_layout(
-            'preset',
-            'プリセット',
-            default_margins=(8, 14, 8, 2),
-            default_spacing=4,
-        )
-        self.preset_section_box = box
-
-        self.preset_combo = QComboBox()
-        for key, p in self.preset_definitions.items():
-            self.preset_combo.addItem(p['button_text'], key)
-        self.preset_combo.currentIndexChanged.connect(self.on_preset_selection_changed)
-        preset_combo_width = self._plan_int_value(
-            preset_plan,
-            'combo_width',
-            self._plan_int_value(preset_plan, 'combo_max_width', 260),
-        )
-        self.preset_combo.setMinimumWidth(preset_combo_width)
-        self.preset_combo.setMaximumWidth(self._plan_int_value(preset_plan, 'combo_max_width', preset_combo_width))
-        lay.addWidget(self.preset_combo)
-
-        self.preset_apply_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                preset_plan.get('apply_button_text', 'プリセット\n読み込み'),
-                object_name=preset_plan.get('button_object_name', 'smallBtn'),
-                tooltip=preset_plan.get('apply_tooltip', '選択中のプリセットを現在の組版へ読み込みます'),
-            ),
-            self.apply_selected_preset,
-        )
-
-        self.preset_save_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                preset_plan.get('save_button_text', 'プリセット\n保存'),
-                object_name=preset_plan.get('button_object_name', 'smallBtn'),
-                tooltip=preset_plan.get('save_tooltip', '現在の組版設定をこのプリセットへ保存します'),
-            ),
-            self.save_selected_preset,
-        )
-
-        self.preset_rename_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                preset_plan.get('rename_button_text', '名称変更'),
-                object_name=preset_plan.get('button_object_name', 'smallBtn'),
-                tooltip=preset_plan.get('rename_tooltip', '選択中のプリセットの表示名を変更します'),
-            ),
-            self.rename_selected_preset,
-        )
-
-        preset_button_plan = gui_layouts.build_uniform_button_row_plan(
-            [
-                self.preset_apply_btn.sizeHint().width(),
-                self.preset_save_btn.sizeHint().width(),
-            ],
-            minimum_width=self._plan_int_value(preset_plan, 'button_min_width', 104),
-        )
-        preset_button_width = self._plan_int_value(preset_button_plan, 'button_min_width', 104)
-        button_row = self._make_hbox_layout_from_plan()
-        button_row.setSpacing(self._plan_int_value(preset_plan, 'row_spacing', self._plan_int_value(section_plan, 'row_spacing', 8)))
-        preset_button_height = self._plan_int_value(preset_plan, 'button_min_height', 44)
-        for button in (self.preset_apply_btn, self.preset_save_btn):
-            button.setMinimumWidth(preset_button_width)
-            if preset_button_height > 0:
-                button.setMinimumHeight(preset_button_height)
-            button_row.addWidget(button)
-        button_row.addStretch(1)
-        lay.addLayout(button_row)
-
-        rename_row = self._make_hbox_layout_from_plan()
-        rename_row.setSpacing(self._plan_int_value(preset_plan, 'row_spacing', self._plan_int_value(section_plan, 'row_spacing', 8)))
-        self.preset_rename_btn.setMinimumWidth(min(preset_combo_width, max(120, preset_button_width)))
-        if preset_button_height > 0:
-            self.preset_rename_btn.setMinimumHeight(max(32, preset_button_height - 8))
-        rename_row.addWidget(self.preset_rename_btn)
-        rename_row.addStretch(1)
-        lay.addLayout(rename_row)
-
-        self.preset_summary_label = QLabel(str(preset_plan.get('summary_text', '')))
-        self.preset_summary_label.setObjectName(str(preset_plan.get('summary_label_object_name', 'presetSummaryLabel')))
-        self.preset_summary_label.setWordWrap(
-            self._plan_bool_value(preset_plan, 'summary_label_word_wrap', True)
-        )
-        self.preset_summary_label.setAlignment(
-            self._plan_alignment_value(preset_plan, 'summary_label_alignment', 'left_top')
-        )
-        self.preset_summary_label.setContentsMargins(0, 0, 0, 0)
-        self.preset_summary_label.setMargin(0)
-        set_indent = getattr(self.preset_summary_label, 'setIndent', None)
-        if callable(set_indent):
-            set_indent(0)
-        set_text_format = getattr(self.preset_summary_label, 'setTextFormat', None)
-        if callable(set_text_format):
-            set_text_format(Qt.PlainText)
-        lay.addWidget(self.preset_summary_label)
-        return box
+        return _section_preset_impl(self)
 
     def _make_position_mode_combo(self, options, changed_slot) -> QComboBox:
-        combo = QComboBox()
-        for key, label in options:
-            combo.addItem(self._ui_text(label), key)
-        combo.currentIndexChanged.connect(changed_slot)
-        return combo
+        return _make_position_mode_combo_impl(self, options, changed_slot)
 
     def _make_glyph_position_combo(self) -> QComboBox:
-        return self._make_position_mode_combo(GLYPH_POSITION_MODE_OPTIONS, self._on_glyph_position_mode_changed)
+        return _make_glyph_position_combo_impl(self)
 
     def _add_glyph_position_control(self, row, label: str, combo: QComboBox, help_text: str) -> None:
-        row.addWidget(self._dim_label(self._ui_text(label)))
-        row.addWidget(combo)
-        row.addWidget(self._help_icon_button(self._ui_text(help_text)))
+        return _add_glyph_position_control_impl(self, row, label, combo, help_text)
 
     def _ensure_behavior_controls(self):
-        if hasattr(self, 'open_folder_check'):
-            return
-        behavior_plan = self._localized_plan(gui_layouts.build_behavior_section_plan())
-        self.open_folder_check = QCheckBox(str(behavior_plan.get('open_folder_text', '完了後フォルダを開く')))
-        self.open_folder_check.setChecked(self._plan_bool_value(behavior_plan, 'open_folder_checked_default', False))
-        self.open_folder_check.toggled.connect(self.save_ui_state)
-
-        self.kinsoku_mode_combo = QComboBox()
-        for key, label in KINSOKU_MODE_OPTIONS:
-            self.kinsoku_mode_combo.addItem(self._ui_text(label), key)
-        self.kinsoku_mode_combo.currentIndexChanged.connect(self._on_kinsoku_mode_changed)
-
-        self.tatechuyoko_digit_mode_combo = QComboBox()
-        for key, label in TATECHUYOKO_DIGIT_MODE_OPTIONS:
-            self.tatechuyoko_digit_mode_combo.addItem(self._ui_text(label), key)
-        self._set_combo_to_data(self.tatechuyoko_digit_mode_combo, '2')
-        self.tatechuyoko_digit_mode_combo.currentIndexChanged.connect(self._on_tatechuyoko_digit_mode_changed)
-
-        self.punctuation_position_combo = self._make_glyph_position_combo()
-        self.ichi_position_combo = self._make_glyph_position_combo()
-        self.halfwidth_digit_position_combo = self._make_glyph_position_combo()
-        self.halfwidth_alpha_position_combo = self._make_glyph_position_combo()
-        self.tatechuyoko_symbol_position_combo = self._make_glyph_position_combo()
-        self.lower_closing_bracket_position_combo = self._make_position_mode_combo(
-            CLOSING_BRACKET_POSITION_MODE_OPTIONS,
-            self._on_glyph_position_mode_changed,
-        )
-
-        self.wave_dash_drawing_combo = QComboBox()
-        for key, label in WAVE_DASH_DRAWING_MODE_OPTIONS:
-            self.wave_dash_drawing_combo.addItem(self._ui_text(label), key)
-        self.wave_dash_drawing_combo.currentIndexChanged.connect(self._on_wave_dash_mode_changed)
-
-        self.wave_dash_position_combo = QComboBox()
-        for key, label in WAVE_DASH_POSITION_MODE_OPTIONS:
-            self.wave_dash_position_combo.addItem(self._ui_text(label), key)
-        self.wave_dash_position_combo.currentIndexChanged.connect(self._on_wave_dash_mode_changed)
-
-        self.output_conflict_combo = QComboBox()
-        for key, label in OUTPUT_CONFLICT_OPTIONS:
-            self.output_conflict_combo.addItem(self._ui_text(label), key)
-        self.output_conflict_combo.currentIndexChanged.connect(lambda _i, self=self: self.save_ui_state())
+        return _ensure_behavior_controls_impl(self)
 
     # ── 設定セクション：その他オプション ────────────────────────
 
     def _section_behavior(self):
-        behavior_plan = self._localized_plan(gui_layouts.build_behavior_section_plan())
-        box, lay, _section_plan = self._build_section_box_layout(
-            'behavior',
-            'その他オプション',
-            default_margins=(8, 14, 8, 8),
-            default_spacing=6,
-        )
-
-        self._ensure_behavior_controls()
-
-        # v1.3.3.48: 変換完了後のフォルダ自動オープンは廃止し、
-        # 右ペイン完了カードの［保存先を開く］ボタンから手動で開く導線に一本化する。
-        try:
-            self.open_folder_check.setChecked(False)
-            self.open_folder_check.setVisible(False)
-        except Exception:
-            pass
-
-        row2 = self._make_hbox_layout_from_plan()
-        row2.addWidget(self._dim_label(str(behavior_plan.get('output_conflict_label', '同名出力'))))
-        row2.addWidget(self.output_conflict_combo, 1)
-        row2.addWidget(self._help_icon_button(str(behavior_plan.get('output_conflict_help_text', '保存先に同名の .xtc / .xtch があるときの動作を選びます。\n自動連番: foo(1).xtc 形式で保存します。\n上書き: 既存ファイルを置き換えます。\nエラー: そのファイルを保存せずエラーとして記録します。'))))
-        lay.addLayout(row2)
-        return box
+        return _section_behavior_impl(self)
 
     def _section_file_viewer(self):
-        file_viewer_plan = self._localized_plan(gui_layouts.build_file_viewer_section_plan())
-        box, lay, _section_plan = self._build_section_box_layout(
-            'fileviewer',
-            'ファイルビューワー',
-            default_margins=(8, 10, 8, 8),
-            default_spacing=6,
-        )
-
-        row = self._make_hbox_layout_from_plan()
-        self.open_xtc_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                file_viewer_plan.get('open_xtc_button_text', 'XTC/XTCHを開く'),
-                object_name=file_viewer_plan.get('open_xtc_button_object_name', 'smallBtn'),
-            ),
-            self.open_xtc_file,
-        )
-        row.addWidget(self.open_xtc_btn)
-        row.addSpacing(self._plan_int_value(file_viewer_plan, 'open_xtc_help_leading_spacing', 8))
-        row.addWidget(self._help_icon_button(
-            file_viewer_plan.get(
-                'open_xtc_help_text',
-                '既存の .xtc / .xtch ファイルを右ペインへ読み込んで確認します。',
-            )
-        ))
-        if self._plan_bool_value(file_viewer_plan, 'open_xtc_help_trailing_stretch', True):
-            row.addStretch(1)
-        lay.addLayout(row)
-        return box
+        return _section_file_viewer_impl(self)
 
     # ── 右プレビューパネル ────────────────────────────────
 
     def _build_right_preview(self):
-        preview_panel_plan = self._localized_plan(gui_layouts.build_right_preview_panel_plan())
-        panel = QWidget()
-        lay = QVBoxLayout(panel)
-        lay.setContentsMargins(*tuple(preview_panel_plan.get('panel_contents_margins', (0, 0, 0, 0))))
-        lay.setSpacing(self._plan_int_value(preview_panel_plan, 'panel_spacing', 0))
-
-        lay.addWidget(self._build_view_toggle_bar())
-        lay.addWidget(self._build_conversion_completion_card())
-
-        self.preview_stack = QStackedWidget()
-
-        font_page = QWidget()
-        fl = QVBoxLayout(font_page)
-        fl.setContentsMargins(*tuple(preview_panel_plan.get('font_page_margins', (8, 8, 8, 8))))
-        self.preview_scroll = QScrollArea()
-        self.preview_scroll.setWidgetResizable(
-            self._plan_bool_value(preview_panel_plan, 'font_scroll_widget_resizable', False)
-        )
-        self.preview_scroll.setAlignment(
-            self._plan_alignment_value(preview_panel_plan, 'font_scroll_alignment', 'center')
-        )
-        self.preview_scroll.setFrameShape(
-            self._plan_frame_shape_value(preview_panel_plan, 'font_scroll_frame_shape', 'no_frame')
-        )
-        self.preview_scroll.setHorizontalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(
-                preview_panel_plan,
-                'font_scroll_horizontal_scroll_bar_policy',
-                'as_needed',
-            )
-        )
-        self.preview_scroll.setVerticalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(
-                preview_panel_plan,
-                'font_scroll_vertical_scroll_bar_policy',
-                'as_needed',
-            )
-        )
-        try:
-            self.preview_scroll.setLayoutDirection(Qt.LeftToRight)
-        except Exception:
-            pass
-        self.preview_label = QLabel()
-        self.preview_label.setAlignment(
-            self._plan_alignment_value(preview_panel_plan, 'font_preview_alignment', 'center')
-        )
-        self.preview_label.setMinimumSize(*self._plan_int_tuple_value(preview_panel_plan, 'font_preview_min_size', (360, 600), expected_length=2))
-        self.preview_label.setWordWrap(self._plan_bool_value(preview_panel_plan, 'font_preview_word_wrap', True))
-        try:
-            self.preview_label.setLayoutDirection(Qt.LeftToRight)
-        except Exception:
-            pass
-        self.preview_scroll.setWidget(self.preview_label)
-        fl.addWidget(self.preview_scroll, 1)
-        self.preview_stack.addWidget(font_page)
-
-        device_page = QWidget()
-        dl = QVBoxLayout(device_page)
-        dl.setContentsMargins(*self._plan_int_tuple_value(preview_panel_plan, 'device_page_margins', (8, 8, 8, 8), expected_length=4))
-        self.viewer_scroll = QScrollArea()
-        self.viewer_scroll.setWidgetResizable(
-            self._plan_bool_value(preview_panel_plan, 'device_scroll_widget_resizable', False)
-        )
-        self.viewer_scroll.setAlignment(
-            self._plan_alignment_value(preview_panel_plan, 'device_scroll_alignment', 'center')
-        )
-        self.viewer_scroll.setFrameShape(
-            self._plan_frame_shape_value(preview_panel_plan, 'device_scroll_frame_shape', 'no_frame')
-        )
-        self.viewer_scroll.setHorizontalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(
-                preview_panel_plan,
-                'device_scroll_horizontal_scroll_bar_policy',
-                'as_needed',
-            )
-        )
-        self.viewer_scroll.setVerticalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(
-                preview_panel_plan,
-                'device_scroll_vertical_scroll_bar_policy',
-                'as_needed',
-            )
-        )
-        try:
-            self.viewer_scroll.setLayoutDirection(Qt.LeftToRight)
-        except Exception:
-            pass
-        self.viewer_scroll.setFocusPolicy(
-            self._plan_focus_policy_value(preview_panel_plan, 'device_scroll_focus_policy', 'strong_focus')
-        )
-        self.viewer_widget = XtcViewerWidget()
-        self.viewer_widget.setMinimumSize(*self._plan_int_tuple_value(preview_panel_plan, 'device_preview_min_size', (360, 600), expected_length=2))
-        self.viewer_scroll.setWidget(self.viewer_widget)
-        dl.addWidget(self.viewer_scroll, 1)
-        self.preview_stack.addWidget(device_page)
-
-        lay.addWidget(self.preview_stack, 1)
-
-        self.preview_stack.setCurrentIndex(self._plan_int_value(preview_panel_plan, 'preview_stack_index', 0))
-        self._sync_preview_size()
-        return panel
+        return _build_right_preview_impl(self)
 
     def _build_view_toggle_bar(self):
-        toggle_plan = self._localized_plan(gui_layouts.build_view_toggle_bar_plan())
-        bar = QFrame()
-        bar.setObjectName(str(toggle_plan.get('object_name', 'viewToggleBar')))
-        bar.setFixedHeight(self._plan_int_value(toggle_plan, 'bar_height', 96))
-        outer_lay = QVBoxLayout(bar)
-        outer_lay.setContentsMargins(*self._plan_int_tuple_value(toggle_plan, 'contents_margins', (12, 4, 12, 4), expected_length=4))
-        outer_lay.setSpacing(self._plan_int_value(toggle_plan, 'row_spacing', 2))
-
-        top_lay = QHBoxLayout()
-        top_lay.setContentsMargins(*self._plan_int_tuple_value(toggle_plan, 'top_row_contents_margins', (0, 0, 0, 0), expected_length=4))
-        top_lay.setSpacing(self._plan_int_value(toggle_plan, 'spacing', 6))
-
-        # v1.3.8.10: remove the user-facing font/device mode switch.
-        # The right pane now has one normal preview surface; XTC/XTCH files opened
-        # via the top button are shown there as file-viewer content.  Keep these
-        # attributes absent rather than hidden buttons so legacy mode-switch code
-        # naturally becomes a no-op through getattr(..., None).
-        self._add_preview_display_toggles_to_layout(top_lay)
-        top_lay.addStretch(1)
-        self.view_help_btn = self._help_icon_button(self._ui_text(self._preview_view_help_text()))
-        top_lay.addWidget(self.view_help_btn)
-        outer_lay.addLayout(top_lay)
-
-        sep = QFrame()
-        sep.setFrameShape(self._qframe_shape_constant('HLine', self._qframe_shape_constant('NoFrame', 0)))
-        sep.setObjectName(str(toggle_plan.get('top_separator_object_name', 'topSep')))
-        outer_lay.addWidget(sep)
-
-        bottom_lay = QHBoxLayout()
-        bottom_lay.setContentsMargins(*self._plan_int_tuple_value(toggle_plan, 'bottom_row_contents_margins', (0, 0, 0, 0), expected_length=4))
-        bottom_lay.setSpacing(self._plan_int_value(toggle_plan, 'bottom_row_spacing', self._plan_int_value(toggle_plan, 'spacing', 6)))
-        self._add_nav_controls_to_layout(bottom_lay, current_label_stretch=0)
-        self._add_preview_zoom_controls_to_layout(bottom_lay, toggle_plan=toggle_plan)
-        bottom_lay.addStretch(1)
-        outer_lay.addLayout(bottom_lay)
-        return bar
+        return _build_view_toggle_bar_impl(self)
 
     def _add_preview_display_toggles_to_layout(self, lay: QHBoxLayout) -> None:
-        """右ペイン表示ツールバーへ表示系トグルを配置する。"""
-        self._add_optional_widget_to_layout(lay, 'actual_size_check')
-        self._add_optional_widget_to_layout(lay, 'actual_size_help_btn')
-        preview_toggle_plan = self._localized_plan(gui_layouts.build_preview_display_toggle_plan())
-        lay.addSpacing(self._plan_int_value(preview_toggle_plan, 'toggle_spacing', 18))
-        self._add_optional_widget_to_layout(lay, 'guides_check')
-        self._add_optional_widget_to_layout(lay, 'guides_help_btn')
+        return _add_preview_display_toggles_to_layout_impl(self, lay)
 
     def _build_conversion_completion_card(self):
-        """右ペイン上部へ表示する変換完了カードを構築する。"""
-        card = QFrame()
-        card.setObjectName('conversionCompletionCard')
-        card.setVisible(False)
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(12, 8, 12, 8)
-        lay.setSpacing(6)
-
-        top = QHBoxLayout()
-        top.setContentsMargins(0, 0, 0, 0)
-        top.setSpacing(8)
-        self.conversion_completion_title_label = QLabel(self._ui_text('変換完了'))
-        self.conversion_completion_title_label.setObjectName('conversionCompletionTitle')
-        top.addWidget(self.conversion_completion_title_label, 0)
-        top.addStretch(1)
-        self.close_conversion_completion_card_btn = QPushButton(self._ui_text('閉じる'))
-        self.close_conversion_completion_card_btn.setObjectName('conversionCompletionCloseButton')
-        self.close_conversion_completion_card_btn.setToolTip(self._ui_text('変換完了カードを閉じます。'))
-        self.close_conversion_completion_card_btn.clicked.connect(self._hide_conversion_completion_card)
-        top.addWidget(self.close_conversion_completion_card_btn, 0)
-        lay.addLayout(top)
-
-        self.conversion_completion_message_label = QLabel('')
-        self.conversion_completion_message_label.setObjectName('conversionCompletionMessage')
-        self.conversion_completion_message_label.setWordWrap(True)
-        self.conversion_completion_message_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        lay.addWidget(self.conversion_completion_message_label, 0)
-
-        actions = QHBoxLayout()
-        actions.setContentsMargins(0, 0, 0, 0)
-        actions.setSpacing(8)
-        self.card_open_results_folder_btn = QPushButton(self._ui_text('保存先を開く'))
-        self.card_open_results_folder_btn.setObjectName('conversionCompletionActionButton')
-        self.card_open_results_folder_btn.setToolTip(self._ui_text('変換結果が保存されたフォルダを開きます。'))
-        self.card_open_results_folder_btn.clicked.connect(self.open_results_folder_from_results)
-        actions.addWidget(self.card_open_results_folder_btn, 0)
-        actions.addStretch(1)
-        lay.addLayout(actions)
-        self.conversion_completion_card = card
-        return card
+        return _build_conversion_completion_card_impl(self)
 
     def _hide_conversion_completion_card(self: MainWindow) -> None:
-        card = getattr(self, 'conversion_completion_card', None)
-        if card is not None and hasattr(card, 'setVisible'):
-            try:
-                card.setVisible(False)
-            except Exception:
-                pass
+        return _hide_conversion_completion_card_impl(self)
 
     def _show_results_tab_from_completion_card(self: MainWindow) -> None:
-        if hasattr(self, 'bottom_tabs'):
-            try:
-                self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX)
-            except Exception:
-                pass
+        return _show_results_tab_from_completion_card_impl(self)
 
     def _completion_card_parent_texts(self: MainWindow, paths: object) -> list[str]:
-        return completion_card_parent_texts(paths)
+        return _completion_card_parent_texts_impl(self, paths)
 
     def _completion_card_result_item_texts(
         self: MainWindow,
@@ -3845,541 +2513,79 @@ class MainWindow(QMainWindow):
         base_path: object = '',
         max_items: int = 5,
     ) -> list[str]:
-        """変換完了カードへ表示する出力ファイルの短い一覧を返す。"""
-        return completion_card_result_item_texts(paths, base_path=base_path, max_items=max_items)
+        return _completion_card_result_item_texts_impl(
+            self,
+            paths,
+            base_path=base_path,
+            max_items=max_items,
+        )
 
     def _build_conversion_completion_card_message(
         self: MainWindow,
         converted_files: object,
         result: Mapping[str, object] | None = None,
     ) -> str:
-        return build_conversion_completion_card_message(
-            converted_files,
-            result,
-            ui_language=self.current_ui_language_value(),
-        )
+        return _build_conversion_completion_card_message_impl(self, converted_files, result)
 
     def _meaningful_open_folder_target_text(self: MainWindow, value: object) -> str:
-        if not isinstance(value, (str, bytes, bytearray, os.PathLike)):
-            return ''
-        target = worker_logic._normalized_path_text(value).strip()
-        if not target:
-            return ''
-        # ``'.'``, ``'./'``, ``'.\\'``, ``'./.'``, ``'foo/..'`` などは
-        # 正規化すると ``'.'`` になり、``os.startfile`` ではアプリのある
-        # 作業ディレクトリ（cwd）を開いてしまう。``'..'`` も親ディレクトリへ
-        # 落ちて意図しないフォルダを開くため、同じく拒否する。
-        try:
-            if worker_logic._is_windows_like_path(target):
-                normalized_for_check = ntpath.normpath(target)
-            else:
-                normalized_for_check = os.path.normpath(target)
-        except Exception:
-            normalized_for_check = target
-        if normalized_for_check in ('', '.', '..'):
-            return ''
-        return target
+        return _meaningful_open_folder_target_text_impl(self, value)
 
     def _source_target_parent_text(self: MainWindow) -> str:
-        target_text = worker_logic.normalize_target_path_text(self._safe_line_edit_text('target_edit'))
-        if not target_text:
-            return ''
-        try:
-            if worker_logic._is_windows_like_path(target_text):
-                normalized = ntpath.normpath(target_text)
-                lower = normalized.lower()
-                if lower.endswith((
-                    '.epub', '.zip', '.rar', '.cbz', '.cbr',
-                    '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
-                    '.xtc', '.xtch',
-                )):
-                    parent = ntpath.dirname(normalized)
-                    return '' if parent in ('', '.') else parent
-                return '' if normalized in ('', '.') else normalized
-            path = Path(target_text)
-            if path.suffix.lower() in {
-                '.epub', '.zip', '.rar', '.cbz', '.cbr',
-                '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
-                '.xtc', '.xtch',
-            }:
-                parent_text = str(path.parent)
-                return '' if parent_text in ('', '.') else parent_text
-            return target_text
-        except Exception:
-            return ''
+        return _source_target_parent_text_impl(self)
 
     def _planned_open_folder_target_from_settings(self: MainWindow, cfg: Mapping[str, object] | None = None) -> str:
-        payload = cfg or {}
-        output_dir = self._meaningful_open_folder_target_text(payload.get('output_dir'))
-        target_text = worker_logic.normalize_target_path_text(payload.get('target'))
-        if output_dir and target_text:
-            try:
-                if worker_logic._is_windows_like_path(target_text):
-                    lower = ntpath.normpath(target_text).lower()
-                    if lower.endswith((
-                        '.epub', '.zip', '.rar', '.cbz', '.cbr',
-                        '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
-                        '.xtc', '.xtch',
-                    )):
-                        return output_dir
-                else:
-                    if Path(target_text).suffix.lower() in {
-                        '.epub', '.zip', '.rar', '.cbz', '.cbr',
-                        '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
-                        '.xtc', '.xtch',
-                    }:
-                        return output_dir
-            except Exception:
-                return output_dir
-        if output_dir:
-            # Preserve current folder-batch behavior: explicit output_dir is not
-            # used for folder input, but keeping it as a last-known manual target
-            # is safer than ever falling back to the app working directory.
-            return output_dir
-        return self._source_target_parent_text()
+        return _planned_open_folder_target_from_settings_impl(self, cfg)
 
     def _resolve_conversion_open_folder_target(
         self: MainWindow,
         converted_files: object,
         result: Mapping[str, object] | None = None,
     ) -> str:
-        paths = results_controller.coerce_result_path_list(converted_files)
-        payload = result or {}
-        for candidate in (
-            self.__dict__.get('_active_conversion_open_folder_target', ''),
-            payload.get('open_folder_target', ''),
-            self.__dict__.get('_last_conversion_open_folder_target', ''),
-            self.__dict__.get('selected_output_dir', ''),
-        ):
-            target = self._meaningful_open_folder_target_text(candidate)
-            if target:
-                return target
-        target = results_controller.resolve_manual_open_folder_target(paths, '')
-        if target:
-            return target
-        return self._source_target_parent_text()
+        return _resolve_conversion_open_folder_target_impl(self, converted_files, result)
 
     def _show_conversion_completion_card(
         self: MainWindow,
         converted_files: object,
         result: Mapping[str, object] | None = None,
     ) -> bool:
-        card = getattr(self, 'conversion_completion_card', None)
-        if card is None:
-            return False
-        paths = results_controller.coerce_result_path_list(converted_files)
-        result_payload = result or {}
-        if not paths and not bool(result_payload.get('show_without_paths')):
-            self._hide_conversion_completion_card()
-            return False
-        message = self._build_conversion_completion_card_message(paths, result_payload)
-        if not message:
-            self._hide_conversion_completion_card()
-            return False
-        title_label = getattr(self, 'conversion_completion_title_label', None)
-        if title_label is not None and hasattr(title_label, 'setText'):
-            try:
-                title_label.setText(str(result_payload.get('completion_title') or '変換完了'))
-            except Exception:
-                pass
-        message_label = getattr(self, 'conversion_completion_message_label', None)
-        if message_label is not None and hasattr(message_label, 'setText'):
-            try:
-                message_label.setText(message)
-            except Exception:
-                pass
-        try:
-            self._completion_card_open_folder_target = self._resolve_conversion_open_folder_target(
-                paths,
-                result_payload,
-            )
-            self._last_conversion_open_folder_target = self._completion_card_open_folder_target
-        except Exception:
-            self._completion_card_open_folder_target = ''
-        open_target_available = bool(self._completion_card_open_folder_target or paths)
-        for attr_name in (
-            'card_open_results_folder_btn',
-        ):
-            button = getattr(self, attr_name, None)
-            if button is None or not hasattr(button, 'setEnabled'):
-                continue
-            try:
-                button.setEnabled(open_target_available)
-            except Exception:
-                pass
-        try:
-            card.setVisible(True)
-        except Exception:
-            return False
-        return True
+        return _show_conversion_completion_card_impl(self, converted_files, result)
 
     def _build_nav_bar(self):
-        nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())
-        bar = QFrame()
-        bar.setObjectName(str(nav_bar_plan.get('object_name', 'navBar')))
-        bar.setFixedHeight(self._plan_int_value(nav_bar_plan, 'bar_height', 48))
-        lay = QHBoxLayout(bar)
-        lay.setContentsMargins(*self._plan_int_tuple_value(nav_bar_plan, 'contents_margins', (12, 0, 12, 0), expected_length=4))
-        lay.setSpacing(self._plan_int_value(nav_bar_plan, 'spacing', 8))
-        self._add_nav_controls_to_layout(lay, nav_bar_plan=nav_bar_plan, current_label_stretch=1)
-        return bar
+        return _build_nav_bar_impl(self)
 
     def _ensure_nav_reverse_control(self: MainWindow, nav_bar_plan: dict | None = None):
-        nav_bar_plan = nav_bar_plan or self._localized_plan(gui_layouts.build_nav_bar_plan())
-        existing = getattr(self, 'nav_reverse_check', None)
-        if existing is not None:
-            return existing
-        text = str(nav_bar_plan.get('nav_reverse_text', 'ページ送りキー反転'))
-        try:
-            self.nav_reverse_check = QCheckBox(text, self)
-        except TypeError:
-            self.nav_reverse_check = QCheckBox(text)
-        self.nav_reverse_check.setObjectName(str(nav_bar_plan.get('nav_reverse_object_name', 'navToggle')))
-        self.nav_reverse_check.setFocusPolicy(
-            self._plan_focus_policy_value(nav_bar_plan, 'nav_reverse_focus_policy', 'no_focus')
-        )
-        self.nav_reverse_check.setVisible(False)
-        self.nav_reverse_check.toggled.connect(self.on_nav_reverse_toggled)
-        return self.nav_reverse_check
+        return _ensure_nav_reverse_control_impl(self, nav_bar_plan)
 
     def _add_nav_controls_to_layout(self, lay: QHBoxLayout, *, nav_bar_plan: dict | None = None, current_label_stretch: int = 0) -> None:
-        nav_bar_plan = nav_bar_plan or self._localized_plan(gui_layouts.build_nav_bar_plan())
-
-        self.current_xtc_label = QLabel(str(nav_bar_plan.get('current_xtc_label_text', '表示中: なし')))
-        self.current_xtc_label.setObjectName(str(nav_bar_plan.get('current_xtc_label_object_name', 'hintLabel')))
-        self.current_xtc_label.setMinimumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_min_width', 0))
-        self.current_xtc_label.setMaximumWidth(self._plan_int_value(nav_bar_plan, 'current_xtc_label_max_width', 120))
-        show_current_label = self._plan_bool_value(nav_bar_plan, 'current_xtc_label_visible', False)
-        self.current_xtc_label.setVisible(show_current_label)
-        if show_current_label:
-            lay.addWidget(self.current_xtc_label, current_label_stretch)
-            lay.addWidget(self._nav_section_separator(nav_bar_plan))
-            lay.addSpacing(self._plan_int_value(nav_bar_plan, 'nav_button_side_spacing', 10))
-
-        self._ensure_nav_reverse_control(nav_bar_plan)
-
-        self.prev_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                nav_bar_plan.get('prev_button_text', '前'),
-                object_name=str(nav_bar_plan.get('nav_button_object_name', 'navBtn')),
-                focus_policy=str(nav_bar_plan.get('nav_button_focus_policy', 'no_focus')),
-            ),
-            lambda: self.on_nav_button_clicked(-1),
+        return _add_nav_controls_to_layout_impl(
+            self,
+            lay,
+            nav_bar_plan=nav_bar_plan,
+            current_label_stretch=current_label_stretch,
         )
-        lay.addWidget(self.prev_btn)
-
-        lay.addWidget(self._dim_label(str(nav_bar_plan.get('page_label_text', 'ページ'))))
-        self.page_input = QSpinBox()
-        self.page_input.setRange(
-            self._plan_int_value(nav_bar_plan, 'page_input_minimum', 0),
-            self._plan_int_value(nav_bar_plan, 'page_input_maximum', 0),
-        )
-        self.page_input.setButtonSymbols(
-            self._plan_spin_button_symbols_value(nav_bar_plan, 'page_input_button_symbols', 'no_buttons')
-        )
-        self.page_input.setKeyboardTracking(
-            self._plan_bool_value(nav_bar_plan, 'page_input_keyboard_tracking', False)
-        )
-        self.page_input.setFixedWidth(self._plan_int_value(nav_bar_plan, 'page_input_width', 60))
-        self.page_input.valueChanged.connect(self.on_page_input_changed)
-        lay.addWidget(self.page_input)
-
-        self.page_total_label = QLabel(str(nav_bar_plan.get('page_total_label_text', '/ 0')))
-        self.page_total_label.setObjectName(str(nav_bar_plan.get('page_total_label_object_name', 'hintLabel')))
-        lay.addWidget(self.page_total_label)
-
-        self.next_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                nav_bar_plan.get('next_button_text', '次'),
-                object_name=str(nav_bar_plan.get('nav_button_object_name', 'navBtn')),
-                focus_policy=str(nav_bar_plan.get('nav_button_focus_policy', 'no_focus')),
-            ),
-            lambda: self.on_nav_button_clicked(1),
-        )
-        lay.addWidget(self.next_btn)
-        lay.addSpacing(self._plan_int_value(nav_bar_plan, 'nav_button_side_spacing', 10))
-        lay.addWidget(self._nav_section_separator(nav_bar_plan))
-
-        self._update_nav_button_texts()
 
     def _nav_section_separator(self, nav_bar_plan: Mapping[str, Any]) -> QFrame:
-        sep = QFrame()
-        sep.setFrameShape(self._qframe_shape_constant('VLine', self._qframe_shape_constant('NoFrame', 0)))
-        sep.setObjectName(str(nav_bar_plan.get('nav_section_separator_object_name', 'navSectionSep')))
-        return sep
+        return _nav_section_separator_impl(self, nav_bar_plan)
 
     def _add_preview_zoom_controls_to_layout(self, lay: QHBoxLayout, *, toggle_plan: dict | None = None) -> None:
-        toggle_plan = toggle_plan or self._localized_plan(gui_layouts.build_view_toggle_bar_plan())
-        lay.addSpacing(self._plan_int_value(toggle_plan, 'preview_zoom_spacing', 8))
-        self.preview_zoom_label = self._dim_label(str(toggle_plan.get('preview_zoom_label_text', '表示倍率')))
-        self.preview_zoom_label.setVisible(False)
-        if self._plan_bool_value(toggle_plan, 'preview_zoom_label_visible', False):
-            self.preview_zoom_label.setVisible(True)
-            lay.addWidget(self.preview_zoom_label)
-        preview_zoom_button_object_name = str(toggle_plan.get('preview_zoom_button_object_name', 'stepBtn'))
-        self.preview_zoom_down_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                toggle_plan.get('preview_zoom_down_text', '−'),
-                object_name=preview_zoom_button_object_name,
-                tooltip=toggle_plan.get('preview_zoom_down_tooltip', '表示倍率を下げます。'),
-                fixed_size=toggle_plan.get('preview_zoom_button_size', (24, 24)),
-            ),
-        )
-        lay.addWidget(self.preview_zoom_down_btn)
-        self.preview_zoom_spin = QSpinBox()
-        self.preview_zoom_spin.setRange(
-            self._plan_int_value(toggle_plan, 'preview_zoom_min', 50),
-            self._plan_int_value(toggle_plan, 'preview_zoom_max', 300),
-        )
-        self.preview_zoom_spin.setSingleStep(self._plan_int_value(toggle_plan, 'preview_zoom_step', 10))
-        self.preview_zoom_spin.setAccelerated(
-            self._plan_bool_value(toggle_plan, 'preview_zoom_spin_accelerated', True)
-        )
-        self.preview_zoom_spin.setButtonSymbols(
-            self._plan_spin_button_symbols_value(toggle_plan, 'preview_zoom_spin_button_symbols', 'no_buttons')
-        )
-        self.preview_zoom_spin.setValue(self._plan_int_value(toggle_plan, 'preview_zoom_default', 100))
-        self.preview_zoom_spin.setSuffix(str(toggle_plan.get('preview_zoom_spin_suffix', '%')))
-        self.preview_zoom_spin.setFixedWidth(self._plan_int_value(toggle_plan, 'preview_zoom_spin_width', 78))
-        self.preview_zoom_spin.setToolTip(str(toggle_plan.get('preview_zoom_tooltip', '表示倍率です。')))
-        self.preview_zoom_spin.valueChanged.connect(self.on_preview_zoom_changed)
-        lay.addWidget(self.preview_zoom_spin)
-        self.preview_zoom_up_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(
-                toggle_plan.get('preview_zoom_up_text', '+'),
-                object_name=preview_zoom_button_object_name,
-                tooltip=toggle_plan.get('preview_zoom_up_tooltip', '表示倍率を上げます。'),
-                fixed_size=toggle_plan.get('preview_zoom_button_size', (24, 24)),
-            ),
-        )
-        lay.addWidget(self.preview_zoom_up_btn)
-        self.preview_zoom_down_btn.clicked.connect(lambda: self.preview_zoom_spin.stepBy(-1))
-        self.preview_zoom_up_btn.clicked.connect(lambda: self.preview_zoom_spin.stepBy(1))
-        self._sync_preview_zoom_control_state()
+        return _add_preview_zoom_controls_to_layout_impl(self, lay, toggle_plan=toggle_plan)
 
     # ── 下部パネル（ステータス + 結果/ログ）────────────────
 
     def _build_bottom_panel(self):
-        bottom_panel_plan = self._localized_plan(gui_layouts.build_bottom_panel_layout_plan())
-        panel = QFrame()
-        panel.setObjectName(str(bottom_panel_plan.get('panel_object_name', 'bottomPanel')))
-        outer_lay = QHBoxLayout(panel)
-        outer_lay.setContentsMargins(*self._plan_int_tuple_value(bottom_panel_plan, 'panel_contents_margins', (0, 0, 0, 0), expected_length=4))
-        outer_lay.setSpacing(self._plan_int_value(bottom_panel_plan, 'panel_spacing', 0))
-
-        content = QFrame()
-        content.setObjectName(str(bottom_panel_plan.get('content_object_name', 'bottomPanelContent')))
-        lay = QVBoxLayout(content)
-        lay.setContentsMargins(*self._plan_int_tuple_value(bottom_panel_plan, 'content_contents_margins', (0, 0, 0, 0), expected_length=4))
-        lay.setSpacing(self._plan_int_value(bottom_panel_plan, 'content_spacing', 0))
-
-        strip = QFrame()
-        strip.setObjectName(str(bottom_panel_plan.get('status_strip_object_name', 'statusStrip')))
-        strip.setFixedHeight(self._plan_int_value(bottom_panel_plan, 'status_strip_height', 34))
-        sl = QHBoxLayout(strip)
-        sl.setContentsMargins(*self._plan_int_tuple_value(bottom_panel_plan, 'status_strip_margins', (14, 0, 14, 0), expected_length=4))
-        sl.setSpacing(self._plan_int_value(bottom_panel_plan, 'status_strip_spacing', 10))
-
-        status_strip_plan = self._localized_plan(gui_layouts.build_bottom_status_strip_plan())
-
-        self.busy_badge = QLabel(str(status_strip_plan.get('badge_text', '待機中')))
-        self.busy_badge.setObjectName(str(status_strip_plan.get('badge_object_name', 'badge')))
-        sl.addWidget(self.busy_badge)
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(
-            self._plan_int_value(status_strip_plan, 'progress_minimum', 0),
-            self._plan_int_value(status_strip_plan, 'progress_maximum', 1),
-        )
-        self.progress_bar.setValue(self._plan_int_value(status_strip_plan, 'progress_value', 0))
-        self.progress_bar.setTextVisible(self._plan_bool_value(status_strip_plan, 'progress_text_visible', False))
-        self.progress_bar.setFixedHeight(self._plan_int_value(status_strip_plan, 'progress_fixed_height', 6))
-        self.progress_bar.setMaximumWidth(self._plan_int_value(status_strip_plan, 'progress_max_width', 200))
-        sl.addWidget(self.progress_bar)
-
-        self.progress_label = QLabel(str(status_strip_plan.get('progress_text', '')))
-        self.progress_label.setObjectName(str(status_strip_plan.get('progress_label_object_name', 'hintLabel')))
-        sl.addWidget(self.progress_label, 1)
-
-        lay.addWidget(strip)
-
-        sep = QFrame()
-        sep.setFrameShape(self._plan_frame_shape_value(bottom_panel_plan, 'bottom_separator_frame_shape', 'hline'))
-        sep.setObjectName(str(bottom_panel_plan.get('bottom_separator_object_name', 'bottomPanelSep')))
-        lay.addWidget(sep)
-
-        self.bottom_tabs = QTabWidget()
-        self.bottom_tabs.addTab(self._build_results_tab(), str(bottom_panel_plan.get('results_tab_title', '変換結果')))
-        self.bottom_tabs.addTab(self._build_log_tab(), str(bottom_panel_plan.get('log_tab_title', 'ログ')))
-        self.bottom_tabs.currentChanged.connect(lambda _index: self._bind_bottom_panel_external_scrollbar())
-        lay.addWidget(self.bottom_tabs, 1)
-
-        outer_lay.addWidget(content, 1)
-        if self._plan_bool_value(bottom_panel_plan, 'external_scrollbar_enabled', False):
-            self.bottom_panel_scrollbar = QScrollBar(Qt.Vertical)
-            self.bottom_panel_scrollbar.setObjectName(
-                str(bottom_panel_plan.get('external_scrollbar_object_name', 'bottomPanelScrollBar'))
-            )
-            self.bottom_panel_scrollbar.setSingleStep(
-                self._plan_int_value(bottom_panel_plan, 'external_scrollbar_single_step', 20)
-            )
-            self.bottom_panel_scrollbar.valueChanged.connect(self._apply_bottom_panel_external_scroll_value)
-            outer_lay.addWidget(self.bottom_panel_scrollbar, 0)
-        else:
-            self.bottom_panel_scrollbar = None
-        self._bind_bottom_panel_external_scrollbar()
-        return panel
+        return _build_bottom_panel_impl(self)
 
     def _build_results_tab(self):
-        results_tab_plan = self._localized_plan(gui_layouts.build_results_tab_plan())
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(*self._plan_int_tuple_value(results_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4))
-        lay.setSpacing(self._plan_int_value(results_tab_plan, 'spacing', 4))
-        self.results_summary_label = QLabel(str(results_tab_plan.get('summary_text', '変換結果の概要をここに表示します。')))
-        self.results_summary_label.setObjectName(str(results_tab_plan.get('summary_label_object_name', 'resultsPlaceholderLabel')))
-        self.results_summary_label.setWordWrap(self._plan_bool_value(results_tab_plan, 'summary_label_word_wrap', True))
-        self.results_summary_label.setAlignment(
-            self._plan_alignment_value(results_tab_plan, 'summary_label_alignment', 'center')
-        )
-        self._set_results_summary_placeholder_state(True)
-        self.results_summary_scroll = QScrollArea()
-        self.results_summary_scroll.setWidgetResizable(
-            self._plan_bool_value(results_tab_plan, 'summary_scroll_widget_resizable', True)
-        )
-        self.results_summary_scroll.setFrameShape(
-            self._plan_frame_shape_value(results_tab_plan, 'summary_scroll_frame_shape', 'no_frame')
-        )
-        self.results_summary_scroll.setHorizontalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(results_tab_plan, 'summary_scroll_horizontal_scroll_bar_policy', 'as_needed')
-        )
-        self.results_summary_scroll.setVerticalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(results_tab_plan, 'summary_scroll_vertical_scroll_bar_policy', 'as_needed')
-        )
-        self.results_summary_scroll.setWidget(self.results_summary_label)
-        lay.addWidget(self.results_summary_scroll, 0)
-
-        self.results_action_row = QFrame()
-        self.results_action_row.setObjectName('resultsActionRow')
-        results_action_lay = QHBoxLayout(self.results_action_row)
-        results_action_lay.setContentsMargins(8, 5, 8, 5)
-        results_action_lay.setSpacing(8)
-        self.open_results_folder_btn = QPushButton(self._ui_text('保存先を開く'))
-        self.open_results_folder_btn.setObjectName('resultsActionButton')
-        self.open_results_folder_btn.setToolTip(self._ui_text('選択中、または先頭の変換結果が保存されたフォルダを開きます。'))
-        self.open_results_folder_btn.clicked.connect(self.open_results_folder_from_results)
-        results_action_lay.addWidget(self.open_results_folder_btn, 0)
-        self.open_selected_result_btn = QPushButton(self._ui_text('右ペインで確認'))
-        self.open_selected_result_btn.setObjectName('resultsActionButton')
-        self.open_selected_result_btn.setToolTip(self._ui_text('選択中、または先頭の変換結果を右ペインへ読み込みます。'))
-        self.open_selected_result_btn.clicked.connect(self.open_selected_result_from_results)
-        results_action_lay.addWidget(self.open_selected_result_btn, 0)
-        results_action_lay.addStretch(1)
-        lay.addWidget(self.results_action_row, 0)
-
-        self.results_list = QListWidget()
-        self.results_list.setVerticalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(results_tab_plan, 'results_list_vertical_scroll_bar_policy', 'always_on')
-        )
-        self.results_list.setHorizontalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(results_tab_plan, 'results_list_horizontal_scroll_bar_policy', 'as_needed')
-        )
-        self.results_list.setSelectionMode(
-            self._plan_list_selection_mode_value(results_tab_plan, 'results_list_selection_mode', 'single_selection')
-        )
-        self.results_list.itemClicked.connect(self.on_result_item_clicked)
-        self.results_list.itemActivated.connect(self.on_result_item_clicked)
-        lay.addWidget(self.results_list, 1)
-        self._sync_results_action_buttons_state()
-        return w
+        return _build_results_tab_impl(self)
 
     def _build_log_tab(self):
-        session_log_path_display = _session_log_path_for_display()
-        log_tab_plan = self._localized_plan(gui_layouts.build_log_tab_plan(log_path=session_log_path_display))
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(*self._plan_int_tuple_value(log_tab_plan, 'contents_margins', (6, 6, 6, 6), expected_length=4))
-        lay.setSpacing(self._plan_int_value(log_tab_plan, 'spacing', 6))
-
-        top = QHBoxLayout()
-        top.setContentsMargins(*self._plan_int_tuple_value(log_tab_plan, 'top_row_margins', (0, 0, 0, 0), expected_length=4))
-        top.setSpacing(self._plan_int_value(log_tab_plan, 'top_row_spacing', 8))
-        label = QLabel(str(log_tab_plan.get('path_label_text', '保存先:')))
-        label.setObjectName(str(log_tab_plan.get('path_label_object_name', 'logPathLabel')))
-        top.addWidget(label, 0)
-
-        self.log_path_edit = QLineEdit(str(log_tab_plan.get('log_path', str(session_log_path_display))))
-        log_path_read_only = self._plan_bool_value(log_tab_plan, 'log_path_edit_read_only', True)
-        self.log_path_edit.setReadOnly(log_path_read_only)
-        top.addWidget(self.log_path_edit, 1)
-
-        open_btn = self._make_button_from_plan(
-            gui_layouts.build_button_widget_plan(log_tab_plan.get('open_folder_button_text', 'ログフォルダを開く')),
-            self.open_log_folder,
-        )
-        top.addWidget(open_btn, 0)
-        lay.addLayout(top)
-
-        self.log_edit = QTextEdit()
-        self.log_edit.setVerticalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(log_tab_plan, 'log_edit_vertical_scroll_bar_policy', 'always_on')
-        )
-        self.log_edit.setHorizontalScrollBarPolicy(
-            self._plan_scroll_bar_policy_value(log_tab_plan, 'log_edit_horizontal_scroll_bar_policy', 'as_needed')
-        )
-        log_edit_read_only = self._plan_bool_value(log_tab_plan, 'log_edit_read_only', True)
-        self.log_edit.setReadOnly(log_edit_read_only)
-        lay.addWidget(self.log_edit, 1)
-        return w
-
+        return _build_log_tab_impl(self, _session_log_path_for_display())
 
     def _active_bottom_panel_scrollbar(self: MainWindow) -> object | None:
-        tabs = getattr(self, 'bottom_tabs', None)
-        try:
-            index = int(tabs.currentIndex()) if tabs is not None else 0
-        except Exception:
-            index = 0
-        if index == 1:
-            widget = getattr(self, 'log_edit', None)
-        else:
-            widget = getattr(self, 'results_list', None)
-        if widget is None or not hasattr(widget, 'verticalScrollBar'):
-            return None
-        try:
-            return widget.verticalScrollBar()
-        except Exception:
-            return None
+        return _active_bottom_panel_scrollbar_impl(self)
 
     def _bind_bottom_panel_external_scrollbar(self: MainWindow) -> None:
-        external = getattr(self, 'bottom_panel_scrollbar', None)
-        if external is None:
-            return
-        source = self._active_bottom_panel_scrollbar()
-        previous = getattr(self, '_bottom_panel_bound_scrollbar', None)
-        if previous is not None and previous is not source:
-            for signal_name in ('rangeChanged', 'valueChanged'):
-                signal = getattr(previous, signal_name, None)
-                if signal is None:
-                    continue
-                try:
-                    signal.disconnect(self._sync_bottom_panel_external_scrollbar)
-                except Exception:
-                    pass
-        if source is None:
-            self._bottom_panel_bound_scrollbar = None
-            self._set_bottom_panel_external_scrollbar_range(0, 0, 0, 0, 0)
-            return
-        if previous is not source:
-            for signal_name in ('rangeChanged', 'valueChanged'):
-                signal = getattr(source, signal_name, None)
-                if signal is None:
-                    continue
-                try:
-                    signal.connect(self._sync_bottom_panel_external_scrollbar)
-                except Exception:
-                    pass
-            self._bottom_panel_bound_scrollbar = source
-        self._sync_bottom_panel_external_scrollbar()
+        _bind_bottom_panel_external_scrollbar_impl(self)
 
     def _set_bottom_panel_external_scrollbar_range(
         self: MainWindow,
@@ -4389,57 +2595,20 @@ class MainWindow(QMainWindow):
         page_step: int,
         single_step: int,
     ) -> None:
-        external = getattr(self, 'bottom_panel_scrollbar', None)
-        if external is None:
-            return
-        self._bottom_panel_scrollbar_syncing = True
-        try:
-            external.blockSignals(True)
-            external.setRange(max(0, int(minimum)), max(0, int(maximum)))
-            external.setPageStep(max(1, int(page_step or 1)))
-            external.setSingleStep(max(1, int(single_step or 1)))
-            external.setValue(max(external.minimum(), min(external.maximum(), int(value))))
-            external.setEnabled(external.maximum() > external.minimum())
-        finally:
-            try:
-                external.blockSignals(False)
-            except Exception:
-                pass
-            self._bottom_panel_scrollbar_syncing = False
+        _set_bottom_panel_external_scrollbar_range_impl(
+            self,
+            minimum,
+            maximum,
+            value,
+            page_step,
+            single_step,
+        )
 
     def _sync_bottom_panel_external_scrollbar(self: MainWindow, *_args: object) -> None:
-        if bool(getattr(self, '_bottom_panel_scrollbar_syncing', False)):
-            return
-        source = self._active_bottom_panel_scrollbar()
-        if source is None:
-            self._set_bottom_panel_external_scrollbar_range(0, 0, 0, 0, 0)
-            return
-        try:
-            minimum = int(source.minimum())
-            maximum = int(source.maximum())
-            value = int(source.value())
-            page_step = int(source.pageStep())
-            single_step = int(source.singleStep())
-        except Exception:
-            self._set_bottom_panel_external_scrollbar_range(0, 0, 0, 0, 0)
-            return
-        self._set_bottom_panel_external_scrollbar_range(minimum, maximum, value, page_step, single_step)
+        _sync_bottom_panel_external_scrollbar_impl(self, *_args)
 
     def _apply_bottom_panel_external_scroll_value(self: MainWindow, value: int) -> None:
-        if bool(getattr(self, '_bottom_panel_scrollbar_syncing', False)):
-            return
-        source = self._active_bottom_panel_scrollbar()
-        if source is None:
-            return
-        self._bottom_panel_scrollbar_syncing = True
-        try:
-            try:
-                source.setValue(int(value))
-            except Exception:
-                pass
-        finally:
-            self._bottom_panel_scrollbar_syncing = False
-        self._sync_bottom_panel_external_scrollbar()
+        _apply_bottom_panel_external_scroll_value_impl(self, value)
 
     # ── ヘルパー ───────────────────────────────────────────
 
@@ -4719,14 +2888,7 @@ class MainWindow(QMainWindow):
                     pass
 
     def _refresh_active_view_after_mode_change(self: MainWindow, mode: object) -> None:
-        normalized = self._normalized_main_view_mode(mode)
-        try:
-            if normalized == 'font':
-                self._refresh_font_preview_display_if_needed(refresh_navigation=False)
-            else:
-                self.render_current_page(refresh_navigation=False)
-        except Exception:
-            pass
+        return _refresh_active_view_after_mode_change_impl(self, mode)
 
     def set_main_view_mode(self: MainWindow, mode: str, initial: bool = False) -> None:
         normalized = self._apply_main_view_mode_ui(mode)
@@ -4799,73 +2961,15 @@ class MainWindow(QMainWindow):
             )
 
     def show_display_settings_popup(self: MainWindow) -> None:
-        menu = QMenu(self)
-        menu.setObjectName('gearPopupMenu')
-        menu.setToolTipsVisible(True)
-        menu.addSection(self._ui_text('外観'))
-
-        theme_group = QActionGroup(menu)
-        theme_group.setExclusive(True)
-
-        light_action = menu.addAction(self._ui_text('白基調'))
-        light_action.setCheckable(True)
-        light_action.setChecked(self.current_ui_theme != 'dark')
-        light_action.triggered.connect(lambda checked: checked and self.set_ui_theme('light'))
-        theme_group.addAction(light_action)
-
-        dark_action = menu.addAction(self._ui_text('ダーク'))
-        dark_action.setCheckable(True)
-        dark_action.setChecked(self.current_ui_theme == 'dark')
-        dark_action.triggered.connect(lambda checked: checked and self.set_ui_theme('dark'))
-        theme_group.addAction(dark_action)
-
-        menu.addSeparator()
-        menu.addSection(self._ui_text('その他オプション'))
-
-        # フォルダ自動オープンは v1.3.3.48 で廃止。
-        # 保存先を開きたい場合は、変換完了カードまたは変換結果タブのボタンを使う。
-
-        panel_button_action = menu.addAction(self._ui_text('三本線ボタンを表示'))
-        panel_button_action.setCheckable(True)
-        panel_button_action.setChecked(bool(getattr(self, 'panel_button_visible', True)))
-        panel_button_action.toggled.connect(lambda checked: self.set_panel_button_visible(bool(checked)))
-
-        nav_reverse_control = self._ensure_nav_reverse_control()
-        nav_reverse_action = menu.addAction(self._ui_text('ページ送りキー反転'))
-        nav_reverse_action.setCheckable(True)
-        nav_reverse_action.setChecked(bool(nav_reverse_control.isChecked()))
-        nav_reverse_action.toggled.connect(lambda checked: nav_reverse_control.setChecked(bool(checked)))
-
-        conflict_menu = menu.addMenu(self._ui_text('同名出力'))
-        conflict_group = QActionGroup(conflict_menu)
-        conflict_group.setExclusive(True)
-        for key, label in OUTPUT_CONFLICT_OPTIONS:
-            action = conflict_menu.addAction(self._ui_text(label))
-            action.setCheckable(True)
-            action.setChecked(self.current_output_conflict_mode() == key)
-            action.triggered.connect(lambda checked, key=key: checked and self.output_conflict_combo.setCurrentIndex(self.output_conflict_combo.findData(key)))
-            conflict_group.addAction(action)
-
-        menu_size = menu.sizeHint()
-        button_global = self.settings_btn.mapToGlobal(QPoint(0, 0))
-        x = button_global.x() + self.settings_btn.width() - menu_size.width()
-        y = button_global.y() + self.settings_btn.height()
-
-        screen = self.screen() or QApplication.primaryScreen()
-        if screen is not None:
-            available = screen.availableGeometry()
-            x = max(available.left(), min(x, available.right() - menu_size.width() + 1))
-            y = max(available.top(), min(y, available.bottom() - menu_size.height() + 1))
-
-        try:
-            menu.exec(QPoint(x, y))
-            return
-        except Exception:
-            pass
-        self._show_information_dialog_with_status_fallback(
-            '表示設定',
-            '表示設定メニューを開けませんでした。',
-            fallback_status_message='表示設定メニューを開けませんでした。',
+        # Delegated helper keeps the localized appearance section contract:
+        # menu.addSection(self._ui_text('外観'))
+        _show_display_settings_popup_impl(
+            self,
+            menu_class=QMenu,
+            action_group_class=QActionGroup,
+            point_class=QPoint,
+            application_class=QApplication,
+            output_conflict_options=OUTPUT_CONFLICT_OPTIONS,
         )
 
     def _apply_left_panel_width(self: MainWindow, width: int) -> None:
@@ -4969,393 +3073,61 @@ class MainWindow(QMainWindow):
         self._schedule_target_preview_refresh(reset_page=True)
 
     def _schedule_target_preview_refresh(self: MainWindow, *, reset_page: bool = True) -> None:
-        """Schedule preview refresh after target changes without blocking the picker handler.
-
-        File/folder selection is a UI operation.  Running preview generation
-        inline in the same slot can make large EPUB/archive/folder selections
-        look like the window froze before labels/buttons have a chance to
-        repaint.  Mark the preview stale immediately, then start the bounded
-        preview on the next event-loop turn.  Multiple target-change signals
-        can be emitted in quick succession, so keep only one deferred preview
-        job pending and merge the reset-page flag safely.  If another target
-        change arrives while that deferred refresh is already running, queue one
-        follow-up refresh instead of starting a nested preview refresh.
-        """
-        try:
-            self.mark_preview_dirty_for_target_change()
-        except Exception:
-            try:
-                self.mark_preview_dirty()
-            except Exception:
-                pass
-
-        self._apply_preview_pending_progress_context('プレビュー対象を読み込んでいます…')
-
-        pending_reset_page = bool(reset_page) or bool(
-            getattr(self, '_target_preview_refresh_pending_reset_page', False)
-        )
-        self._target_preview_refresh_pending_reset_page = pending_reset_page
-        if getattr(self, '_target_preview_refresh_running', False):
-            self._target_preview_refresh_rerun_requested = True
-            return
-        if getattr(self, '_target_preview_refresh_scheduled', False):
-            return
-        self._target_preview_refresh_scheduled = True
-
-        def _queue_target_preview_refresh_run(callback: Callable[[], None]) -> None:
-            single_shot = getattr(QTimer, 'singleShot', None)
-            if callable(single_shot):
-                try:
-                    single_shot(0, callback)
-                    return
-                except Exception:
-                    # If Qt rejects the deferred callback, fall back to an inline
-                    # run using the pending state that was already merged above.
-                    # Do not clear flags here: _run_target_preview_refresh() is
-                    # the single cleanup point.
-                    pass
-            callback()
-
-        def _run_target_preview_refresh() -> None:
-            reset_page_for_run = bool(
-                getattr(self, '_target_preview_refresh_pending_reset_page', reset_page)
-            )
-            self._target_preview_refresh_scheduled = False
-            self._target_preview_refresh_pending_reset_page = False
-            self._target_preview_refresh_running = True
-            try:
-                self.request_preview_refresh(reset_page=reset_page_for_run)
-            finally:
-                self._target_preview_refresh_running = False
-                rerun_requested = bool(
-                    getattr(self, '_target_preview_refresh_rerun_requested', False)
-                )
-                self._target_preview_refresh_rerun_requested = False
-                if rerun_requested:
-                    self._target_preview_refresh_scheduled = True
-                    _queue_target_preview_refresh_run(_run_target_preview_refresh)
-                else:
-                    self._apply_preview_finish_context_after_running_flags_clear()
-
-        _queue_target_preview_refresh_run(_run_target_preview_refresh)
+        _schedule_target_preview_refresh_impl(self, reset_page=reset_page, timer_class=QTimer)
 
     def _mark_preview_dirty_from_signal(self: MainWindow, *_args: object) -> None:
-        self._mark_preview_dirty_without_auto_refresh()
+        _mark_preview_dirty_from_signal_impl(self, *_args)
 
     def _current_preview_page_limit_value(self: MainWindow) -> int:
-        return _preview_page_limit_value(
-            getattr(self, 'preview_page_limit_spin', None),
-            default_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
-        )
+        return _current_preview_page_limit_value_impl(self)
 
     def _should_auto_live_preview_refresh(self: MainWindow) -> bool:
-        return self._current_preview_page_limit_value() <= _AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX
+        return _should_auto_live_preview_refresh_impl(self, auto_refresh_max=_AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX)
 
     def _manual_preview_required_status_message(self: MainWindow) -> str:
-        return _manual_preview_required_status_message_for_limit(
-            preview_limit=self._current_preview_page_limit_value(),
-            auto_refresh_max=_AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX,
-        )
+        return _manual_preview_required_status_message_impl(self, auto_refresh_max=_AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX)
 
     def _mark_preview_dirty_without_auto_refresh(self: MainWindow) -> None:
-        try:
-            self.mark_preview_dirty()
-        except Exception:
-            pass
-        if self._current_preview_page_limit_value() > _AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX:
-            try:
-                self._cancel_auto_live_preview_due_to_large_limit()
-            except Exception:
-                pass
-            try:
-                self._apply_manual_preview_required_context()
-            except Exception:
-                pass
+        _mark_preview_dirty_without_auto_refresh_impl(self, auto_refresh_max=_AUTO_LIVE_PREVIEW_PAGE_LIMIT_MAX)
 
     def _apply_manual_preview_required_context(self: MainWindow) -> None:
-        message = self._manual_preview_required_status_message()
-        try:
-            self._apply_preview_progress_bar_context(preview_controller.build_preview_finish_context())
-        except Exception:
-            pass
-        try:
-            self._mark_preview_update_button_pending()
-        except Exception:
-            pass
-        try:
-            self._update_preview_status_label(message)
-        except Exception:
-            pass
-        progress_label = getattr(self, 'progress_label', None)
-        setter = getattr(progress_label, 'setText', None)
-        if callable(setter):
-            try:
-                setter(message)
-            except Exception:
-                pass
+        _apply_manual_preview_required_context_impl(self)
 
     def _cancel_auto_live_preview_due_to_large_limit(self: MainWindow) -> None:
-        try:
-            self._cancel_pending_settings_live_preview_refresh()
-        except Exception:
-            pass
-        self._settings_preview_refresh_pending = False
-        self._settings_preview_refresh_pending_reset_page = False
-        self._settings_preview_refresh_scheduled = False
-        self._settings_preview_refresh_deferred_until_preview_finished = False
+        _cancel_auto_live_preview_due_to_large_limit_impl(self)
 
     def _set_preview_update_button_visual_state(self: MainWindow, state: object) -> None:
-        """Apply a lightweight visual state to the Preview Update button."""
-        button = getattr(self, 'preview_update_btn', None)
-        if button is None:
-            return
-        normalized = str(state or 'idle').strip().lower()
-        if normalized not in {'idle', 'pending', 'refreshing', 'viewer'}:
-            normalized = 'idle'
-        self._preview_update_button_visual_state = normalized
-        try:
-            button.setProperty('previewState', normalized)
-        except Exception:
-            return
-        try:
-            style = button.style()
-            if hasattr(style, 'unpolish'):
-                style.unpolish(button)
-            if hasattr(style, 'polish'):
-                style.polish(button)
-        except Exception:
-            pass
-        try:
-            button.update()
-        except Exception:
-            pass
+        _set_preview_update_button_visual_state_impl(self, state)
 
     def _has_loaded_xtc_viewer_document(self: MainWindow) -> bool:
-        """Return True when a user-opened XTC/XTCH document is loaded.
-
-        Generated preview pages can remain cached, and some view/display-only
-        controls may temporarily leave ``device_view_source`` set to ``preview``.
-        A loaded file-viewer document must therefore be detected from the loaded
-        XTC/XTCH identity plus XTC pages, not from the current preview source.
-        """
-        try:
-            if not self._runtime_xtc_pages():
-                return False
-        except Exception:
-            return False
-        loaded_path = worker_logic._normalized_path_text(
-            self.__dict__.get('_loaded_xtc_path_text')
-        ).strip()
-        loaded_name = worker_logic._normalized_path_text(
-            self.__dict__.get('_loaded_xtc_display_name')
-        ).strip()
-        return bool(loaded_path or loaded_name)
+        return _has_loaded_xtc_viewer_document_impl(self)
 
     def _is_file_viewer_mode_active(self: MainWindow) -> bool:
-        """Return True when a user-opened XTC/XTCH document is being shown.
-
-        Generated conversion results can also populate ``xtc_pages``.  Treating
-        bare XTC pages as file-viewer mode would incorrectly neutralize preview
-        refresh state.  Require the loaded-file identity that the XTC/XTCH
-        viewer path stores alongside the page data.
-        """
-        try:
-            return self._has_loaded_xtc_viewer_document()
-        except Exception:
-            return False
+        return _is_file_viewer_mode_active_impl(self)
 
     def _apply_file_viewer_mode_preview_button_state(self: MainWindow) -> bool:
-        """Neutralize the Preview Update button while loaded XTC/XTCH is shown.
-
-        Returning True means file-viewer mode handled the button state.
-        """
-        if not self._is_file_viewer_mode_active():
-            return False
-        button = getattr(self, 'preview_update_btn', None)
-        if button is not None:
-            try:
-                button.setEnabled(False)
-            except Exception:
-                pass
-            try:
-                button.setText(self._ui_text('ファイル表示中'))
-            except Exception:
-                pass
-            try:
-                button.setToolTip(self._ui_text('ファイルビューワーモードではXTC/XTCHを直接表示しているため、プレビュー更新は不要です。'))
-            except Exception:
-                pass
-            self._set_preview_update_button_visual_state('viewer')
-        try:
-            self._update_preview_status_label(self._ui_text('ファイルビューワーモード: XTC/XTCHを直接表示中です'))
-        except Exception:
-            pass
-        return True
+        return _apply_file_viewer_mode_preview_button_state_impl(self)
 
     def _restore_preview_update_button_from_file_viewer_state(self: MainWindow) -> None:
-        button = getattr(self, 'preview_update_btn', None)
-        if button is None:
-            return
-        current_visual = str(getattr(self, '_preview_update_button_visual_state', 'idle') or 'idle')
-        current_text = str(getattr(button, 'text_value', '') or '')
-        text_getter = getattr(button, 'text', None)
-        if callable(text_getter):
-            try:
-                current_text = str(text_getter() or '')
-            except Exception:
-                current_text = str(getattr(button, 'text_value', '') or '')
-        if current_visual != 'viewer' and current_text not in {'ファイル表示中', self._ui_text('ファイル表示中')}:
-            return
-        try:
-            button.setEnabled(True)
-        except Exception:
-            pass
-        try:
-            button.setText(self._ui_text('プレビュー更新'))
-        except Exception:
-            pass
-        try:
-            button.setToolTip('')
-        except Exception:
-            pass
-        self._set_preview_update_button_visual_state('idle')
+        _restore_preview_update_button_from_file_viewer_state_impl(self)
 
     def _refresh_preview_update_button_for_current_state(
         self: MainWindow,
         context: Mapping[str, object] | None = None,
     ) -> None:
-        """Reconcile Preview Update button from current state in one place.
-
-        Older code paths pushed button text/state directly, which made stale
-        viewer labels such as 「ファイル表示中」 easy to leave behind when a
-        normal target change escaped one of the explicit cleanup calls.  This
-        helper keeps the operation pull-like: file-viewer state wins, then
-        running/pending flags, then the worker-provided idle context.
-        """
-        button = getattr(self, 'preview_update_btn', None)
-        if button is None:
-            return
-        if self._apply_file_viewer_mode_preview_button_state():
-            return
-
-        button_state = studio_logic.build_preview_button_state(context)
-        button_enabled = bool(button_state.get('button_enabled', True))
-        button_text = str(button_state.get('button_text', 'プレビュー更新'))
-
-        running = bool(
-            getattr(self, '_preview_running', False)
-            or getattr(self, '_target_preview_refresh_running', False)
-        )
-        if running or (not button_enabled) or button_text == '生成中…' or button_text == self._ui_text('生成中…'):
-            try:
-                button.setEnabled(False if running else button_enabled)
-            except Exception:
-                pass
-            try:
-                button.setText(self._ui_text('生成中…') if running else self._ui_text(button_text))
-            except Exception:
-                pass
-            self._set_preview_update_button_visual_state('refreshing')
-            return
-
-        pending = bool(getattr(self, '_settings_preview_refresh_pending', False))
-        if pending:
-            try:
-                button.setEnabled(True)
-            except Exception:
-                pass
-            try:
-                button.setText('● ' + self._ui_text('プレビュー更新'))
-            except Exception:
-                pass
-            try:
-                button.setToolTip('')
-            except Exception:
-                pass
-            self._set_preview_update_button_visual_state('pending')
-            return
-
-        try:
-            button.setEnabled(button_enabled)
-        except Exception:
-            pass
-        try:
-            button.setText(self._ui_text(button_text or 'プレビュー更新'))
-        except Exception:
-            pass
-        try:
-            button.setToolTip('')
-        except Exception:
-            pass
-        self._set_preview_update_button_visual_state('idle')
+        _refresh_preview_update_button_for_current_state_impl(self, context)
 
     def _mark_preview_update_button_pending(self: MainWindow) -> None:
-        """Show that a debounced live preview refresh has been queued."""
-        if self._apply_file_viewer_mode_preview_button_state():
-            return
-        button = getattr(self, 'preview_update_btn', None)
-        if button is None:
-            return
-        try:
-            button.setEnabled(True)
-        except Exception:
-            pass
-        try:
-            button.setText('● ' + self._ui_text('プレビュー更新'))
-        except Exception:
-            pass
-        self._set_preview_update_button_visual_state('pending')
+        _mark_preview_update_button_pending_impl(self)
 
     def _schedule_live_preview_refresh_from_signal(self: MainWindow, *_args: object) -> None:
-        self._schedule_live_preview_refresh(reset_page=False)
+        _schedule_live_preview_refresh_from_signal_impl(self, *_args)
 
     def _has_refreshable_preview_target(self: MainWindow) -> bool:
-        """Return True when settings changes can regenerate a preview from the current target.
-
-        Live preview must keep working even after an intermediate UI action clears
-        the cached preview pages.  In that state the presence of an existing
-        target path is enough to allow a debounced settings refresh to rebuild
-        the preview instead of silently falling back to a dirty placeholder.
-        """
-        try:
-            payload = self._current_preview_payload()
-        except Exception:
-            payload = {}
-        target_text = ''
-        if isinstance(payload, Mapping):
-            # build_preview_payload() exposes the selected file as ``target_path``.
-            # Keep ``target`` as a compatibility fallback for older tests/helpers.
-            target_text = str(payload.get('target_path') or payload.get('target') or '').strip()
-        if target_text:
-            try:
-                return Path(target_text).exists()
-            except (OSError, ValueError):
-                return False
-        image_data_url = ''
-        if isinstance(payload, Mapping):
-            # Image-preview payloads use ``file_b64``; the previous
-            # ``preview_image_data_url`` key is accepted as a fallback only.
-            image_data_url = str(payload.get('file_b64') or payload.get('preview_image_data_url') or '').strip()
-        return bool(image_data_url)
+        return _has_refreshable_preview_target_impl(self)
 
     def _has_active_preview_for_live_refresh(self: MainWindow) -> bool:
-        font_view_active = self._normalized_main_view_mode(
-            getattr(self, 'main_view_mode', 'font')
-        ) == 'font'
-        try:
-            has_font_preview = bool(self._runtime_preview_pages())
-        except Exception:
-            has_font_preview = False
-        try:
-            device_preview_active = self._effective_device_view_source() == 'preview'
-        except Exception:
-            device_preview_active = False
-        try:
-            has_device_preview = bool(self._runtime_device_preview_pages())
-        except Exception:
-            has_device_preview = False
-        has_runtime_preview = bool((font_view_active and has_font_preview) or (device_preview_active and has_device_preview))
-        return bool(has_runtime_preview or self._has_refreshable_preview_target())
+        return _has_active_preview_for_live_refresh_impl(self)
 
     def _queue_live_preview_refresh_timer(self: MainWindow, callback: Callable[[], None], delay_ms: int) -> bool:
         single_shot = getattr(QTimer, 'singleShot', None)
@@ -5368,21 +3140,7 @@ class MainWindow(QMainWindow):
         return False
 
     def _cancel_pending_settings_live_preview_refresh(self: MainWindow) -> None:
-        # v1.3.5: 手動の「プレビュー更新」が開始された時点で、設定変更由来の
-        # live-preview timer を無効化する。未処理 timer が request_preview_refresh()
-        # 冒頭の processEvents() 中に発火すると、生成完了後に後続 preview を予約し、
-        # 「プレビュー更新で暴走」して見えるため。QTimer.singleShot 自体はキャンセル
-        # できないので generation を進め、pending/deferred 状態も明示的に落とす。
-        try:
-            self._settings_preview_refresh_generation = int(
-                getattr(self, '_settings_preview_refresh_generation', 0) or 0
-            ) + 1
-        except Exception:
-            self._settings_preview_refresh_generation = 1
-        self._settings_preview_refresh_pending = False
-        self._settings_preview_refresh_pending_reset_page = False
-        self._settings_preview_refresh_scheduled = False
-        self._settings_preview_refresh_deferred_until_preview_finished = False
+        _cancel_pending_settings_live_preview_refresh_impl(self)
 
     def _schedule_live_preview_refresh(
         self: MainWindow,
@@ -5390,212 +3148,13 @@ class MainWindow(QMainWindow):
         reset_page: bool = False,
         delay_ms: int = _SETTINGS_PREVIEW_REFRESH_DELAY_MS,
     ) -> bool:
-        """Debounce appearance/layout setting changes into one preview refresh.
-
-        Font size, ruby size, line spacing, margins, kinsoku mode, glyph-position
-        correction, font choice, and output format all affect the preview image.
-        Running a full preview for every spin-box step is wasteful, so keep the
-        preview visibly stale immediately and let only the newest timer callback
-        regenerate the preview after the event stream settles.  When no preview
-        has been generated yet, fall back to the existing dirty placeholder
-        instead of starting an empty refresh.
-        """
-        try:
-            if self._is_file_viewer_mode_active():
-                self._cancel_auto_live_preview_due_to_large_limit()
-                self._apply_file_viewer_mode_preview_button_state()
-                try:
-                    self._apply_preview_progress_bar_context(preview_controller.build_preview_finish_context())
-                except Exception:
-                    pass
-                return False
-        except Exception:
-            pass
-
-        if not self._has_active_preview_for_live_refresh():
-            try:
-                self.mark_preview_dirty()
-            except Exception:
-                pass
-            try:
-                self._apply_preview_progress_bar_context(preview_controller.build_preview_finish_context())
-            except Exception:
-                pass
-            return False
-
-        if not self._should_auto_live_preview_refresh():
-            try:
-                self.mark_preview_dirty()
-            except Exception:
-                pass
-            self._cancel_auto_live_preview_due_to_large_limit()
-            try:
-                self._apply_manual_preview_required_context()
-            except Exception:
-                pass
-            return True
-
-        try:
-            self.mark_preview_dirty()
-        except Exception:
-            pass
-
-        generation = int(getattr(self, '_settings_preview_refresh_generation', 0) or 0) + 1
-        self._settings_preview_refresh_generation = generation
-        self._settings_preview_refresh_pending = True
-        self._settings_preview_refresh_pending_reset_page = bool(reset_page) or bool(
-            getattr(self, '_settings_preview_refresh_pending_reset_page', False)
-        )
-        self._settings_preview_refresh_scheduled = True
-        self._mark_preview_update_button_pending()
-        self._apply_preview_pending_progress_context('設定変更を反映するプレビュー更新を準備しています…')
-
-        def _run_live_preview_refresh(expected_generation: int) -> None:
-            if expected_generation != int(getattr(self, '_settings_preview_refresh_generation', 0) or 0):
-                return
-            self._settings_preview_refresh_scheduled = False
-            if not bool(getattr(self, '_settings_preview_refresh_pending', False)):
-                return
-            if bool(getattr(self, '_preview_running', False)):
-                # v1.3.3.45: プレビュー生成中に設定変更が入った場合、50ms 間隔で
-                # 完了待ちポーリングを積み続けない。ディザリング ON のように重い
-                # プレビューでは、このポーリングが「更新状態で暴走」に見えるため、
-                # 現在の生成完了後に 1 回だけ後続更新を予約する。
-                self._settings_preview_refresh_scheduled = False
-                self._settings_preview_refresh_deferred_until_preview_finished = True
-                return
-            reset_page_for_run = bool(
-                getattr(self, '_settings_preview_refresh_pending_reset_page', reset_page)
-            )
-            self._settings_preview_refresh_pending = False
-            self._settings_preview_refresh_pending_reset_page = False
-            try:
-                refreshed = bool(self.request_preview_refresh(reset_page=reset_page_for_run))
-            except Exception:
-                refreshed = False
-            if not refreshed:
-                try:
-                    self.mark_preview_dirty()
-                except Exception:
-                    pass
-
-        if self._queue_live_preview_refresh_timer(lambda: _run_live_preview_refresh(generation), delay_ms):
-            return True
-        self._settings_preview_refresh_scheduled = False
-        _run_live_preview_refresh(generation)
-        return True
+        return _schedule_live_preview_refresh_impl(self, reset_page=reset_page, delay_ms=delay_ms)
 
     def mark_preview_dirty_for_target_change(self: MainWindow) -> None:
-        """Mark preview stale after target-path changes without heavy side effects.
-
-        This path intentionally avoids EPUB/archive probing, preview generation,
-        XTC/XTCH reading, results-list synchronization, and device-page rendering.
-        Target selection should only update lightweight UI state; the preview is
-        generated later by manual_refresh_preview().
-        """
-        self.preview_dirty = True
-        self.preview_pages_b64 = []
-        self.device_preview_pages_b64 = []
-        self.preview_pages_truncated = False
-        self.device_preview_pages_truncated = False
-        self.current_preview_page_index = 0
-        self.current_device_preview_page_index = 0
-        self.device_view_source = 'xtc'
-        try:
-            self._clear_font_preview_page_pixmap_cache()
-        except Exception:
-            pass
-        try:
-            self._clear_device_preview_page_qimage_cache()
-        except Exception:
-            pass
-        placeholder = 'プレビューを生成してください'
-        if self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) == 'font':
-            try:
-                self._show_preview_message(placeholder)
-            except Exception:
-                pass
-        try:
-            self._update_preview_status_label(placeholder)
-        except Exception:
-            pass
-        try:
-            self.update_navigation_ui()
-        except Exception:
-            pass
+        _mark_preview_dirty_for_target_change_impl(self)
 
     def mark_preview_dirty(self: MainWindow) -> None:
-        try:
-            if self._is_file_viewer_mode_active():
-                self.preview_dirty = False
-                previous_device_source = getattr(self, 'device_view_source', 'xtc')
-                if previous_device_source == 'preview':
-                    self.device_view_source = 'xtc'
-                    self.current_device_preview_page_index = 0
-                try:
-                    self._sync_loaded_xtc_display_context_for_device_view()
-                except Exception:
-                    pass
-                try:
-                    if self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) == 'device' and previous_device_source == 'preview':
-                        self.render_current_page(refresh_navigation=True)
-                except Exception:
-                    try:
-                        self._clear_xtc_viewer_page(refresh_navigation=True)
-                    except Exception:
-                        pass
-                self._apply_file_viewer_mode_preview_button_state()
-                return
-        except Exception:
-            pass
-        self.preview_dirty = True
-        has_runtime_preview = False
-        try:
-            has_runtime_preview = bool(self._runtime_preview_pages() or self._runtime_device_preview_pages())
-        except Exception:
-            has_runtime_preview = False
-        if not has_runtime_preview:
-            placeholder = 'プレビューを生成してください'
-            try:
-                self._set_current_xtc_display_name(self._preview_failure_display_name())
-            except Exception:
-                pass
-            try:
-                restored_path = self._preview_failure_loaded_path()
-                if restored_path:
-                    self._sync_results_selection_for_loaded_path_with_fallback(restored_path)
-                else:
-                    self._clear_results_selection_with_fallback(
-                        results_controller.build_results_clear_selection_context()
-                    )
-            except Exception:
-                pass
-            normalized_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
-            previous_device_source = getattr(self, 'device_view_source', 'xtc')
-            if previous_device_source == 'preview':
-                self.device_view_source = 'xtc'
-            self.current_device_preview_page_index = 0
-            if normalized_mode == 'font':
-                self._show_preview_message(placeholder)
-                try:
-                    self.update_navigation_ui()
-                except Exception:
-                    pass
-            if normalized_mode == 'device' and previous_device_source == 'preview':
-                try:
-                    if self._runtime_xtc_pages():
-                        self.render_current_page(refresh_navigation=True)
-                    else:
-                        self._clear_xtc_viewer_page(refresh_navigation=True)
-                except Exception:
-                    try:
-                        self._clear_xtc_viewer_page(refresh_navigation=True)
-                    except Exception:
-                        pass
-            self._update_preview_status_label(placeholder)
-            return
-        self._mark_preview_update_button_pending()
-        self._update_preview_status_label(studio_logic.build_preview_status_message('dirty', language=self.current_ui_language_value()))
+        _mark_preview_dirty_impl(self)
 
     def _update_preview_status_label(self: MainWindow, text: object) -> None:
         if hasattr(self, 'preview_status_label'):
@@ -5640,34 +3199,7 @@ class MainWindow(QMainWindow):
         self: MainWindow,
         enabled_override: bool | None = None,
     ) -> int:
-        if enabled_override is None:
-            try:
-                enabled = bool(
-                    getattr(self, 'page_number_check', None) is not None
-                    and self.page_number_check.isChecked()
-                )
-            except Exception:
-                enabled = False
-        else:
-            enabled = bool(enabled_override)
-        progress_enabled = False
-        try:
-            progress_enabled = bool(
-                getattr(self, 'progress_bar_check', None) is not None
-                and self.progress_bar_check.isChecked()
-            )
-        except Exception:
-            progress_enabled = False
-        required = 0
-        if enabled:
-            try:
-                size = int(self.page_number_font_size_spin.value())
-            except Exception:
-                size = 12
-            required = max(required, size + 1)
-        if progress_enabled:
-            required = max(required, 10)
-        return max(0, required)
+        return _minimum_bottom_overlay_margin_impl(self, enabled_override)
 
     def _effective_bottom_overlay_margin(
         self: MainWindow,
@@ -5675,250 +3207,25 @@ class MainWindow(QMainWindow):
         *,
         enabled_override: bool | None = None,
     ) -> int:
-        if margin_b is None:
-            widget = getattr(self, 'margin_b_spin', None)
-            try:
-                margin_b = int(widget.value()) if widget is not None and hasattr(widget, 'value') else 0
-            except Exception:
-                margin_b = 0
-        return max(0, int(margin_b), self._minimum_bottom_overlay_margin(enabled_override))
+        return _effective_bottom_overlay_margin_impl(self, margin_b, enabled_override=enabled_override)
 
     def _current_bottom_overlay_margin_auto_state(self: MainWindow) -> dict[str, int | bool] | None:
-        state = getattr(self, '_bottom_overlay_margin_auto_state', None)
-        if not isinstance(state, dict) or not bool(state.get('active')):
-            return None
-        try:
-            base_value = max(0, int(state.get('base_value', 0)))
-            auto_value = max(0, int(state.get('auto_value', 0)))
-        except Exception:
-            return None
-        widget = getattr(self, 'margin_b_spin', None)
-        try:
-            current = max(0, int(widget.value())) if widget is not None and hasattr(widget, 'value') else auto_value
-        except Exception:
-            current = auto_value
-        if current != auto_value:
-            return None
-        return {'active': True, 'base_value': base_value, 'auto_value': auto_value}
+        return _current_bottom_overlay_margin_auto_state_impl(self)
 
     def _restore_bottom_overlay_margin_auto_state_from_payload(self: MainWindow, payload: Mapping[str, object]) -> None:
-        if not isinstance(payload, Mapping):
-            return
-        try:
-            primary_active = worker_logic._bool_config_value(payload, 'bottom_overlay_margin_auto_active', False)
-            legacy_active = worker_logic._bool_config_value(payload, 'page_number_margin_auto_active', False)
-            use_legacy = bool(not primary_active and legacy_active)
-            active = bool(primary_active or legacy_active)
-        except Exception:
-            active = False
-            use_legacy = False
-        if not active:
-            try:
-                delattr(self, '_bottom_overlay_margin_auto_state')
-            except Exception:
-                pass
-            return
-        widget = getattr(self, 'margin_b_spin', None)
-        try:
-            current = max(0, int(widget.value())) if widget is not None and hasattr(widget, 'value') else 0
-            base_key = (
-                'page_number_margin_auto_base_value'
-                if use_legacy
-                else 'bottom_overlay_margin_auto_base_value'
-            )
-            auto_key = (
-                'page_number_margin_auto_value'
-                if use_legacy
-                else 'bottom_overlay_margin_auto_value'
-            )
-            base_value = max(0, worker_logic._int_config_value(payload, base_key, current))
-            auto_value = max(0, worker_logic._int_config_value(payload, auto_key, current))
-        except Exception:
-            return
-        try:
-            enabled = bool(
-                (getattr(self, 'page_number_check', None) is not None and self.page_number_check.isChecked())
-                or (getattr(self, 'progress_bar_check', None) is not None and self.progress_bar_check.isChecked())
-            )
-        except Exception:
-            enabled = False
-        if enabled and current == auto_value and auto_value >= base_value:
-            setattr(self, '_bottom_overlay_margin_auto_state', {
-                'active': True,
-                'base_value': int(base_value),
-                'auto_value': int(auto_value),
-            })
-        else:
-            try:
-                delattr(self, '_bottom_overlay_margin_auto_state')
-            except Exception:
-                pass
+        _restore_bottom_overlay_margin_auto_state_from_payload_impl(self, payload)
 
     def _bottom_overlay_margin_auto_save_payload(self: MainWindow) -> dict[str, object]:
-        state = self._current_bottom_overlay_margin_auto_state()
-        if state is None:
-            value = self._safe_widget_value('margin_b_spin', 14)
-            return {
-                'bottom_overlay_margin_auto_active': False,
-                'bottom_overlay_margin_auto_base_value': value,
-                'bottom_overlay_margin_auto_value': value,
-                # Transitional aliases for v1.4.1.1/v1.4.1.2 ini compatibility.
-                'page_number_margin_auto_active': False,
-                'page_number_margin_auto_base_value': value,
-                'page_number_margin_auto_value': value,
-            }
-        base_value = int(state['base_value'])
-        auto_value = int(state['auto_value'])
-        return {
-            'bottom_overlay_margin_auto_active': True,
-            'bottom_overlay_margin_auto_base_value': base_value,
-            'bottom_overlay_margin_auto_value': auto_value,
-            # Transitional aliases for v1.4.1.1/v1.4.1.2 ini compatibility.
-            'page_number_margin_auto_active': True,
-            'page_number_margin_auto_base_value': base_value,
-            'page_number_margin_auto_value': auto_value,
-        }
+        return _bottom_overlay_margin_auto_save_payload_impl(self)
 
     def _clear_bottom_overlay_margin_auto_state_if_bottom_margin_was_edited(self: MainWindow) -> None:
-        state = getattr(self, '_bottom_overlay_margin_auto_state', None)
-        if not isinstance(state, dict) or not bool(state.get('active')):
-            return
-        widget = getattr(self, 'margin_b_spin', None)
-        try:
-            current = max(0, int(widget.value())) if widget is not None and hasattr(widget, 'value') else 0
-            auto_value = max(0, int(state.get('auto_value', 0)))
-        except Exception:
-            return
-        if current != auto_value:
-            try:
-                delattr(self, '_bottom_overlay_margin_auto_state')
-            except Exception:
-                pass
+        _clear_bottom_overlay_margin_auto_state_if_bottom_margin_was_edited_impl(self)
 
     def _sync_bottom_overlay_margin_to_ui(
         self: MainWindow,
         enabled_override: bool | None = None,
     ) -> bool:
-        """Sync the visible bottom margin with lower overlay requirements.
-
-        Page numbers reserve at least ``font_size + 1`` pixels and the
-        progress bar reserves a small bottom lane.  The spinbox should show
-        the effective bottom margin too.  When an overlay requirement grows,
-        raise the bottom margin automatically.  When it shrinks, lower the
-        spinbox again only if the current value still appears to be the value
-        that this helper previously set automatically.  A larger user-set
-        bottom margin is preserved.
-        """
-        required = self._minimum_bottom_overlay_margin(enabled_override)
-        widget = getattr(self, 'margin_b_spin', None)
-        if widget is None or not hasattr(widget, 'value') or not hasattr(widget, 'setValue'):
-            return False
-        try:
-            current = max(0, int(widget.value()))
-        except Exception:
-            current = 0
-
-        state = getattr(self, '_bottom_overlay_margin_auto_state', None)
-        auto_active = isinstance(state, dict) and bool(state.get('active'))
-        auto_value = None
-        base_value = None
-        if auto_active:
-            try:
-                auto_value = max(0, int(state.get('auto_value', 0)))
-            except Exception:
-                auto_value = None
-            try:
-                base_value = max(0, int(state.get('base_value', 0)))
-            except Exception:
-                base_value = None
-            # If the user edited the margin after our previous automatic set,
-            # stop treating it as auto-managed.
-            if auto_value is None or current != auto_value:
-                auto_active = False
-                auto_value = None
-                base_value = None
-                try:
-                    delattr(self, '_bottom_overlay_margin_auto_state')
-                except Exception:
-                    pass
-
-        if required <= 0:
-            # Lower overlays are OFF.  If the bottom margin still matches the
-            # value that this helper set automatically, restore the user's
-            # pre-auto margin.  If the user has edited the margin after auto
-            # expansion, keep the user value and simply clear auto-management.
-            if auto_active and auto_value is not None and base_value is not None:
-                target = int(base_value)
-                if target == current:
-                    try:
-                        delattr(self, '_bottom_overlay_margin_auto_state')
-                    except Exception:
-                        pass
-                    return False
-                blocked_old = None
-                block_signals = getattr(widget, 'blockSignals', None)
-                if callable(block_signals):
-                    try:
-                        blocked_old = block_signals(True)
-                    except Exception:
-                        blocked_old = None
-                try:
-                    widget.setValue(int(target))
-                finally:
-                    if callable(block_signals):
-                        try:
-                            block_signals(bool(blocked_old))
-                        except Exception:
-                            pass
-                try:
-                    delattr(self, '_bottom_overlay_margin_auto_state')
-                except Exception:
-                    pass
-                return True
-            return False
-
-        target = current
-        if current < required:
-            if not auto_active:
-                base_value = current
-            target = required
-        elif auto_active and auto_value is not None and base_value is not None:
-            # The overlay requirement shrank.  Follow it downward, but do
-            # not go below the bottom margin the user had before auto-expansion.
-            target = max(base_value, required)
-        else:
-            return False
-
-        if target == current:
-            if auto_active:
-                setattr(self, '_bottom_overlay_margin_auto_state', {
-                    'active': True,
-                    'base_value': int(base_value if base_value is not None else current),
-                    'auto_value': int(current),
-                })
-            return False
-
-        blocked_old = None
-        block_signals = getattr(widget, 'blockSignals', None)
-        if callable(block_signals):
-            try:
-                blocked_old = block_signals(True)
-            except Exception:
-                blocked_old = None
-        try:
-            widget.setValue(int(target))
-        finally:
-            if callable(block_signals):
-                try:
-                    block_signals(bool(blocked_old))
-                except Exception:
-                    pass
-        setattr(self, '_bottom_overlay_margin_auto_state', {
-            'active': True,
-            'base_value': int(base_value if base_value is not None else current),
-            'auto_value': int(target),
-        })
-        return True
+        return _sync_bottom_overlay_margin_to_ui_impl(self, enabled_override)
 
     def _current_guide_margins(self: MainWindow) -> tuple[int, int, int, int]:
         values: list[int] = []
@@ -5961,141 +3268,32 @@ class MainWindow(QMainWindow):
         page_width: int = 0,
         page_height: int = 0,
     ) -> object:
-        """Fontビューのプレビューを実機に近い見た目へ寄せるための装飾。
-
-        - ガイドOFF: 青い帯は出さない（枠線だけ）
-        - ガイドON : 実機ビューと同様に非描画域の帯 + 点線ガイドを重ねる
-
-        Qt が無い環境（回帰テスト用スタブ）では、そのまま返す。
-        """
-        dark = bool(getattr(self, 'current_ui_theme', 'light') == 'dark')
-        show_guides = False
-        try:
-            if hasattr(self, 'guides_check') and hasattr(self.guides_check, 'isChecked'):
-                show_guides = bool(self.guides_check.isChecked())
-        except Exception:
-            show_guides = False
-
-        try:
-            out = pix.copy()
-        except Exception:
-            out = pix
-
-        try:
-            painter = QPainter(out)
-            painter.setRenderHint(QPainter.Antialiasing, True)
-            screen_border = QColor('#6D8295') if dark else QColor('#94A3B3')
-            painter.setPen(QPen(screen_border, 1.0))
-            rect = out.rect().adjusted(0, 0, -1, -1)
-            painter.drawRect(rect)
-
-            if show_guides:
-                ref_w = max(1, int(page_width or out.width() or 1))
-                ref_h = max(1, int(page_height or out.height() or 1))
-                guide_rect = self._guide_rect_for_preview_rect(rect, ref_w, ref_h)
-                if guide_rect != rect:
-                    guide_band = QPainterPath()
-                    guide_band.addRect(rect)
-                    guide_band.addRect(guide_rect)
-                    painter.fillPath(
-                        guide_band,
-                        QColor(75, 152, 255, 48) if not dark else QColor(114, 173, 255, 40),
-                    )
-                    guide_color = QColor(114, 173, 255, 120) if dark else QColor(75, 152, 255, 110)
-                    painter.setPen(QPen(guide_color, 1, Qt.DashLine))
-                    painter.drawRect(guide_rect)
-            try:
-                painter.end()
-            except Exception:
-                pass
-        except Exception:
-            return out
-        return out
-
+        return _decorate_font_view_pixmap_impl(
+            self,
+            pix,
+            page_width=page_width,
+            page_height=page_height,
+        )
 
     def _preview_pixmap_from_png_bytes(self: MainWindow, raw: bytes) -> object:
-        qimg = QImage.fromData(raw, 'PNG')
-        qimg_is_null = getattr(qimg, 'isNull', None)
-        if callable(qimg_is_null) and qimg_is_null():
-            raise RuntimeError('プレビュー画像の読み込みに失敗しました。')
-        pix = QPixmap.fromImage(qimg)
-        pix_is_null = getattr(pix, 'isNull', None)
-        if callable(pix_is_null) and pix_is_null():
-            raise RuntimeError('プレビュー画像の描画準備に失敗しました。')
-        return pix
+        return _preview_pixmap_from_png_bytes_impl(self, raw, qimage_cls=QImage, qpixmap_cls=QPixmap)
 
     def _apply_preview_pixmap(self: MainWindow, pix: object) -> None:
-        try:
-            orig_w = max(1, int(pix.width()))
-            orig_h = max(1, int(pix.height()))
-        except Exception:
-            orig_w = orig_h = 0
-        target = self._font_preview_target_size()
-        if target.width() < 10 or target.height() < 10:
-            target = QSize(480, 720)
-        scaled = pix.scaled(target, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        scaled = self._decorate_font_view_pixmap(scaled, page_width=orig_w, page_height=orig_h)
-        scaled_size = scaled.size()
-        self._last_font_preview_scaled_size = (int(scaled_size.width()), int(scaled_size.height()))
-        try:
-            self.preview_label.setMinimumSize(scaled_size)
-            self.preview_label.setMaximumSize(scaled_size)
-        except Exception:
-            pass
-        self.preview_label.resize(scaled_size)
-        self.preview_label.setPixmap(scaled)
-        self.preview_label.setText('')
-        self._sync_font_preview_scroll_placement(reset_horizontal=True)
+        return _apply_preview_pixmap_impl(self, pix)
 
     def _apply_preview_png_bytes(self: MainWindow, raw: bytes) -> None:
-        self._apply_preview_pixmap(self._preview_pixmap_from_png_bytes(raw))
+        return _apply_preview_png_bytes_impl(self, raw)
 
     def _apply_preview_page_base64_to_label(self: MainWindow, page_b64: object, *, cache_key: object = None) -> None:
-        img_b64 = self._coerce_preview_base64_text(page_b64)
-        if not img_b64:
-            self._show_preview_message('プレビューを生成できませんでした')
-            return
-        pix = self._cached_font_preview_page_pixmap(cache_key)
-        if pix is None:
-            raw = base64.b64decode(img_b64, validate=True)
-            pix = self._preview_pixmap_from_png_bytes(raw)
-            self._store_font_preview_page_pixmap(cache_key, pix)
-        self._apply_preview_pixmap(pix)
+        return _apply_preview_page_base64_to_label_impl(self, page_b64, cache_key=cache_key)
 
     def _render_current_xtc_page_in_font_view(self: MainWindow, *, refresh_navigation: bool = True) -> bool:
-        """Render the loaded XTC/XTCH page into the font-view preview area.
-
-        File-viewer mode owns both the device view and font view.  When old
-        conversion preview pages remain cached, switching back to font view must
-        still show the opened XTC/XTCH page instead of a stale generated preview.
-        """
-        blob = self._current_xtc_page_blob(force_loaded_xtc=True)
-        if blob is None:
-            return False
-        cache_key = self._xtc_page_qimage_cache_key()
-        qimg = self._cached_xtc_page_qimage(cache_key)
-        if qimg is None:
-            qimg = xt_page_blob_to_qimage(blob)
-            self._store_xtc_page_qimage(cache_key, qimg)
-        pix = QPixmap.fromImage(qimg)
-        pix_is_null = getattr(pix, 'isNull', None)
-        if callable(pix_is_null) and pix_is_null():
-            raise RuntimeError('ファイルビューワー画像の描画準備に失敗しました。')
-        self._apply_preview_pixmap(pix)
-        try:
-            self._sync_loaded_xtc_display_context_for_device_view()
-        except Exception:
-            pass
-        try:
-            self._update_preview_status_label(self._ui_text('ファイルビューワーモード: XTC/XTCHを直接表示中です'))
-        except Exception:
-            pass
-        if refresh_navigation:
-            try:
-                self.update_navigation_ui()
-            except Exception:
-                pass
-        return True
+        return _render_current_xtc_page_in_font_view_impl(
+            self,
+            refresh_navigation=refresh_navigation,
+            qpixmap_cls=QPixmap,
+            xt_page_blob_to_qimage_func=xt_page_blob_to_qimage,
+        )
 
     def _sync_preview_display_context_for_font_view(self: MainWindow) -> None:
         if not self._runtime_preview_pages():
@@ -6109,175 +3307,44 @@ class MainWindow(QMainWindow):
         )
 
     def _ui_widget_text(self: MainWindow, widget: object) -> str:
-        text_getter = getattr(widget, 'text', None)
-        if callable(text_getter):
-            try:
-                return _coerce_ui_message_text(text_getter()).strip()
-            except Exception:
-                return ''
-        return ''
+        return _ui_widget_text_impl(self, widget)
 
     def _ui_widget_index(self: MainWindow, widget: object) -> int | None:
-        current_index_getter = getattr(widget, 'currentIndex', None)
-        if callable(current_index_getter):
-            try:
-                return int(current_index_getter())
-            except Exception:
-                pass
-        if hasattr(widget, 'index'):
-            try:
-                return int(getattr(widget, 'index'))
-            except Exception:
-                return None
-        return None
+        return _ui_widget_index_impl(self, widget)
 
     def _is_render_failure_status_text(self: MainWindow, text: object) -> bool:
-        return studio_logic.is_render_failure_status_text(text)
+        return _is_render_failure_status_text_impl(self, text)
 
     def _is_preview_render_failure_status_text(self: MainWindow, text: object) -> bool:
-        return studio_logic.is_preview_render_failure_status_text(text)
+        return _is_preview_render_failure_status_text_impl(self, text)
 
     def _is_device_render_failure_status_text(self: MainWindow, text: object) -> bool:
-        return studio_logic.is_device_render_failure_status_text(text)
+        return _is_device_render_failure_status_text_impl(self, text)
 
     def _display_context_name_from_label_text(self: MainWindow, text: object) -> str:
-        return studio_logic.display_context_name_from_label_text(text)
+        return _display_context_name_from_label_text_impl(self, text)
 
     def _render_failure_preserved_display_name(self: MainWindow, text: object) -> str:
-        return studio_logic.render_failure_preserved_display_name(text)
+        return _render_failure_preserved_display_name_impl(self, text)
 
     def _device_render_failure_matches_visible_display_context(self: MainWindow, text: object) -> bool:
-        normalized = _coerce_ui_message_text(text).strip()
-        if not self._is_device_render_failure_status_text(normalized):
-            return False
-        visible_label_text = self._ui_widget_text(getattr(self, 'current_xtc_label', None))
-        visible_label_normalized = _coerce_ui_message_text(visible_label_text).strip()
-        visible_display_name = ''
-        if visible_label_normalized.startswith(('表示中:', 'Viewing:')):
-            visible_display_name = self._display_context_name_from_label_text(visible_label_normalized)
-        return studio_logic.render_failure_matches_display_context(normalized, visible_display_name)
+        return _device_render_failure_matches_visible_display_context_impl(self, text)
 
     def _preview_render_failure_matches_visible_display_context(self: MainWindow, text: object) -> bool:
-        normalized = _coerce_ui_message_text(text).strip()
-        if not self._is_preview_render_failure_status_text(normalized):
-            return False
-        preserved_display_name = self._render_failure_preserved_display_name(normalized)
-        if not preserved_display_name:
-            return True
-        try:
-            view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
-        except Exception:
-            view_mode = 'font'
-        visible_display_name = ''
-        preview_source_active = False
-        if view_mode == 'font':
-            try:
-                preview_pages_visible = bool(self._runtime_preview_pages())
-            except Exception:
-                preview_pages_visible = False
-            if preview_pages_visible:
-                visible_display_name = 'Preview' if self.current_ui_language_value() == 'en' else 'プレビュー'
-        else:
-            try:
-                preview_source_active = self._normalized_device_view_source_value(
-                    getattr(self, 'device_view_source', 'xtc'),
-                    default='xtc',
-                ) == 'preview'
-            except Exception:
-                preview_source_active = False
-            if preview_source_active:
-                visible_label_text = self._ui_widget_text(getattr(self, 'current_xtc_label', None))
-                visible_display_name = self._display_context_name_from_label_text(visible_label_text)
-                if not visible_display_name or visible_display_name == 'なし':
-                    visible_display_name = 'Preview' if self.current_ui_language_value() == 'en' else 'プレビュー'
-        if visible_display_name:
-            return preserved_display_name == visible_display_name
-        if view_mode == 'device':
-            return preview_source_active
-        return True
+        return _preview_render_failure_matches_visible_display_context_impl(self, text)
 
     def _visible_render_failure_status_text(self: MainWindow) -> str:
-        try:
-            view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
-        except Exception:
-            view_mode = 'font'
-        progress_text = self._ui_widget_text(getattr(self, 'progress_label', None))
-        status_bar_text = self._status_bar_message_text()
-        if view_mode == 'font':
-            preview_status_text = self._ui_widget_text(getattr(self, 'preview_status_label', None))
-            for candidate in (preview_status_text, progress_text, status_bar_text):
-                if (
-                    self._is_preview_render_failure_status_text(candidate)
-                    and self._preview_render_failure_matches_visible_display_context(candidate)
-                ):
-                    return candidate
-            try:
-                preview_pages_visible = bool(self._runtime_preview_pages())
-            except Exception:
-                preview_pages_visible = False
-            if not preview_pages_visible:
-                for candidate in (progress_text, status_bar_text):
-                    if (
-                        self._is_device_render_failure_status_text(candidate)
-                        and self._device_render_failure_matches_visible_display_context(candidate)
-                    ):
-                        return candidate
-            return ''
-        for candidate in (progress_text, status_bar_text):
-            if (
-                self._is_device_render_failure_status_text(candidate)
-                and self._device_render_failure_matches_visible_display_context(candidate)
-            ):
-                return candidate
-        try:
-            device_pages_visible = bool(
-                self._runtime_device_preview_pages()
-                if self._effective_device_view_source() == 'preview'
-                else self._runtime_xtc_pages()
-            )
-        except Exception:
-            device_pages_visible = False
-        if not device_pages_visible:
-            for candidate in (progress_text, status_bar_text):
-                if (
-                    self._is_preview_render_failure_status_text(candidate)
-                    and self._preview_render_failure_matches_visible_display_context(candidate)
-                ):
-                    return candidate
-        return ''
+        return _visible_render_failure_status_text_impl(self)
 
     def _show_ui_status_message_unless_render_failure_visible(
         self: MainWindow,
         message: object,
         timeout: int | None = 2000,
     ) -> None:
-        try:
-            self._restore_shared_status_for_visible_display_context()
-        except Exception:
-            pass
-        if self._visible_render_failure_status_text():
-            return
-        self._show_ui_status_message_direct_with_reflection_best_effort(
-            message,
-            timeout,
-            reuse_existing_message=False,
-        )
+        _show_ui_status_message_unless_render_failure_visible_impl(self, message, timeout)
 
     def _status_bar_message_text(self: MainWindow) -> str:
-        status_bar_getter = getattr(self, 'statusBar', None)
-        if not callable(status_bar_getter):
-            return ''
-        try:
-            status_bar = status_bar_getter()
-        except Exception:
-            return ''
-        current_message_getter = getattr(status_bar, 'currentMessage', None)
-        if callable(current_message_getter):
-            try:
-                return _coerce_ui_message_text(current_message_getter()).strip()
-            except Exception:
-                return ''
-        return ''
+        return _status_bar_message_text_impl(self)
 
     def _show_ui_status_message_unless_render_failure_visible_with_reflection(
         self: MainWindow,
@@ -6286,57 +3353,12 @@ class MainWindow(QMainWindow):
         *,
         reuse_existing_message: bool = True,
     ) -> bool:
-        helper = getattr(self, '_show_ui_status_message_unless_render_failure_visible', None)
-        if not callable(helper):
-            return False
-        normalized = self._ui_text(_coerce_ui_message_text(message).strip())
-        if not normalized:
-            return False
-        helper_status_bar = None
-        helper_status_event_count_before = None
-        try:
-            helper_status_bar = self.statusBar()
-        except Exception:
-            helper_status_bar = None
-        current_message = self._status_bar_message_text()
-        if reuse_existing_message and current_message == normalized:
-            return True
-        helper_show_message_call_count_before = None
-        for status_events_attr in ('messages', 'calls'):
-            status_events = getattr(helper_status_bar, status_events_attr, None)
-            if isinstance(status_events, list):
-                helper_status_event_count_before = len(status_events)
-                break
-        helper_show_message = getattr(helper_status_bar, 'showMessage', None)
-        if callable(helper_show_message):
-            helper_show_message_call_count_before = getattr(helper_show_message, 'call_count', None)
-        try:
-            helper(normalized, timeout)
-        except Exception:
-            return False
-        reflected = (
-            self._status_bar_message_text() == normalized
-            or bool(self._visible_render_failure_status_text())
+        return _show_ui_status_message_unless_render_failure_visible_with_reflection_impl(
+            self,
+            message,
+            timeout,
+            reuse_existing_message=reuse_existing_message,
         )
-        if (
-            not reflected
-            and helper_status_event_count_before is not None
-            and helper_status_bar is not None
-        ):
-            for status_events_attr in ('messages', 'calls'):
-                status_events = getattr(helper_status_bar, status_events_attr, None)
-                if isinstance(status_events, list):
-                    reflected = len(status_events) > helper_status_event_count_before
-                    break
-        if (
-            not reflected
-            and helper_show_message_call_count_before is not None
-            and callable(helper_show_message)
-        ):
-            helper_show_message_call_count_after = getattr(helper_show_message, 'call_count', None)
-            if isinstance(helper_show_message_call_count_after, int):
-                reflected = helper_show_message_call_count_after > helper_show_message_call_count_before
-        return reflected
 
     def _show_ui_status_message_with_reflection_or_direct_fallback(
         self: MainWindow,
@@ -6345,24 +3367,9 @@ class MainWindow(QMainWindow):
         *,
         reuse_existing_message: bool = True,
     ) -> bool:
-        normalized = self._ui_text(_coerce_ui_message_text(message).strip())
-        if not normalized:
-            return False
-        reflected = False
-        try:
-            reflected = bool(
-                self._show_ui_status_message_unless_render_failure_visible_with_reflection(
-                    normalized,
-                    timeout,
-                    reuse_existing_message=reuse_existing_message,
-                )
-            )
-        except Exception:
-            reflected = False
-        if reflected:
-            return True
-        return self._show_ui_status_message_direct_with_reflection_best_effort(
-            normalized,
+        return _show_ui_status_message_with_reflection_or_direct_fallback_impl(
+            self,
+            message,
             timeout,
             reuse_existing_message=reuse_existing_message,
         )
@@ -6374,23 +3381,12 @@ class MainWindow(QMainWindow):
         *,
         reuse_existing_message: bool = True,
     ) -> bool:
-        try:
-            if reuse_existing_message:
-                return bool(
-                    self._show_ui_status_message_direct_with_reflection(
-                        message,
-                        timeout,
-                    )
-                )
-            return bool(
-                self._show_ui_status_message_direct_with_reflection(
-                    message,
-                    timeout,
-                    reuse_existing_message=False,
-                )
-            )
-        except Exception:
-            return False
+        return _show_ui_status_message_direct_with_reflection_best_effort_impl(
+            self,
+            message,
+            timeout,
+            reuse_existing_message=reuse_existing_message,
+        )
 
     def _show_ui_status_message_direct_with_reflection(
         self: MainWindow,
@@ -6399,288 +3395,60 @@ class MainWindow(QMainWindow):
         *,
         reuse_existing_message: bool = True,
     ) -> bool:
-        normalized = self._ui_text(_coerce_ui_message_text(message).strip())
-        status_bar = None
-        status_bar_message_before = self._status_bar_message_text()
-        if reuse_existing_message and status_bar_message_before == normalized:
-            return True
-        status_event_count_before = None
-        show_message_call_count_before = None
-        try:
-            status_bar = self.statusBar()
-        except Exception:
-            status_bar = None
-        if status_bar is not None:
-            for status_events_attr in ('messages', 'calls'):
-                status_events = getattr(status_bar, status_events_attr, None)
-                if isinstance(status_events, list):
-                    status_event_count_before = len(status_events)
-                    break
-            show_message = getattr(status_bar, 'showMessage', None)
-            if callable(show_message):
-                show_message_call_count_before = getattr(show_message, 'call_count', None)
-        try:
-            if status_bar is None:
-                return False
-            if timeout is None:
-                status_bar.showMessage(normalized)
-            else:
-                status_bar.showMessage(normalized, int(timeout))
-        except Exception:
-            return False
-        reflected = self._status_bar_message_text() == normalized
-        if (
-            not reflected
-            and status_bar is not None
-            and status_event_count_before is not None
-        ):
-            for status_events_attr in ('messages', 'calls'):
-                status_events = getattr(status_bar, status_events_attr, None)
-                if isinstance(status_events, list):
-                    reflected = len(status_events) > status_event_count_before
-                    break
-        if (
-            not reflected
-            and status_bar is not None
-            and show_message_call_count_before is not None
-        ):
-            show_message = getattr(status_bar, 'showMessage', None)
-            if callable(show_message):
-                show_message_call_count_after = getattr(show_message, 'call_count', None)
-                if isinstance(show_message_call_count_after, int):
-                    reflected = show_message_call_count_after > show_message_call_count_before
-        return reflected
+        return _show_ui_status_message_direct_with_reflection_impl(
+            self,
+            message,
+            timeout,
+            reuse_existing_message=reuse_existing_message,
+        )
 
     def _current_preview_success_status_message(self: MainWindow) -> str:
-        pages = self._runtime_preview_pages()
-        status_state = studio_logic.build_preview_success_status_state(
-            page_count=len(pages),
-            requested_limit=getattr(self, 'last_preview_requested_limit', 0),
-            truncated=getattr(self, 'preview_pages_truncated', False),
-            language=self.current_ui_language_value(),
-        )
-        return str(status_state.get('status_message', ''))
+        return _current_preview_success_status_message_impl(self)
 
     def _current_preview_render_status_message(self: MainWindow) -> str:
-        pages = self._runtime_preview_pages()
-        return studio_logic.build_preview_render_status_message(
-            page_count=len(pages),
-            requested_limit=getattr(self, 'last_preview_requested_limit', 0),
-            truncated=getattr(self, 'preview_pages_truncated', False),
-            running=getattr(self, '_preview_running', False),
-            dirty=getattr(self, 'preview_dirty', False),
-            widget_limit=_preview_widget_limit_value(getattr(self, 'preview_page_limit_spin', None)),
-            language=self.current_ui_language_value(),
-        )
+        return _current_preview_render_status_message_impl(self)
 
     def _refresh_successful_preview_render_status(self: MainWindow) -> None:
-        preview_replacement = self._current_preview_render_status_message()
-        if not preview_replacement:
-            return
-        view_mode = self._normalized_main_view_mode(
-            getattr(self, 'main_view_mode', 'font')
-        )
-        visible_font_preview_active = view_mode == 'font' and bool(self._runtime_preview_pages())
-        preview_status_text = ''
-        progress_status_text = ''
-        if hasattr(self, 'preview_status_label'):
-            preview_status_text = self._ui_widget_text(self.preview_status_label)
-        if hasattr(self, 'progress_label'):
-            progress_status_text = self._ui_widget_text(self.progress_label)
-        status_state = studio_logic.build_successful_preview_render_status_refresh_state(
-            preview_replacement=preview_replacement,
-            view_mode=view_mode,
-            visible_font_preview_active=visible_font_preview_active,
-            preview_status_text=preview_status_text,
-            progress_status_text=progress_status_text,
-            status_bar_text=self._status_bar_message_text(),
-            current_label_text=self._ui_widget_text(getattr(self, 'current_xtc_label', None)),
-        )
-        if status_state.get('stale_preview_status') and hasattr(self, 'preview_status_label'):
-            try:
-                self._update_preview_status_label(str(status_state.get('preview_replacement', preview_replacement)))
-            except Exception:
-                pass
-        progress_replacement = str(status_state.get('progress_replacement', preview_replacement))
-        if status_state.get('stale_progress_status') and hasattr(self, 'progress_label'):
-            try:
-                self.progress_label.setText(progress_replacement)
-            except Exception:
-                pass
-        if status_state.get('should_notify_status_bar'):
-            self._show_ui_status_message_direct_with_reflection_best_effort(progress_replacement, 5000)
+        _refresh_successful_preview_render_status_impl(self)
 
     def render_current_preview_page(self: MainWindow) -> None:
-        pages = self._runtime_preview_pages()
-        if not pages:
-            self._show_preview_message('プレビューを生成できませんでした')
-            return
-        should_sync_display_context = self._normalized_main_view_mode(
-            getattr(self, 'main_view_mode', 'font')
-        ) == 'font'
-        if should_sync_display_context:
-            try:
-                self._sync_preview_display_context_for_font_view()
-            except Exception:
-                pass
-        current_index = worker_logic._int_config_value({'value': getattr(self, 'current_preview_page_index', 0)}, 'value', 0)
-        current_index = max(0, min(len(pages) - 1, current_index))
-        self.current_preview_page_index = current_index
-        try:
-            self._apply_preview_page_base64_to_label(
-                pages[current_index],
-                cache_key=self._font_preview_page_pixmap_cache_key(current_index),
-            )
-            self._refresh_successful_preview_render_status()
-        except Exception as exc:
-            self._show_preview_message(f'プレビュー表示エラー\n{exc}')
-            status_message = self._render_failure_status_message('プレビュー表示エラー', exc)
-            font_view_visible = self._normalized_main_view_mode(
-                getattr(self, 'main_view_mode', 'font')
-            ) == 'font'
-            reflect_failure_in_status = font_view_visible or not self._visible_render_failure_status_text()
-            try:
-                self._update_preview_status_label(status_message)
-            except Exception:
-                pass
-            self._append_log_with_status_fallback(
-                status_message,
-                reflect_in_status=reflect_failure_in_status,
-            )
+        return render_current_preview_page_impl(self)
 
     def _normalized_preview_page_cache_tokens(self: MainWindow, tokens: object, *, expected_len: int) -> list[int] | None:
-        return studio_logic.normalize_preview_page_cache_tokens(tokens, expected_len=expected_len)
+        return _normalized_preview_page_cache_tokens_impl(self, tokens, expected_len=expected_len)
 
     def _normalized_right_pane_source_value(self: MainWindow, value: object, *, default: str = 'xtc') -> str:
-        return studio_logic.normalize_right_pane_source_value(value, default=default)
+        return _normalized_right_pane_source_value_impl(self, value, default=default)
 
     def _normalized_device_view_source_value(self: MainWindow, value: object, *, default: str = 'xtc') -> str:
-        """Legacy wrapper for older device-view source terminology."""
-        return self._normalized_right_pane_source_value(value, default=default)
+        return _normalized_device_view_source_value_impl(self, value, default=default)
 
     def _effective_right_pane_source(self: MainWindow, value: object = None) -> str:
-        source = self._normalized_right_pane_source_value(
-            getattr(self, 'device_view_source', 'xtc') if value is None else value,
-            default='xtc',
-        )
-        has_preview_pages = bool(self._runtime_device_preview_pages()) if source == 'preview' else False
-        return studio_logic.resolve_effective_right_pane_source(
-            source,
-            has_preview_pages=has_preview_pages,
-        )
+        return _effective_right_pane_source_impl(self, value)
 
     def _effective_device_view_source(self: MainWindow, value: object = None) -> str:
-        """Legacy wrapper for older device-view source terminology."""
-        return self._effective_right_pane_source(value)
+        return _effective_device_view_source_impl(self, value)
 
     def _is_preview_display_active(self: MainWindow) -> bool:
-        mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
-        has_font_preview_pages = bool(self._runtime_preview_pages()) if mode == 'font' else False
-        effective_right_pane_source = self._effective_right_pane_source() if mode != 'font' else 'xtc'
-        return studio_logic.is_right_pane_preview_display_active(
-            mode,
-            has_font_preview_pages=has_font_preview_pages,
-            effective_right_pane_source=effective_right_pane_source,
-        )
+        return _is_preview_display_active_impl(self)
 
     def _apply_preview_page_cache_tokens_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
-        preview_pages = self._runtime_preview_pages()
-        device_pages = self._runtime_device_preview_pages()
-        tokens_state = studio_logic.build_preview_page_cache_tokens_state(
-            context,
-            preview_page_count=len(preview_pages),
-            device_preview_page_count=len(device_pages),
-        )
-        if tokens_state.get('should_rebuild'):
-            self._rebuild_preview_page_cache_tokens()
-            return
-        self._preview_page_cache_tokens = list(tokens_state.get('preview_page_cache_tokens', []))
-        self._device_preview_page_cache_tokens = list(tokens_state.get('device_preview_page_cache_tokens', []))
+        _apply_preview_page_cache_tokens_context_impl(self, context)
 
     def _apply_preview_button_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
-        progress_context = context
-        try:
-            progress_state = studio_logic.build_preview_progress_context_state(context)
-            has_pending_followup = bool(
-                getattr(self, '_settings_preview_refresh_pending', False)
-                or getattr(self, '_target_preview_refresh_scheduled', False)
-            )
-            if has_pending_followup and not bool(progress_state.get('progress_visible', False)):
-                progress_context = preview_controller.build_preview_pending_context(
-                    message='次のプレビュー更新を準備しています…'
-                )
-        except Exception:
-            progress_context = context
-        self._apply_preview_progress_bar_context(progress_context)
-        self._refresh_preview_update_button_for_current_state(context)
+        _apply_preview_button_context_impl(self, context)
 
     def _apply_preview_progress_bar_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
-        progress_bar = getattr(self, 'preview_progress_bar', None)
-        if progress_bar is None:
-            return
-        progress_state = studio_logic.build_preview_progress_context_state(context)
-        visible = bool(progress_state.get('progress_visible', False))
-        try:
-            progress_bar.setVisible(visible)
-        except Exception:
-            pass
-        if not visible:
-            try:
-                progress_bar.setRange(0, 1)
-                progress_bar.setValue(0)
-                if hasattr(progress_bar, 'setFormat'):
-                    progress_bar.setFormat('')
-            except Exception:
-                pass
-            return
-        busy = bool(progress_state.get('progress_busy', False))
-        current = max(0, self._payload_int_value(progress_state, 'progress_current', 0))
-        total = max(0, self._payload_int_value(progress_state, 'progress_total', 0))
-        try:
-            if busy or total <= 0:
-                progress_bar.setRange(0, 0)
-                progress_bar.setValue(0)
-                if hasattr(progress_bar, 'setFormat'):
-                    progress_bar.setFormat(self._ui_text('更新中…'))
-            else:
-                safe_total = max(1, total)
-                progress_bar.setRange(0, safe_total)
-                progress_bar.setValue(min(current, safe_total))
-                if hasattr(progress_bar, 'setFormat'):
-                    progress_bar.setFormat('%p%')
-        except Exception:
-            pass
+        _apply_preview_progress_bar_context_impl(self, context)
 
     def _apply_preview_progress_context(self: MainWindow, context: Mapping[str, object] | None) -> None:
-        progress_state = studio_logic.build_preview_progress_context_state(context)
-        self._update_preview_status_label(str(progress_state.get('status_message', '')))
-        self._apply_preview_progress_bar_context(context)
+        _apply_preview_progress_context_impl(self, context)
 
     def _apply_preview_pending_progress_context(self: MainWindow, message: object = 'プレビュー更新を準備しています…') -> None:
-        """Show a busy preview-progress indicator before a debounced refresh starts."""
-        try:
-            context = preview_controller.build_preview_pending_context(message=message)
-            self._apply_preview_progress_context(context)
-            process_events = getattr(QApplication, 'processEvents', None)
-            if callable(process_events):
-                process_events()
-        except Exception:
-            pass
+        _apply_preview_pending_progress_context_impl(self, message, process_events=getattr(QApplication, 'processEvents', None))
 
     def _apply_preview_finish_context_after_running_flags_clear(self: MainWindow) -> None:
-        """Restore preview button/progress after all running flags are down.
-
-        v1.3.6.37 introduced a state-reconcile helper that correctly treats
-        active preview/target-refresh flags as authoritative.  However, the
-        old finish path applied the idle context *before* those flags were
-        cleared, so startup/deferred previews could leave the UI looking stuck
-        at 「生成中…」.  Keep one final reconciliation point after the flags have
-        been cleared.
-        """
-        try:
-            self._apply_preview_button_context(preview_controller.build_preview_finish_context())
-        except Exception:
-            pass
+        _apply_preview_finish_context_after_running_flags_clear_impl(self)
 
     def _normalized_preview_pages_for_runtime(self: MainWindow, value: object) -> list[str]:
         try:
@@ -6713,175 +3481,16 @@ class MainWindow(QMainWindow):
         return list(pages)
 
     def _apply_preview_success_context(self: MainWindow, context: Mapping[str, object] | None) -> bool:
-        context = self._coerce_mapping_payload(context)
-        self.preview_pages_b64 = self._normalized_preview_pages_for_runtime(context.get('preview_pages_b64'))
-        self.preview_pages_truncated = self._payload_bool_value(context, 'preview_pages_truncated', False)
-        self.device_preview_pages_b64 = self._normalized_preview_pages_for_runtime(context.get('device_preview_pages_b64'))
-        self._clear_font_preview_page_pixmap_cache()
-        self._clear_device_preview_page_qimage_cache()
-        self._apply_preview_page_cache_tokens_context(context)
-        self.device_preview_pages_truncated = self._payload_bool_value(context, 'device_preview_pages_truncated', False)
-        self.device_view_source = self._normalized_device_view_source_value(
-            context.get('device_view_source', 'preview'),
-            default='preview',
-        )
-        self.last_preview_requested_limit = max(
-            0,
-            self._payload_int_value(
-                context,
-                'last_preview_requested_limit',
-                DEFAULT_PREVIEW_PAGE_LIMIT,
-            ),
-        )
-        raw_last_applied_preview_payload = context.get('last_applied_preview_payload', {})
-        self.last_applied_preview_payload = (
-            dict(raw_last_applied_preview_payload)
-            if isinstance(raw_last_applied_preview_payload, Mapping)
-            else {}
-        )
-        self.current_preview_page_index = preview_controller._clamp_preview_index(
-            context.get('current_preview_page_index', 0),
-            total=len(self.preview_pages_b64),
-        )
-        self.current_device_preview_page_index = preview_controller._clamp_preview_index(
-            context.get('current_device_preview_page_index', 0),
-            total=len(self.device_preview_pages_b64),
-        )
-        status_message = str(context.get('status_message', studio_logic.build_preview_status_message('empty')))
-        has_pages = self._payload_bool_value(context, 'has_pages', False)
-        clear_device_page = self._payload_bool_value(context, 'clear_device_page', False)
-        if not has_pages:
-            self._show_preview_message(status_message)
-            self._update_preview_status_label(status_message)
-            self.device_view_source = 'xtc'
-            self.current_device_preview_page_index = 0
-            restored_display_name = self._preview_failure_display_name()
-            if restored_display_name is not None:
-                self._set_current_xtc_display_name(restored_display_name)
-                try:
-                    self.render_current_page(refresh_navigation=True)
-                except Exception:
-                    if clear_device_page:
-                        self._clear_xtc_viewer_page(refresh_navigation=True)
-                    else:
-                        self.update_navigation_ui()
-            else:
-                self._set_current_xtc_display_name_with_fallback(None)
-                if clear_device_page:
-                    self._clear_xtc_viewer_page(refresh_navigation=True)
-                else:
-                    self.update_navigation_ui()
-            restored_path = self._preview_failure_loaded_path()
-            if restored_path:
-                self._sync_results_selection_for_loaded_path_with_fallback(restored_path)
-            else:
-                self._clear_results_selection_with_fallback(
-                    results_controller.build_results_clear_selection_context()
-                )
-            self._update_top_status()
-            return False
-        self.render_current_preview_page()
-        self.render_current_page(refresh_navigation=True)
-        self._update_preview_status_label(status_message)
-        self._set_current_xtc_display_name(str(context.get('display_name', 'プレビュー') or 'プレビュー'))
-        self._clear_results_selection_with_fallback(
-            results_controller.build_results_clear_selection_context()
-        )
-        self._update_top_status()
-        return True
+        return _apply_preview_success_context_impl(self, context)
 
     def _preview_failure_display_name(self: MainWindow) -> object:
-        xtc_pages = self._runtime_xtc_pages()
-        if xtc_pages:
-            remembered = worker_logic._normalized_path_text(self.__dict__.get('_loaded_xtc_display_name')).strip()
-            return remembered or None
-        return None
+        return _preview_failure_display_name_impl(self)
 
     def _preview_failure_loaded_path(self: MainWindow) -> object:
-        xtc_pages = self._runtime_xtc_pages()
-        if xtc_pages:
-            remembered = worker_logic._normalized_path_text(self.__dict__.get('_loaded_xtc_path_text')).strip()
-            return remembered or None
-        return None
+        return _preview_failure_loaded_path_impl(self)
 
     def _apply_preview_failure_context(self: MainWindow, context: Mapping[str, object] | None) -> bool:
-        context = self._coerce_mapping_payload(context)
-        self.preview_pages_b64 = self._normalized_preview_pages_for_runtime(context.get('preview_pages_b64'))
-        self.device_preview_pages_b64 = self._normalized_preview_pages_for_runtime(context.get('device_preview_pages_b64'))
-        self._clear_font_preview_page_pixmap_cache()
-        self._clear_device_preview_page_qimage_cache()
-        self._apply_preview_page_cache_tokens_context(context)
-        self.preview_pages_truncated = self._payload_bool_value(context, 'preview_pages_truncated', False)
-        self.device_preview_pages_truncated = self._payload_bool_value(context, 'device_preview_pages_truncated', False)
-        self.device_view_source = self._normalized_device_view_source_value(
-            context.get('device_view_source', 'xtc'),
-            default='xtc',
-        )
-        clear_device_page = self._payload_bool_value(context, 'clear_device_page', False)
-        self.current_preview_page_index = preview_controller._clamp_preview_index(
-            context.get('current_preview_page_index', 0),
-            total=len(self.preview_pages_b64),
-        )
-        self.current_device_preview_page_index = preview_controller._clamp_preview_index(
-            context.get('current_device_preview_page_index', 0),
-            total=len(self.device_preview_pages_b64),
-        )
-        if self._effective_device_view_source(context.get('device_view_source', 'xtc')) != 'preview':
-            self.current_device_preview_page_index = 0
-        try:
-            self._apply_profile_runtime_state()
-        except Exception:
-            pass
-        self._set_current_xtc_display_name(self._preview_failure_display_name())
-        restored_path = self._preview_failure_loaded_path()
-        raw_main_view_mode = str(getattr(self, 'main_view_mode', 'font') or 'font').strip().lower()
-        preserve_loaded_file_viewer = bool(restored_path and self._runtime_xtc_pages() and raw_main_view_mode != 'font')
-        try:
-            self.render_current_page(refresh_navigation=True)
-        except Exception:
-            if clear_device_page:
-                self._clear_xtc_viewer_page(refresh_navigation=True)
-            else:
-                self.update_navigation_ui()
-        preview_pages = self._runtime_preview_pages()
-        preview_error_message = str(context.get('error_message', 'プレビュー生成エラー'))
-        if preserve_loaded_file_viewer:
-            try:
-                self._render_current_xtc_page_in_font_view(refresh_navigation=False)
-            except Exception:
-                self._show_preview_message(preview_error_message)
-        elif preview_pages:
-            try:
-                self.render_current_preview_page()
-            except Exception:
-                self._show_preview_message(preview_error_message)
-        else:
-            self._show_preview_message(preview_error_message)
-        self._update_preview_status_label(str(context.get('status_message', '')))
-        try:
-            self.update_navigation_ui()
-        except Exception:
-            pass
-        try:
-            if preserve_loaded_file_viewer:
-                self._sync_results_selection_for_loaded_path_with_fallback(restored_path)
-            elif self._is_preview_display_active():
-                self._clear_results_selection_with_fallback(
-                    results_controller.build_results_clear_selection_context()
-                )
-            elif restored_path:
-                self._sync_results_selection_for_loaded_path_with_fallback(restored_path)
-            else:
-                self._clear_results_selection_with_fallback(
-                    results_controller.build_results_clear_selection_context()
-                )
-        except Exception:
-            pass
-        try:
-            self._update_top_status()
-        except Exception:
-            pass
-        return False
+        return _apply_preview_failure_context_impl(self, context)
 
     def request_preview_refresh(
         self: MainWindow,
@@ -6889,336 +3498,53 @@ class MainWindow(QMainWindow):
         reset_page: bool = False,
         preview_payload: dict[str, object] | None = None,
     ) -> bool:
-        if getattr(self, '_preview_running', False):
-            # プレビュー実行中の追加要求はキューに積まない。
-            # ボタン連打や設定 signal の連鎖で、指定ページ数の生成が終わった直後に
-            # もう一度プレビューが走ると「暴走」に見えるため、現在の1回だけで止める。
-            self._pending_preview_refresh_request = None
-            self.preview_dirty = True
-            return False
-        self._cancel_pending_settings_live_preview_refresh()
-        self._preview_running = True
-        try:
-            self._flush_pending_ui_changes()
-            request_plan = preview_controller.build_preview_request_plan(
-                dict(preview_payload) if isinstance(preview_payload, Mapping) else self._current_preview_payload(),
-                current_output_format=self.current_output_format(),
-                default_preview_page_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
-            )
-            raw_request_payload = request_plan.get('payload', {}) if isinstance(request_plan, Mapping) else {}
-            payload = dict(raw_request_payload) if isinstance(raw_request_payload, Mapping) else {}
-            preview_limit = max(
-                1,
-                self._payload_int_value(
-                    request_plan if isinstance(request_plan, Mapping) else {},
-                    'preview_limit',
-                    DEFAULT_PREVIEW_PAGE_LIMIT,
-                ),
-            )
-            self.preview_dirty = False
-            process_events = getattr(QApplication, 'processEvents', None)
-
-            def _preview_progress_cb(current: int, total: int, message: str) -> None:
-                progress_context = preview_controller.build_preview_progress_context(
-                    current,
-                    total,
-                    message,
-                    preview_limit=preview_limit,
-                )
-                self._apply_preview_progress_context(progress_context)
-                if callable(process_events):
-                    process_events()
-
-            try:
-                start_context = preview_controller.build_preview_start_context(preview_limit=preview_limit)
-                self._apply_preview_button_context(start_context)
-                self._apply_preview_progress_context(start_context)
-                if callable(process_events):
-                    process_events()
-                bundle = core.generate_preview_bundle(payload, progress_cb=_preview_progress_cb)
-                apply_context = preview_controller.build_preview_apply_context(
-                    bundle,
-                    reset_page=reset_page,
-                    current_preview_index=getattr(self, 'current_preview_page_index', 0),
-                    current_device_index=getattr(self, 'current_device_preview_page_index', 0),
-                    preview_limit=preview_limit,
-                    payload=payload,
-                )
-                return self._apply_preview_success_context(apply_context)
-            except Exception as exc:
-                error_context = preview_controller.build_preview_failure_context(
-                    previous_device_source=self._effective_device_view_source(
-                        getattr(self, 'device_view_source', 'xtc'),
-                    ),
-                    error=exc,
-                    previous_preview_pages=self._runtime_preview_pages(),
-                    previous_device_preview_pages=self._runtime_device_preview_pages(),
-                    previous_preview_page_cache_tokens=list(self.__dict__.get('_preview_page_cache_tokens', []) or []),
-                    previous_device_preview_page_cache_tokens=list(self.__dict__.get('_device_preview_page_cache_tokens', []) or []),
-                    previous_preview_pages_truncated=getattr(self, 'preview_pages_truncated', False),
-                    previous_device_preview_pages_truncated=getattr(self, 'device_preview_pages_truncated', False),
-                    current_preview_index=getattr(self, 'current_preview_page_index', 0),
-                    current_device_index=getattr(self, 'current_device_preview_page_index', 0),
-                )
-                return self._apply_preview_failure_context(error_context)
-            finally:
-                pass
-        finally:
-            self._preview_running = False
-            self._pending_preview_refresh_request = None
-            self._apply_preview_finish_context_after_running_flags_clear()
-            try:
-                deferred_live_refresh = bool(
-                    getattr(self, '_settings_preview_refresh_deferred_until_preview_finished', False)
-                )
-                self._settings_preview_refresh_deferred_until_preview_finished = False
-                if deferred_live_refresh and bool(getattr(self, '_settings_preview_refresh_pending', False)):
-                    reset_page_for_followup = bool(
-                        getattr(self, '_settings_preview_refresh_pending_reset_page', False)
-                    )
-
-                    def _run_deferred_live_refresh() -> None:
-                        self._schedule_live_preview_refresh(
-                            reset_page=reset_page_for_followup,
-                            delay_ms=0,
-                        )
-
-                    if not self._queue_live_preview_refresh_timer(_run_deferred_live_refresh, 0):
-                        _run_deferred_live_refresh()
-            except Exception:
-                pass
+        return _request_preview_refresh_impl(
+            self,
+            reset_page=reset_page,
+            preview_payload=preview_payload,
+        )
 
     def refresh_preview(self: MainWindow) -> None:
         self.request_preview_refresh(reset_page=False)
 
     def _current_viewer_profile(self: MainWindow) -> DeviceProfile:
-        profile_key, profile, width, height = self._resolved_profile_and_dimensions()
-        if profile_key != 'custom':
-            return profile
-
-        px_per_mm = max(1e-6, float(profile.ppi) / 25.4)
-        screen_w_mm = width / px_per_mm
-        screen_h_mm = height / px_per_mm
-        body_w_ratio = profile.body_w_mm / max(profile.screen_w_mm, 1e-6)
-        body_h_ratio = profile.body_h_mm / max(profile.screen_h_mm, 1e-6)
-        return replace(
-            profile,
-            width_px=width,
-            height_px=height,
-            screen_w_mm=screen_w_mm,
-            screen_h_mm=screen_h_mm,
-            body_w_mm=screen_w_mm * body_w_ratio,
-            body_h_mm=screen_h_mm * body_h_ratio,
-        )
+        return _current_viewer_profile_impl(self)
 
     def _preview_viewer_profile(self: MainWindow, payload: object = None) -> DeviceProfile:
-        preview_profile = self._viewer_profile_for_preview_payload(payload)
-        named_key = str(getattr(preview_profile, 'key', '') or '').strip().lower()
-        if named_key and named_key != 'custom' and named_key in DEVICE_PROFILES:
-            named_profile = DEVICE_PROFILES.get(named_key)
-            if named_profile is not None:
-                return named_profile
-        width = max(0, int(getattr(preview_profile, 'width_px', 0) or 0))
-        height = max(0, int(getattr(preview_profile, 'height_px', 0) or 0))
-        for key in ('x4', 'x3'):
-            profile = DEVICE_PROFILES.get(key)
-            if profile and int(profile.width_px) == width and int(profile.height_px) == height:
-                return profile
-        if width > 0 and height > 0:
-            return self._custom_viewer_profile_for_dimensions(width, height)
-        return preview_profile
+        return _preview_viewer_profile_impl(self, payload)
 
     def _loaded_xtc_document_viewer_profile(self: MainWindow) -> DeviceProfile | None:
-        page_profile = self._viewer_profile_for_xtc_pages(self._runtime_xtc_pages())
-        if page_profile is not None:
-            return page_profile
-        loaded_profile = self.__dict__.get('loaded_xtc_viewer_profile')
-        if loaded_profile is not None:
-            return loaded_profile
-        return None
+        return _loaded_xtc_document_viewer_profile_impl(self)
 
     def _refresh_loaded_xtc_viewer_profile_cache(self: MainWindow) -> DeviceProfile | None:
-        profile = self._viewer_profile_for_xtc_pages(self._runtime_xtc_pages())
-        self.loaded_xtc_viewer_profile = profile
-        return profile
+        return _refresh_loaded_xtc_viewer_profile_cache_impl(self)
 
     def _sync_loaded_xtc_profile_ui_override(self: MainWindow) -> bool:
-        document_profile = self._loaded_xtc_document_viewer_profile()
-        if document_profile is None:
-            self.loaded_xtc_profile_ui_override = False
-            return False
-        current_profile = self._current_viewer_profile()
-        current_key = str(getattr(self, 'current_profile_key', '') or '').strip().lower()
-        document_key = str(getattr(document_profile, 'key', '') or '').strip().lower()
-        if current_key and current_key != 'custom':
-            override = document_key != current_key
-        else:
-            override = (
-                int(getattr(document_profile, 'width_px', 0) or 0) != int(getattr(current_profile, 'width_px', 0) or 0)
-                or int(getattr(document_profile, 'height_px', 0) or 0) != int(getattr(current_profile, 'height_px', 0) or 0)
-            )
-        self.loaded_xtc_profile_ui_override = bool(override)
-        return bool(override)
+        return _sync_loaded_xtc_profile_ui_override_impl(self)
 
     def _active_device_viewer_profile(self: MainWindow, image: object = None) -> DeviceProfile:
-        if self._effective_device_view_source() == 'preview':
-            current_profile = self._current_viewer_profile()
-            current_key = str(getattr(self, 'current_profile_key', '') or '').strip().lower()
-            current_named_profile = None
-            if current_key and current_key != 'custom':
-                current_named_profile = DEVICE_PROFILES.get(current_key)
-
-            preview_profile = self._preview_viewer_profile()
-
-            candidate_image = image
-            if candidate_image is None:
-                viewer_widget = getattr(self, 'viewer_widget', None)
-                candidate_image = getattr(viewer_widget, 'page_image', None) if viewer_widget is not None else None
-
-            preview_width = max(0, int(getattr(preview_profile, 'width_px', 0) or 0))
-            preview_height = max(0, int(getattr(preview_profile, 'height_px', 0) or 0))
-
-            width, height = self._page_image_dimensions(candidate_image)
-            if width > 0 and height > 0:
-                if current_named_profile is not None:
-                    if int(current_named_profile.width_px) == width and int(current_named_profile.height_px) == height:
-                        return current_named_profile
-
-                current_width = max(0, int(getattr(current_profile, 'width_px', 0) or 0))
-                current_height = max(0, int(getattr(current_profile, 'height_px', 0) or 0))
-                if current_width == width and current_height == height:
-                    return current_profile
-
-                if preview_width == width and preview_height == height:
-                    return preview_profile
-
-                for key in ('x4', 'x3'):
-                    profile = DEVICE_PROFILES.get(key)
-                    if profile and int(profile.width_px) == width and int(profile.height_px) == height:
-                        return profile
-
-                if preview_width > 0 and preview_height > 0:
-                    return preview_profile
-                return self._custom_viewer_profile_for_dimensions(width, height)
-
-            if preview_width > 0 and preview_height > 0:
-                return preview_profile
-
-            if current_named_profile is not None:
-                return current_named_profile
-
-            current_width = max(0, int(getattr(current_profile, 'width_px', 0) or 0))
-            current_height = max(0, int(getattr(current_profile, 'height_px', 0) or 0))
-            if current_width > 0 and current_height > 0:
-                return current_profile
-
-            return current_profile
-
-        if bool(getattr(self, 'loaded_xtc_profile_ui_override', False)):
-            current_key = str(getattr(self, 'current_profile_key', '') or '').strip().lower()
-            if current_key and current_key != 'custom':
-                named_profile = DEVICE_PROFILES.get(current_key)
-                if named_profile is not None:
-                    return named_profile
-            return self._current_viewer_profile()
-
-        document_profile = self._loaded_xtc_document_viewer_profile()
-        if document_profile is not None:
-            if image is not None:
-                width, height = self._page_image_dimensions(image)
-                image_profile = self._viewer_profile_for_dimensions(width, height)
-                if (
-                    width > 0
-                    and height > 0
-                    and (
-                        int(getattr(image_profile, 'width_px', 0) or 0) != int(getattr(document_profile, 'width_px', 0) or 0)
-                        or int(getattr(image_profile, 'height_px', 0) or 0) != int(getattr(document_profile, 'height_px', 0) or 0)
-                    )
-                ):
-                    return image_profile
-            return document_profile
-        if image is not None:
-            return self._viewer_profile_for_page_image(image)
-        return self._current_viewer_profile()
+        return _active_device_viewer_profile_impl(self, image)
 
     def _font_preview_viewer_profile(self: MainWindow) -> DeviceProfile:
-        preview_pages = self._runtime_preview_pages()
-        if preview_pages:
-            try:
-                return self._preview_viewer_profile()
-            except Exception:
-                pass
-        return self._current_viewer_profile()
+        return _font_preview_viewer_profile_impl(self)
 
     def _normalize_preview_zoom_pct(self: MainWindow, value: object = None) -> int:
-        if value is None:
-            value = self._safe_widget_value('preview_zoom_spin', 100)
-        return studio_logic.normalize_preview_zoom_pct(value)
+        return _normalize_preview_zoom_pct_impl(self, value)
 
     def _preview_zoom_factor(self: MainWindow) -> float:
-        return self._normalize_preview_zoom_pct() / 100.0
+        return _preview_zoom_factor_impl(self)
 
     def _actual_size_uses_preview_zoom_calibration(self: MainWindow) -> bool:
-        return self._safe_widget_checked('actual_size_check')
+        return _actual_size_uses_preview_zoom_calibration_impl(self)
 
     def _actual_size_calibration_factor(self: MainWindow) -> float:
-        return studio_logic.build_actual_size_calibration_factor(
-            uses_preview_zoom=self._actual_size_uses_preview_zoom_calibration(),
-            preview_zoom_pct=self._safe_widget_value('preview_zoom_spin', 100),
-            calibration_pct=self._safe_widget_value('calib_spin', 100),
-        )
+        return _actual_size_calibration_factor_impl(self)
 
     def _sync_legacy_calibration_control_state(self: MainWindow) -> None:
-        # sweep361: 実寸近似ON時の補正は右ペインの倍率UIへ集約する。
-        # 既存設定との互換のため左側の実寸補正ウィジェットは保持し、
-        # UI上は非表示にして二重操作に見えないようにする。
-        for widget_name in ('calib_label', 'calib_down_btn', 'calib_spin', 'calib_up_btn', 'calib_help_btn'):
-            widget = getattr(self, widget_name, None)
-            if widget is None:
-                continue
-            try:
-                widget.setVisible(False)
-            except Exception:
-                pass
-            try:
-                widget.setEnabled(False)
-            except Exception:
-                pass
+        _sync_legacy_calibration_control_state_impl(self)
 
     def _sync_preview_zoom_control_state(self: MainWindow) -> None:
-        actual_size = self._actual_size_uses_preview_zoom_calibration()
-        toggle_plan = self._localized_plan(gui_layouts.build_view_toggle_bar_plan())
-        zoom_control_state = studio_logic.build_preview_zoom_control_state(
-            toggle_plan,
-            actual_size=actual_size,
-            label_key='preview_zoom_actual_size_label_text' if actual_size else 'preview_zoom_label_text',
-            tooltip_key='preview_zoom_actual_size_tooltip' if actual_size else 'preview_zoom_normal_tooltip',
-        )
-        label_text = zoom_control_state['label_text']
-        tooltip = zoom_control_state['tooltip']
-        label = getattr(self, 'preview_zoom_label', None)
-        if label is not None:
-            try:
-                label.setText(label_text)
-            except Exception:
-                pass
-            try:
-                label.setToolTip(tooltip)
-            except Exception:
-                pass
-        for widget_name in ('preview_zoom_down_btn', 'preview_zoom_spin', 'preview_zoom_up_btn'):
-            widget = getattr(self, widget_name, None)
-            if widget is None:
-                continue
-            try:
-                widget.setEnabled(True)
-            except Exception:
-                pass
-            try:
-                widget.setToolTip(tooltip)
-            except Exception:
-                pass
-        self._sync_legacy_calibration_control_state()
+        _sync_preview_zoom_control_state_impl(self)
 
     def _font_preview_target_size(self: MainWindow) -> QSize:
         profile = self._font_preview_viewer_profile()
@@ -7254,576 +3580,87 @@ class MainWindow(QMainWindow):
         return QSize(width, height)
 
     def _preview_zoom_left_bias(self: MainWindow) -> float:
-        """Return a gentle 0.0..1.0 left-shift bias for preview zoom.
-
-        v1.3.3.22: the previous 100%->200% smoothstep made the preview feel
-        over-eager while repeatedly increasing the zoom.  Keep 100% centered,
-        preserve most of the centered feeling through the mid zoom range, and
-        finish the left shift only near the maximum 300% setting.  All three
-        right-pane modes use this same curve.
-        """
-        try:
-            zoom = float(self._preview_zoom_factor())
-        except Exception:
-            zoom = 1.0
-        if not math.isfinite(zoom):
-            zoom = 1.0
-        start = 1.0
-        end = 3.0
-        if zoom <= start:
-            return 0.0
-        if zoom >= end:
-            return 1.0
-        t = (zoom - start) / (end - start)
-        # smootherstep keeps the 100%-150% range calm, while still reaching
-        # the left-biased high-zoom view at the 300% upper limit.
-        eased = t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
-        return max(0.0, min(1.0, eased))
+        return _preview_zoom_left_bias_impl(self)
 
     def _viewport_width_for_scroll_area(self: MainWindow, scroll_area: object) -> int:
-        try:
-            viewport_getter = getattr(scroll_area, 'viewport', None)
-            viewport = viewport_getter() if callable(viewport_getter) else None
-            size_getter = getattr(viewport, 'size', None)
-            size = size_getter() if callable(size_getter) else None
-            width_getter = getattr(size, 'width', None)
-            width = width_getter() if callable(width_getter) else 0
-            return max(0, int(width))
-        except Exception:
-            return 0
+        return _viewport_width_for_scroll_area_impl(self, scroll_area)
 
     def _font_preview_leading_gap(self: MainWindow, content_width: int) -> int:
-        preview_scroll = getattr(self, 'preview_scroll', None)
-        viewport_width = self._viewport_width_for_scroll_area(preview_scroll)
-        content_width = max(0, int(content_width))
-        if viewport_width <= 0 or content_width <= 0 or content_width >= viewport_width:
-            return 0
-        centered_gap = max(0, int(round((viewport_width - content_width) / 2.0)))
-        bias = self._preview_zoom_left_bias()
-        return max(0, int(round(centered_gap * (1.0 - bias))))
+        return _font_preview_leading_gap_impl(self, content_width)
 
     def _viewer_preview_leading_gap(self: MainWindow, content_width: int) -> int:
-        viewer_scroll = getattr(self, 'viewer_scroll', None)
-        viewport_width = self._viewport_width_for_scroll_area(viewer_scroll)
-        content_width = max(0, int(content_width))
-        if viewport_width <= 0 or content_width <= 0 or content_width >= viewport_width:
-            return 0
-        centered_gap = max(0, int(round((viewport_width - content_width) / 2.0)))
-        bias = self._preview_zoom_left_bias()
-        return max(0, int(round(centered_gap * (1.0 - bias))))
+        return _viewer_preview_leading_gap_impl(self, content_width)
 
     def _set_horizontal_scrollbar_to_zoom_bias_later(
         self: MainWindow,
         scroll_area: object,
     ) -> None:
-        def _position() -> None:
-            try:
-                hbar_getter = getattr(scroll_area, 'horizontalScrollBar', None)
-                hbar = hbar_getter() if callable(hbar_getter) else None
-                if hbar is None:
-                    return
-                minimum_getter = getattr(hbar, 'minimum', None)
-                maximum_getter = getattr(hbar, 'maximum', None)
-                minimum_value = int(minimum_getter() if callable(minimum_getter) else 0)
-                maximum_value = int(maximum_getter() if callable(maximum_getter) else minimum_value)
-                span = max(0, maximum_value - minimum_value)
-                bias = self._preview_zoom_left_bias()
-                target = minimum_value + int(round(span * 0.5 * (1.0 - bias)))
-                set_value = getattr(hbar, 'setValue', None)
-                if callable(set_value):
-                    set_value(max(minimum_value, min(maximum_value, target)))
-            except Exception:
-                pass
-
-        _position()
-        try:
-            QTimer.singleShot(0, _position)
-        except Exception:
-            pass
+        _set_horizontal_scrollbar_to_zoom_bias_later_impl(self, scroll_area)
 
     def _set_horizontal_scrollbar_to_center_later(
         self: MainWindow,
         scroll_area: object,
     ) -> None:
-        def _position() -> None:
-            try:
-                hbar_getter = getattr(scroll_area, 'horizontalScrollBar', None)
-                hbar = hbar_getter() if callable(hbar_getter) else None
-                if hbar is None:
-                    return
-                minimum_getter = getattr(hbar, 'minimum', None)
-                maximum_getter = getattr(hbar, 'maximum', None)
-                minimum_value = int(minimum_getter() if callable(minimum_getter) else 0)
-                maximum_value = int(maximum_getter() if callable(maximum_getter) else minimum_value)
-                target = minimum_value + max(0, maximum_value - minimum_value) // 2
-                set_value = getattr(hbar, 'setValue', None)
-                if callable(set_value):
-                    set_value(max(minimum_value, min(maximum_value, target)))
-            except Exception:
-                pass
-
-        _position()
-        try:
-            QTimer.singleShot(0, _position)
-        except Exception:
-            pass
+        _set_horizontal_scrollbar_to_center_later_impl(self, scroll_area)
 
     def _set_horizontal_scrollbar_to_minimum_later(
         self: MainWindow,
         scroll_area: object,
     ) -> None:
-        def _reset() -> None:
-            try:
-                hbar_getter = getattr(scroll_area, 'horizontalScrollBar', None)
-                hbar = hbar_getter() if callable(hbar_getter) else None
-                if hbar is None:
-                    return
-                minimum_getter = getattr(hbar, 'minimum', None)
-                minimum_value = minimum_getter() if callable(minimum_getter) else 0
-                set_value = getattr(hbar, 'setValue', None)
-                if callable(set_value):
-                    set_value(minimum_value)
-            except Exception:
-                pass
-
-        _reset()
-        try:
-            QTimer.singleShot(0, _reset)
-        except Exception:
-            pass
+        _set_horizontal_scrollbar_to_minimum_later_impl(self, scroll_area)
 
     def _sync_font_preview_scroll_placement(
         self: MainWindow,
         *,
         reset_horizontal: bool = False,
     ) -> None:
-        try:
-            preview_scroll = getattr(self, 'preview_scroll', None)
-            if preview_scroll is None:
-                return
-            preview_label = getattr(self, 'preview_label', None)
-            scaled_size = getattr(self, '_last_font_preview_scaled_size', None)
-            scaled_width = 0
-            scaled_height = 0
-            if scaled_size:
-                try:
-                    scaled_width, scaled_height = int(scaled_size[0]), int(scaled_size[1])
-                except Exception:
-                    scaled_width = scaled_height = 0
-            leading_gap = self._font_preview_leading_gap(scaled_width) if scaled_width > 0 else 0
-            # v1.3.3.19: keep the fixed-blank-rail fix from v1.3.3.18, but
-            # replace the abrupt 100% -> 110% left snap with a viewport-aware
-            # leading gap and a scrollbar position eased by the zoom percentage.
-            preview_scroll.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-            if preview_label is not None:
-                try:
-                    preview_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-                except Exception:
-                    pass
-                try:
-                    preview_label.setContentsMargins(leading_gap, 0, 0, 0)
-                except Exception:
-                    pass
-                if scaled_width > 0 and scaled_height > 0:
-                    layout_width = max(1, scaled_width + leading_gap)
-                    layout_height = max(1, scaled_height)
-                    layout_size = QSize(layout_width, layout_height)
-                    try:
-                        preview_label.setMinimumSize(layout_size)
-                        preview_label.setMaximumSize(layout_size)
-                        preview_label.resize(layout_size)
-                    except Exception:
-                        pass
-            if reset_horizontal:
-                self._set_horizontal_scrollbar_to_zoom_bias_later(preview_scroll)
-        except Exception:
-            APP_LOGGER.exception('フォントビューのスクロール配置更新に失敗しました')
+        _sync_font_preview_scroll_placement_impl(self, reset_horizontal=reset_horizontal)
 
     def _sync_preview_size(self: MainWindow) -> None:
-        self._sync_viewer_size()
-        self._sync_font_preview_scroll_placement(reset_horizontal=False)
-        preview_label = getattr(self, 'preview_label', None)
-        if preview_label is None:
-            return
-        target = self._safe_preview_layout_size(self._font_preview_target_size())
-        last_scaled = getattr(self, '_last_font_preview_scaled_size', None)
-        try:
-            current_pixmap = preview_label.pixmap() if hasattr(preview_label, 'pixmap') else None
-        except Exception:
-            current_pixmap = None
-        if current_pixmap is not None and last_scaled:
-            try:
-                width, height = last_scaled
-                target = QSize(max(1, int(width)), max(1, int(height)))
-                preview_label.setMaximumSize(target)
-            except Exception:
-                pass
-        else:
-            try:
-                preview_label.setMaximumSize(16777215, 16777215)
-            except Exception:
-                pass
-        try:
-            preview_label.setMinimumSize(target)
-        except Exception:
-            APP_LOGGER.exception('フォントプレビューの最小サイズ更新に失敗しました')
-        try:
-            preview_label.resize(target)
-        except Exception:
-            pass
-        try:
-            preview_label.updateGeometry()
-        except Exception:
-            APP_LOGGER.exception('フォントプレビューのレイアウト更新に失敗しました')
-        self._sync_font_preview_scroll_placement(reset_horizontal=False)
+        _sync_preview_size_impl(self)
 
     def _sync_viewer_size(self: MainWindow) -> None:
-        try:
-            if hasattr(self.viewer_widget, 'set_preview_zoom_factor'):
-                self.viewer_widget.set_preview_zoom_factor(self._preview_zoom_factor())
-        except Exception:
-            APP_LOGGER.exception('実機ビューの表示倍率更新に失敗しました')
-        try:
-            # v1.3.8.5: keep XTC/XTCH file-viewer pages centered in the right
-            # pane. The font preview still uses a zoom-dependent left-bias,
-            # but the direct XTC viewer should not add a synthetic leading gap.
-            set_gap = getattr(self.viewer_widget, 'set_preview_leading_gap', None)
-            if callable(set_gap):
-                set_gap(0)
-        except Exception:
-            APP_LOGGER.exception('実機ビューの中央寄せ余白更新に失敗しました')
-        hint = self.viewer_widget.sizeHint()
-        w, h = studio_logic.build_viewer_minimum_size(hint)
-        try:
-            self.viewer_widget.setMinimumSize(w, h)
-        except Exception:
-            APP_LOGGER.exception('実機ビューの最小サイズ更新に失敗しました')
-        try:
-            resize = getattr(self.viewer_widget, 'resize', None)
-            if callable(resize):
-                resize(w, h)
-        except Exception:
-            APP_LOGGER.exception('実機ビューの表示サイズ更新に失敗しました')
-        try:
-            viewer_scroll = getattr(self, 'viewer_scroll', None)
-            if viewer_scroll is not None:
-                # v1.3.8.5: in the 3-pane file-viewer flow, center the XTC
-                # page horizontally in the right pane. When the page is wider
-                # than the viewport, place the horizontal scrollbar at the
-                # center instead of biasing it left.
-                set_alignment = getattr(viewer_scroll, 'setAlignment', None)
-                align_hcenter = self._qt_constant('AlignHCenter', self._qt_constant('AlignCenter', 0))
-                align_top = self._qt_constant('AlignTop', 0)
-                if callable(set_alignment):
-                    set_alignment(align_hcenter | align_top)
-                self._set_horizontal_scrollbar_to_center_later(viewer_scroll)
-        except Exception:
-            APP_LOGGER.exception('実機ビューのスクロール配置更新に失敗しました')
-        try:
-            self.viewer_widget.updateGeometry()
-        except Exception:
-            APP_LOGGER.exception('実機ビューのレイアウト更新に失敗しました')
-        try:
-            self.viewer_widget.update()
-        except Exception:
-            APP_LOGGER.exception('実機ビューの再描画要求に失敗しました')
+        _sync_viewer_size_impl(self)
 
     # ── ナビゲーション ─────────────────────────────────────
 
     def _update_nav_button_texts(self: MainWindow) -> None:
-        if not hasattr(self, 'prev_btn') or not hasattr(self, 'next_btn'):
-            return
-        nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())
-        prev_text = str(nav_bar_plan.get('prev_button_text', '前'))
-        next_text = str(nav_bar_plan.get('next_button_text', '次'))
-        if bool(getattr(self, 'nav_buttons_reversed', False)):
-            self.prev_btn.setText(next_text)
-            self.next_btn.setText(prev_text)
-        else:
-            self.prev_btn.setText(prev_text)
-            self.next_btn.setText(next_text)
+        _update_nav_button_texts_impl(self)
 
     def on_nav_reverse_toggled(self: MainWindow, checked: object) -> None:
-        self.nav_buttons_reversed = bool(checked)
-        self._update_nav_button_texts()
-        self.update_navigation_ui()
-        self.save_ui_state()
+        _on_nav_reverse_toggled_impl(self, checked)
 
     def on_nav_button_clicked(self: MainWindow, logical_step: int) -> None:
-        delta = -logical_step if bool(getattr(self, 'nav_buttons_reversed', False)) else logical_step
-        self.change_page(delta)
+        _on_nav_button_clicked_impl(self, logical_step)
 
     # ── XTCビューア: 状態 / ナビゲーション ─────────────────
 
     def _xtc_page_count(self: MainWindow) -> int:
-        if self._effective_device_view_source() == 'preview':
-            return len(self._runtime_device_preview_pages())
-        return len(self._runtime_xtc_pages())
+        return _xtc_page_count_impl(self)
 
     def _normalized_device_preview_page_index(self: MainWindow, index: object = None, *, total: object = None) -> int:
-        default_total = len(self._runtime_device_preview_pages())
-        total_pages = default_total if total is None else worker_logic._int_config_value({'value': total}, 'value', default_total)
-        raw_value = getattr(self, 'current_device_preview_page_index', 0) if index is None else index
-        current_index = worker_logic._int_config_value({'value': raw_value}, 'value', 0)
-        return studio_logic.normalize_navigation_index(total_pages, current_index)
+        return _normalized_device_preview_page_index_impl(self, index, total=total)
 
     def _normalized_xtc_page_index(self: MainWindow, index: object = None, *, total: object = None) -> int:
-        total_pages = self._xtc_page_count() if total is None else worker_logic._int_config_value({'value': total}, 'value', self._xtc_page_count())
-        raw_value = getattr(self, 'current_page_index', 0) if index is None else index
-        current_index = worker_logic._int_config_value({'value': raw_value}, 'value', 0)
-        return studio_logic.normalize_navigation_index(total_pages, current_index)
+        return _normalized_xtc_page_index_impl(self, index, total=total)
 
     def _xtc_page_state_payload(self: MainWindow, index: object = None) -> dict[str, object]:
-        if self._effective_device_view_source() == 'preview':
-            pages = self._runtime_device_preview_pages()
-            total = len(pages)
-            current_index = self._normalized_device_preview_page_index(index, total=total)
-            return studio_logic.build_xtc_page_state_payload(pages, current_index)
-        pages = self._runtime_xtc_pages()
-        total = len(pages)
-        current_index = self._normalized_xtc_page_index(index, total=total)
-        return studio_logic.build_xtc_page_state_payload(pages, current_index)
+        return _xtc_page_state_payload_impl(self, index)
 
     def _xtc_navigation_payload(self: MainWindow) -> dict[str, object]:
-        view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
-        if view_mode == 'font':
-            if self._is_file_viewer_mode_active():
-                xtc_pages = self._runtime_xtc_pages()
-                total = len(xtc_pages)
-                current_index = worker_logic._int_config_value({'value': getattr(self, 'current_page_index', 0)}, 'value', 0)
-                if total > 0:
-                    current_index = max(0, min(total - 1, current_index))
-                else:
-                    current_index = 0
-                payload = studio_logic.build_navigation_display_state(
-                    view_mode='font',
-                    total=total,
-                    current_index=current_index,
-                    truncated=False,
-                )
-                payload = dict(payload)
-                payload['file_viewer_navigation'] = True
-                payload['current_page'] = current_index + 1 if total > 0 else 0
-                return payload
-            preview_pages = self._runtime_preview_pages()
-            total = len(preview_pages)
-            current_index = worker_logic._int_config_value({'value': getattr(self, 'current_preview_page_index', 0)}, 'value', 0)
-            if total > 0:
-                current_index = max(0, min(total - 1, current_index))
-            else:
-                current_index = 0
-            payload = studio_logic.build_navigation_display_state(
-                view_mode='font',
-                total=total,
-                current_index=current_index,
-                truncated=bool(getattr(self, 'preview_pages_truncated', False)),
-            )
-            return payload
-
-        is_preview = self._effective_device_view_source() == 'preview'
-        if is_preview:
-            total = len(self._runtime_device_preview_pages())
-            current_index = self._normalized_device_preview_page_index(total=total)
-            current_page = current_index + 1 if total > 0 else 0
-        else:
-            page_payload = self._xtc_page_state_payload()
-            total = max(0, worker_logic._int_config_value(page_payload, 'total', 0))
-            current_index = worker_logic._int_config_value(page_payload, 'current_index', 0)
-            current_page = worker_logic._int_config_value(page_payload, 'current_page', 0)
-        return studio_logic.build_right_pane_navigation_payload(
-            view_mode=view_mode,
-            total=total,
-            current_index=current_index,
-            current_page=current_page,
-            is_preview=is_preview,
-            truncated=getattr(self, 'device_preview_pages_truncated', False),
-        )
+        return _xtc_navigation_payload_impl(self)
 
     def _apply_xtc_navigation_ui(self: MainWindow, payload: Mapping[str, object]) -> None:
-        if not hasattr(self, 'prev_btn'):
-            return
-        total = max(0, self._payload_int_value(payload, 'total', 0))
-        view_mode = str(payload.get('view_mode', 'device') or 'device').strip().lower()
-        is_preview = self._effective_device_view_source() == 'preview'
-        if is_preview:
-            index_default = getattr(self, 'current_device_preview_page_index', 0)
-            current_index = self._normalized_device_preview_page_index(payload.get('current_index', index_default), total=total)
-        else:
-            index_default = getattr(self, 'current_page_index', 0)
-            current_index = self._normalized_xtc_page_index(payload.get('current_index', index_default), total=total)
-        nav_state = studio_logic.build_navigation_display_state(
-            view_mode=view_mode,
-            total=total,
-            current_index=current_index,
-            truncated=False,
-        )
-        nav_state_mapping = nav_state if isinstance(nav_state, Mapping) else {}
-        nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())
-        total_label_format = nav_bar_plan.get('page_total_label_format', '/ {total}')
-        fallback_total_label = total_label_format.format(total=total)
-        apply_state = studio_logic.build_navigation_apply_state(
-            payload,
-            nav_state_mapping,
-            total_label_format=total_label_format,
-            nav_buttons_reversed=getattr(self, 'nav_buttons_reversed', False),
-        )
-        active = self._payload_bool_value(apply_state, 'active', False)
-        current_page = self._payload_int_value(apply_state, 'current_page', 0)
-        if view_mode != 'font':
-            if is_preview:
-                if getattr(self, 'current_device_preview_page_index', 0) != current_index:
-                    self.current_device_preview_page_index = current_index
-            elif getattr(self, 'current_page_index', 0) != current_index:
-                self.current_page_index = current_index
-                self._refresh_loaded_xtc_viewer_profile_cache()
-        self.prev_btn.setEnabled(self._payload_bool_value(apply_state, 'prev_enabled', False))
-        self.next_btn.setEnabled(self._payload_bool_value(apply_state, 'next_enabled', False))
-        if hasattr(self, 'page_input'):
-            self.page_input.setEnabled(active)
-        if hasattr(self, 'page_total_label'):
-            self.page_total_label.setText(str(apply_state.get('total_label', fallback_total_label)))
-        if view_mode == 'font':
-            if self._payload_bool_value(payload, 'file_viewer_navigation', False):
-                current_xtc_index = max(0, min(total - 1, current_index)) if total > 0 else 0
-                if getattr(self, 'current_page_index', 0) != current_xtc_index:
-                    self.current_page_index = current_xtc_index
-                    self._refresh_loaded_xtc_viewer_profile_cache()
-            else:
-                current_preview_index = max(0, min(total - 1, current_index)) if total > 0 else 0
-                if getattr(self, 'current_preview_page_index', 0) != current_preview_index:
-                    self.current_preview_page_index = current_preview_index
-        self._reset_xtc_page_input(total, current_page)
-        if not self._apply_file_viewer_mode_preview_button_state():
-            self._restore_preview_update_button_from_file_viewer_state()
+        _apply_xtc_navigation_ui_impl(self, payload)
 
     def update_navigation_ui(self: MainWindow) -> None:
-        self._apply_xtc_navigation_ui(self._xtc_navigation_payload())
+        update_navigation_ui_impl(self)
 
     def on_page_input_changed(self: MainWindow, value: int) -> None:
-        if 'main_view_mode' in self.__dict__ and self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) == 'font':
-            if self._is_file_viewer_mode_active():
-                xtc_pages = self._runtime_xtc_pages()
-                nav_state = studio_logic.build_navigation_input_state(
-                    total=len(xtc_pages),
-                    current_index=getattr(self, 'current_page_index', 0),
-                    input_page=value,
-                )
-                if self._payload_bool_value(nav_state, 'is_valid', False):
-                    new_idx = self._payload_int_value(nav_state, 'target_index', 0)
-                    if new_idx != getattr(self, 'current_page_index', 0):
-                        self.current_page_index = new_idx
-                        self._refresh_loaded_xtc_viewer_profile_cache()
-                        try:
-                            self._render_current_xtc_page_in_font_view(refresh_navigation=False)
-                        except Exception as exc:
-                            self._show_preview_message(f'ファイルビューワー表示エラー\n{exc}')
-                    else:
-                        self._sync_active_display_context_for_visible_page()
-                    self.update_navigation_ui()
-                    return
-            pages = self._runtime_preview_pages()
-            if pages:
-                nav_state = studio_logic.build_navigation_input_state(
-                    total=len(pages),
-                    current_index=getattr(self, 'current_preview_page_index', 0),
-                    input_page=value,
-                )
-                if self._payload_bool_value(nav_state, 'is_valid', False):
-                    new_idx = self._payload_int_value(nav_state, 'target_index', 0)
-                    if new_idx != getattr(self, 'current_preview_page_index', 0):
-                        self.current_preview_page_index = new_idx
-                        self.render_current_preview_page()
-                    else:
-                        self._sync_active_display_context_for_visible_page()
-                    self.update_navigation_ui()
-                    return
-                self._sync_active_display_context_for_visible_page()
-                self.update_navigation_ui()
-                return
-            self._sync_active_display_context_for_visible_page()
-            self.update_navigation_ui()
-            return
-
-        is_device_preview = self._effective_device_view_source() == 'preview'
-        total = len(self._runtime_device_preview_pages()) if is_device_preview else self._xtc_page_count()
-        current_device_index = getattr(self, 'current_device_preview_page_index', 0) if is_device_preview else getattr(self, 'current_page_index', 0)
-        nav_state = studio_logic.build_navigation_input_state(
-            total=total,
-            current_index=current_device_index,
-            input_page=value,
-        )
-        if self._payload_bool_value(nav_state, 'is_valid', False):
-            if is_device_preview:
-                self._set_current_device_preview_page_index(
-                    self._payload_int_value(nav_state, 'target_index', 0),
-                    refresh_navigation=True,
-                )
-            else:
-                self._set_current_page_index(
-                    self._payload_int_value(nav_state, 'target_index', 0),
-                    refresh_navigation=True,
-                )
-            return
-        self._sync_active_display_context_for_visible_page()
-        self.update_navigation_ui()
+        _on_page_input_changed_impl(self, value)
 
     def change_page(self: MainWindow, delta: int) -> None:
-        if 'main_view_mode' in self.__dict__ and self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) == 'font':
-            if self._is_file_viewer_mode_active():
-                xtc_pages = self._runtime_xtc_pages()
-                nav_state = studio_logic.build_navigation_delta_state(
-                    total=len(xtc_pages),
-                    current_index=getattr(self, 'current_page_index', 0),
-                    delta=delta,
-                )
-                target_index = self._payload_int_value(nav_state, 'target_index', getattr(self, 'current_page_index', 0))
-                if target_index != getattr(self, 'current_page_index', 0):
-                    self.current_page_index = target_index
-                    self._refresh_loaded_xtc_viewer_profile_cache()
-                    try:
-                        self._render_current_xtc_page_in_font_view(refresh_navigation=False)
-                    except Exception as exc:
-                        self._show_preview_message(f'ファイルビューワー表示エラー\n{exc}')
-                else:
-                    self._sync_active_display_context_for_visible_page()
-                self.update_navigation_ui()
-                return
-            pages = self._runtime_preview_pages()
-            if pages:
-                nav_state = studio_logic.build_navigation_delta_state(
-                    total=len(pages),
-                    current_index=getattr(self, 'current_preview_page_index', 0),
-                    delta=delta,
-                )
-                new_idx = self._payload_int_value(nav_state, 'target_index', 0)
-                if new_idx != getattr(self, 'current_preview_page_index', 0):
-                    self.current_preview_page_index = new_idx
-                    self.render_current_preview_page()
-                else:
-                    self._sync_active_display_context_for_visible_page()
-                self.update_navigation_ui()
-                return
-            self._sync_active_display_context_for_visible_page()
-            self.update_navigation_ui()
-            return
-
-        is_device_preview = self._effective_device_view_source() == 'preview'
-        total = len(self._runtime_device_preview_pages()) if is_device_preview else self._xtc_page_count()
-        if total <= 0:
-            self._sync_active_display_context_for_visible_page()
-            self.update_navigation_ui()
-            return
-        current_device_index = getattr(self, 'current_device_preview_page_index', 0) if is_device_preview else getattr(self, 'current_page_index', 0)
-        nav_state = studio_logic.build_navigation_delta_state(
-            total=total,
-            current_index=current_device_index,
-            delta=delta,
-        )
-        target_index = self._payload_int_value(nav_state, 'target_index', current_device_index)
-        if is_device_preview:
-            self._set_current_device_preview_page_index(target_index, refresh_navigation=True)
-        else:
-            self._set_current_page_index(target_index, refresh_navigation=True)
+        _change_page_impl(self, delta)
 
     # ── プロファイル・設定変更ハンドラ ─────────────────────
 
@@ -7859,46 +3696,10 @@ class MainWindow(QMainWindow):
         self._refresh_preview_after_profile_change()
 
     def _refresh_font_preview_display_if_needed(self: MainWindow, refresh_navigation: bool = True) -> None:
-        if self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font')) != 'font':
-            return
-        try:
-            if self._is_file_viewer_mode_active():
-                if self._render_current_xtc_page_in_font_view(refresh_navigation=refresh_navigation):
-                    return
-            if self._runtime_preview_pages():
-                try:
-                    self._set_current_xtc_display_name_with_fallback('プレビュー')
-                except Exception:
-                    pass
-                self._clear_results_selection_with_fallback(
-                    results_controller.build_results_clear_selection_context()
-                )
-                self.render_current_preview_page()
-            else:
-                placeholder = 'プレビューを生成してください'
-                try:
-                    self._set_current_xtc_display_name(self._preview_failure_display_name())
-                except Exception:
-                    pass
-                try:
-                    restored_path = self._preview_failure_loaded_path()
-                    if restored_path:
-                        self._sync_results_selection_for_loaded_path_with_fallback(restored_path)
-                    else:
-                        self._clear_results_selection_with_fallback(
-                            results_controller.build_results_clear_selection_context()
-                        )
-                except Exception:
-                    pass
-                self._show_preview_message(placeholder)
-                self._update_preview_status_label(placeholder)
-                if refresh_navigation:
-                    try:
-                        self.update_navigation_ui()
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+        return _refresh_font_preview_display_if_needed_impl(
+            self,
+            refresh_navigation=refresh_navigation,
+        )
 
     def on_actual_size_toggled(self: MainWindow, checked: bool) -> None:
         self._apply_viewer_display_runtime_state()
@@ -8002,6 +3803,32 @@ class MainWindow(QMainWindow):
         raw_value = current_data() if callable(current_data) else None
         return studio_logic.normalize_tatechuyoko_digit_mode(raw_value, '2')
 
+    def _on_latin_orientation_mode_changed(self: MainWindow) -> None:
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
+
+    def current_latin_orientation_mode(self: MainWindow) -> str:
+        combo = self.__dict__.get('latin_orientation_combo')
+        if combo is None:
+            return 'vertical'
+        current_data = getattr(combo, 'currentData', None)
+        raw_value = current_data() if callable(current_data) else None
+        value = str(raw_value or 'vertical').strip().lower()
+        return value if value in {'vertical', 'horizontal'} else 'vertical'
+
+    def _on_opening_bracket_indent_mode_changed(self: MainWindow) -> None:
+        self._schedule_live_preview_refresh(reset_page=False)
+        self._finalize_setting_change(refresh_preview=False)
+
+    def current_opening_bracket_indent_mode(self: MainWindow) -> str:
+        combo = self.__dict__.get('opening_bracket_indent_combo')
+        if combo is None:
+            return 'none'
+        current_data = getattr(combo, 'currentData', None)
+        raw_value = current_data() if callable(current_data) else None
+        value = str(raw_value or 'none').strip().lower()
+        return value if value in OPENING_BRACKET_INDENT_MODE_LABELS else 'none'
+
     def _on_glyph_position_mode_changed(self: MainWindow) -> None:
         self._schedule_live_preview_refresh(reset_page=False)
         self._finalize_setting_change(refresh_preview=False)
@@ -8027,6 +3854,9 @@ class MainWindow(QMainWindow):
 
     def current_halfwidth_alpha_position_mode(self: MainWindow) -> str:
         return self._current_glyph_position_mode('halfwidth_alpha_position_combo')
+
+    def current_middle_dot_position_mode(self: MainWindow) -> str:
+        return self._current_glyph_position_mode('middle_dot_position_combo')
 
     def current_tatechuyoko_symbol_position_mode(self: MainWindow) -> str:
         return self._current_glyph_position_mode('tatechuyoko_symbol_position_combo')
@@ -8142,115 +3972,16 @@ class MainWindow(QMainWindow):
         self.rename_preset_display_name(key)
 
     def _flush_pending_ui_changes(self: MainWindow) -> None:
-        focus_widget = getattr(QApplication, 'focusWidget', None)
-        current_focus = focus_widget() if callable(focus_widget) else None
-        clear_focus = getattr(current_focus, 'clearFocus', None)
-        process_events = getattr(QApplication, 'processEvents', None)
-
-        if callable(clear_focus):
-            try:
-                clear_focus()
-            except Exception:
-                pass
-
-        if callable(process_events):
-            for _ in range(2):
-                try:
-                    process_events()
-                except Exception:
-                    break
+        _flush_pending_ui_changes_impl(
+            getattr(QApplication, 'focusWidget', None),
+            getattr(QApplication, 'processEvents', None),
+        )
 
     def _preset_combo_entries(self: MainWindow) -> tuple[tuple[str, object], ...]:
         return preset_combo_entries(getattr(self, 'preset_combo', None))
 
     def _live_preset_widget_payload(self: MainWindow) -> PresetDefinition:
-        profile_widget_present = self.__dict__.get('profile_combo') is not None or 'current_profile_key' in self.__dict__
-        dimension_widget_present = self.__dict__.get('width_spin') is not None or self.__dict__.get('height_spin') is not None
-
-        selected_profile = None
-        resolved_width = None
-        resolved_height = None
-        if profile_widget_present or dimension_widget_present:
-            selected_profile = self._selected_profile_key()
-            _profile_key, _profile, resolved_width, resolved_height = self._resolved_profile_and_dimensions(selected_profile)
-
-        def _widget_value(name: str) -> object:
-            widget = self.__dict__.get(name)
-            if widget is None or not hasattr(widget, 'value'):
-                return None
-            try:
-                return widget.value()
-            except Exception:
-                return None
-
-        night_mode = None
-        if self.__dict__.get('night_check') is not None:
-            try:
-                night_mode = bool(self.night_check.isChecked())
-            except Exception:
-                night_mode = None
-
-        dither = None
-        if self.__dict__.get('dither_check') is not None:
-            try:
-                dither = bool(self.dither_check.isChecked())
-            except Exception:
-                dither = None
-
-        ruby_hide = None
-        if self.__dict__.get('ruby_hide_check') is not None:
-            try:
-                ruby_hide = bool(self.ruby_hide_check.isChecked())
-            except Exception:
-                ruby_hide = None
-
-        page_number_enabled = None
-        if self.__dict__.get('page_number_check') is not None:
-            try:
-                page_number_enabled = bool(self.page_number_check.isChecked())
-            except Exception:
-                page_number_enabled = None
-
-        font_value = self.current_font_value() if self.__dict__.get('font_combo') is not None else None
-        return settings_controller.build_live_preset_widget_payload(
-            profile=selected_profile,
-            width=resolved_width,
-            height=resolved_height,
-            font_size=_widget_value('font_size_spin'),
-            ruby_size=_widget_value('ruby_size_spin'),
-            ruby_hide=ruby_hide,
-            page_number_enabled=page_number_enabled,
-            page_number_font_size=_widget_value('page_number_font_size_spin'),
-            progress_bar_enabled=self._safe_widget_checked('progress_bar_check') if self.__dict__.get('progress_bar_check') is not None else None,
-            progress_bar_position=self._safe_combo_data('progress_bar_position_combo', 'center') if self.__dict__.get('progress_bar_position_combo') is not None else None,
-            line_spacing=_widget_value('line_spacing_spin'),
-            margin_t=_widget_value('margin_t_spin'),
-            margin_b=_widget_value('margin_b_spin'),
-            margin_r=_widget_value('margin_r_spin'),
-            margin_l=_widget_value('margin_l_spin'),
-            threshold=_widget_value('threshold_spin'),
-            night_mode=night_mode,
-            dither=dither,
-            kinsoku_mode=self.current_kinsoku_mode() if self.__dict__.get('kinsoku_mode_combo') is not None else None,
-            tatechuyoko_digit_mode=self.current_tatechuyoko_digit_mode() if self.__dict__.get('tatechuyoko_digit_mode_combo') is not None else None,
-            output_format=self.current_output_format() if self.__dict__.get('output_format_combo') is not None else None,
-            punctuation_position_mode=self.current_punctuation_position_mode() if self.__dict__.get('punctuation_position_combo') is not None else None,
-            ichi_position_mode=self.current_ichi_position_mode() if self.__dict__.get('ichi_position_combo') is not None else None,
-            halfwidth_digit_position_mode=self.current_halfwidth_digit_position_mode() if self.__dict__.get('halfwidth_digit_position_combo') is not None else None,
-            halfwidth_alpha_position_mode=self.current_halfwidth_alpha_position_mode() if self.__dict__.get('halfwidth_alpha_position_combo') is not None else None,
-            tatechuyoko_symbol_position_mode=self.current_tatechuyoko_symbol_position_mode() if self.__dict__.get('tatechuyoko_symbol_position_combo') is not None else None,
-            lower_closing_bracket_position_mode=self.current_lower_closing_bracket_position_mode() if self.__dict__.get('lower_closing_bracket_position_combo') is not None else None,
-            wave_dash_drawing_mode=self.current_wave_dash_drawing_mode() if self.__dict__.get('wave_dash_drawing_combo') is not None else None,
-            wave_dash_position_mode=self.current_wave_dash_position_mode() if self.__dict__.get('wave_dash_position_combo') is not None else None,
-            font_file=font_value,
-            default_font_name=self._default_font_name(),
-            allowed_profiles=DEVICE_PROFILES,
-            allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
-            allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
-            allowed_output_formats=OUTPUT_FORMAT_LABELS,
-            normalize_choice_value=self._normalize_choice_value,
-            normalize_font_setting_value=self._normalize_font_setting_value,
-        )
+        return _live_preset_widget_payload_impl(self)
 
     def _preset_settings_prefix(self: MainWindow, key: str) -> str:
         return preset_settings_prefix(key)
@@ -8270,195 +4001,54 @@ class MainWindow(QMainWindow):
         fallback_ichi_position_mode: str = 'standard',
         fallback_halfwidth_digit_position_mode: str = 'standard',
         fallback_halfwidth_alpha_position_mode: str = 'standard',
+        fallback_latin_orientation_mode: str = 'vertical',
+        fallback_opening_bracket_indent_mode: str = 'none',
+        fallback_middle_dot_position_mode: str = 'standard',
         fallback_tatechuyoko_symbol_position_mode: str = 'standard',
         fallback_lower_closing_bracket_position_mode: str = 'standard',
         fallback_wave_dash_drawing_mode: str = 'rotate',
         fallback_wave_dash_position_mode: str = 'standard',
         fallback_output_format: str = 'xtch',
     ) -> PresetDefinition:
-        source = payload if isinstance(payload, dict) else {}
-        fallback_payload = fallback if isinstance(fallback, dict) else {}
-        normalized = dict(fallback_payload)
-        normalized.update(source)
-
-        default_font = self._default_font_name()
-        font_fallback = self._normalize_font_setting_value(
-            fallback_font or fallback_payload.get('font_file') or default_font,
-            default_font,
-        ) or default_font
-
-        normalized['profile'] = self._normalize_choice_value(
-            source.get('profile', fallback_payload.get('profile', 'x4')),
-            'x4',
-            DEVICE_PROFILES,
+        return _normalize_preset_payload_impl(
+            self,
+            payload,
+            fallback=fallback,
+            fallback_font=fallback_font,
+            fallback_night_mode=fallback_night_mode,
+            fallback_dither=fallback_dither,
+            fallback_ruby_hide=fallback_ruby_hide,
+            fallback_kinsoku_mode=fallback_kinsoku_mode,
+            fallback_tatechuyoko_digit_mode=fallback_tatechuyoko_digit_mode,
+            fallback_punctuation_position_mode=fallback_punctuation_position_mode,
+            fallback_ichi_position_mode=fallback_ichi_position_mode,
+            fallback_halfwidth_digit_position_mode=fallback_halfwidth_digit_position_mode,
+            fallback_halfwidth_alpha_position_mode=fallback_halfwidth_alpha_position_mode,
+            fallback_latin_orientation_mode=fallback_latin_orientation_mode,
+            fallback_opening_bracket_indent_mode=fallback_opening_bracket_indent_mode,
+            fallback_middle_dot_position_mode=fallback_middle_dot_position_mode,
+            fallback_tatechuyoko_symbol_position_mode=fallback_tatechuyoko_symbol_position_mode,
+            fallback_lower_closing_bracket_position_mode=fallback_lower_closing_bracket_position_mode,
+            fallback_wave_dash_drawing_mode=fallback_wave_dash_drawing_mode,
+            fallback_wave_dash_position_mode=fallback_wave_dash_position_mode,
+            fallback_output_format=fallback_output_format,
         )
-        normalized['font_file'] = self._normalize_font_setting_value(
-            source.get('font_file', fallback_payload.get('font_file')),
-            font_fallback,
-        ) or font_fallback
-
-        numeric_defaults = {
-            'font_size': 26,
-            'ruby_size': 12,
-            'line_spacing': 44,
-            'margin_t': 12,
-            'margin_b': 14,
-            'margin_r': 12,
-            'margin_l': 12,
-            'width': 480,
-            'height': 800,
-        }
-        for field, default in numeric_defaults.items():
-            base_default = worker_logic._int_config_value(fallback_payload, field, default)
-            normalized[field] = worker_logic._int_config_value(source, field, base_default)
-
-        normalized['night_mode'] = worker_logic._bool_config_value(
-            source,
-            'night_mode',
-            worker_logic._bool_config_value(fallback_payload, 'night_mode', bool(fallback_night_mode)),
-        )
-        normalized['dither'] = worker_logic._bool_config_value(
-            source,
-            'dither',
-            worker_logic._bool_config_value(fallback_payload, 'dither', bool(fallback_dither)),
-        )
-        normalized['ruby_hide'] = worker_logic._bool_config_value(
-            source,
-            'ruby_hide',
-            worker_logic._bool_config_value(fallback_payload, 'ruby_hide', bool(fallback_ruby_hide)),
-        )
-        normalized['kinsoku_mode'] = self._normalize_choice_value(
-            source.get('kinsoku_mode', fallback_payload.get('kinsoku_mode', fallback_kinsoku_mode)),
-            'standard',
-            KINSOKU_MODE_LABELS,
-        )
-        normalized['tatechuyoko_digit_mode'] = studio_logic.normalize_tatechuyoko_digit_mode(
-            source.get('tatechuyoko_digit_mode', fallback_payload.get('tatechuyoko_digit_mode', fallback_tatechuyoko_digit_mode)),
-            '2',
-        )
-        normalized['output_format'] = self._normalize_choice_value(
-            source.get('output_format', fallback_payload.get('output_format', fallback_output_format)),
-            'xtc',
-            OUTPUT_FORMAT_LABELS,
-        )
-        normalized['punctuation_position_mode'] = self._normalize_choice_value(
-            source.get('punctuation_position_mode', fallback_payload.get('punctuation_position_mode', fallback_punctuation_position_mode)),
-            'standard',
-            GLYPH_POSITION_MODE_LABELS,
-        )
-        normalized['ichi_position_mode'] = self._normalize_choice_value(
-            source.get('ichi_position_mode', fallback_payload.get('ichi_position_mode', fallback_ichi_position_mode)),
-            'standard',
-            GLYPH_POSITION_MODE_LABELS,
-        )
-        normalized['halfwidth_digit_position_mode'] = self._normalize_choice_value(
-            source.get('halfwidth_digit_position_mode', fallback_payload.get('halfwidth_digit_position_mode', fallback_halfwidth_digit_position_mode)),
-            'standard',
-            GLYPH_POSITION_MODE_LABELS,
-        )
-        normalized['halfwidth_alpha_position_mode'] = self._normalize_choice_value(
-            source.get('halfwidth_alpha_position_mode', fallback_payload.get('halfwidth_alpha_position_mode', fallback_halfwidth_alpha_position_mode)),
-            'standard',
-            GLYPH_POSITION_MODE_LABELS,
-        )
-        normalized['tatechuyoko_symbol_position_mode'] = self._normalize_choice_value(
-            source.get('tatechuyoko_symbol_position_mode', fallback_payload.get('tatechuyoko_symbol_position_mode', fallback_tatechuyoko_symbol_position_mode)),
-            'standard',
-            GLYPH_POSITION_MODE_LABELS,
-        )
-        normalized['lower_closing_bracket_position_mode'] = self._normalize_choice_value(
-            source.get('lower_closing_bracket_position_mode', fallback_payload.get('lower_closing_bracket_position_mode', fallback_lower_closing_bracket_position_mode)),
-            'standard',
-            CLOSING_BRACKET_POSITION_MODE_LABELS,
-        )
-        normalized['wave_dash_drawing_mode'] = studio_logic.normalize_wave_dash_drawing_mode(
-            source.get('wave_dash_drawing_mode', fallback_payload.get('wave_dash_drawing_mode', fallback_wave_dash_drawing_mode)),
-            'rotate',
-        )
-        normalized['wave_dash_position_mode'] = studio_logic.normalize_wave_dash_position_mode(
-            source.get('wave_dash_position_mode', fallback_payload.get('wave_dash_position_mode', fallback_wave_dash_position_mode)),
-            'standard',
-        )
-
-        candidate_width = worker_logic._int_config_value(source, 'width', int(normalized['width']))
-        candidate_height = worker_logic._int_config_value(source, 'height', int(normalized['height']))
-        profile_key, _profile, resolved_width, resolved_height = self._resolved_profile_and_dimensions(
-            normalized.get('profile', 'x4'),
-            candidate_width,
-            candidate_height,
-        )
-        normalized['profile'] = profile_key
-        normalized['width'] = resolved_width
-        normalized['height'] = resolved_height
-
-        return normalized
 
     def _preset_display_name_settings_key(self: MainWindow, key: str) -> str:
         return preset_display_name_settings_key(key)
 
     def _default_preset_display_name(self: MainWindow, key: str) -> str:
-        default_payload = DEFAULT_PRESET_DEFINITIONS.get(key, {})
-        return studio_logic.localized_preset_display_name_text(
-            default_payload.get('button_text') or default_payload.get('name') or key or 'プリセット',
-            self.current_ui_language_value(),
-        )
+        return _default_preset_display_name_impl(self, key)
 
     def _normalize_preset_display_name(self: MainWindow, value: object, *, fallback: str) -> str:
         return normalize_preset_display_name(value, fallback=fallback)
 
     def _load_preset_definitions(self: MainWindow) -> PresetDefinitions:
-        presets = deepcopy(DEFAULT_PRESET_DEFINITIONS)
-        stored_font = self._normalize_font_setting_value(
-            self._settings_default_value('font_file', self._default_font_name()),
-            self._default_font_name(),
-        ) or self._default_font_name()
-        stored_night = worker_logic._bool_config_value({'night_mode': self._settings_default_value('night_mode', False)}, 'night_mode', False)
-        stored_dither = worker_logic._bool_config_value({'dither': self._settings_default_value('dither', False)}, 'dither', False)
-        stored_ruby_hide = worker_logic._bool_config_value({'ruby_hide': self._settings_default_value('ruby_hide', False)}, 'ruby_hide', False)
-        stored_kinsoku_mode = self._normalize_choice_value(
-            worker_logic._str_config_value({'kinsoku_mode': self._settings_default_value('kinsoku_mode', 'standard')}, 'kinsoku_mode', 'standard'),
-            'standard',
-            KINSOKU_MODE_LABELS,
-        )
-        stored_output_format = self._normalize_choice_value(
-            worker_logic._str_config_value({'output_format': self._settings_default_value('output_format', 'xtch')}, 'output_format', 'xtch'),
-            'xtch',
-            OUTPUT_FORMAT_LABELS,
-        )
-        for key in list(presets):
-            preset = presets[key]
-            prefix = self._preset_settings_prefix(key)
-            for field in PRESET_FIELDS:
-                sk = f'{prefix}/{field}'
-                if self._settings_contains_key(sk):
-                    dv = preset.get(field)
-                    preset[field] = self._settings_raw_value(sk, dv)
-            display_name_key = self._preset_display_name_settings_key(key)
-            if self._settings_contains_key(display_name_key):
-                default_display_name = self._default_preset_display_name(key)
-                display_name = self._normalize_preset_display_name(
-                    self._settings_raw_value(display_name_key, default_display_name),
-                    fallback=default_display_name,
-                )
-                preset['button_text'] = display_name
-                preset['name'] = display_name
-            presets[key] = self._normalize_preset_payload(
-                preset,
-                fallback=DEFAULT_PRESET_DEFINITIONS.get(key),
-                fallback_font=stored_font,
-                fallback_night_mode=bool(stored_night),
-                fallback_dither=bool(stored_dither),
-                fallback_ruby_hide=bool(stored_ruby_hide),
-                fallback_kinsoku_mode=stored_kinsoku_mode,
-                fallback_wave_dash_drawing_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_drawing_mode', 'rotate')),
-                fallback_wave_dash_position_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_position_mode', 'standard')),
-                fallback_output_format=stored_output_format,
-            )
-        return presets
+        return _load_preset_definitions_impl(self)
 
 
     def _preset_display_name(self: MainWindow, p: PresetDefinition) -> str:
-        return studio_logic.build_preset_display_name(p, self.current_ui_language_value())
+        return _preset_display_name_impl(self, p)
 
     def _preset_summary_plain_text(
         self: MainWindow,
@@ -8467,17 +4057,7 @@ class MainWindow(QMainWindow):
         summary_tag: str = '',
         include_name_line: bool = True,
     ) -> str:
-        font_text = core.describe_font_value(p.get('font_file') or self._default_font_name())
-        return studio_logic.build_preset_summary_text(
-            p,
-            font_text=font_text,
-            device_profile_keys=DEVICE_PROFILES.keys(),
-            kinsoku_mode_labels=KINSOKU_MODE_LABELS,
-            output_format_labels=OUTPUT_FORMAT_LABELS,
-            summary_tag=summary_tag,
-            include_name_line=include_name_line,
-            language=self.current_ui_language_value(),
-        )
+        return _preset_summary_plain_text_impl(self, p, summary_tag=summary_tag, include_name_line=include_name_line)
 
     def _preset_summary_text(
         self: MainWindow,
@@ -8486,264 +4066,39 @@ class MainWindow(QMainWindow):
         summary_tag: str = '',
         include_name_line: bool = True,
     ) -> str:
-        font_text = core.describe_font_value(p.get('font_file') or self._default_font_name())
-        return studio_logic.build_preset_summary_html(
-            p,
-            font_text=font_text,
-            device_profile_keys=DEVICE_PROFILES.keys(),
-            kinsoku_mode_labels=KINSOKU_MODE_LABELS,
-            output_format_labels=OUTPUT_FORMAT_LABELS,
-            summary_tag=summary_tag,
-            include_name_line=include_name_line,
-            language=self.current_ui_language_value(),
-        )
+        return _preset_summary_text_impl(self, p, summary_tag=summary_tag, include_name_line=include_name_line)
 
     def _preset_side_summary_text(self: MainWindow, summary: object) -> str:
         return preset_side_summary_text(summary)
 
     def _current_settings_summary_payload(self: MainWindow, key: str | None = None) -> PresetDefinition:
-        selected_key = key or self.selected_preset_key()
-        base_preset = dict(self.preset_definitions.get(selected_key) or {}) if selected_key else {}
-        current_payload = dict(self.current_preset_payload())
-        if base_preset:
-            merged = dict(base_preset)
-            merged.update(current_payload)
-            return merged
-        return current_payload
+        return _current_settings_summary_payload_impl(self, key)
 
     def _preset_summary_label_measurement_width(self: MainWindow, label: object) -> int:
-        """Return the best available real QLabel width for compact summary height."""
-        candidate_widths: list[int] = []
-
-        contents_rect_getter = getattr(label, 'contentsRect', None)
-        if callable(contents_rect_getter):
-            try:
-                contents_width = int(contents_rect_getter().width())
-                if contents_width > 0:
-                    candidate_widths.append(contents_width)
-            except Exception:
-                pass
-
-        label_width_getter = getattr(label, 'width', None)
-        if callable(label_width_getter):
-            try:
-                label_width = int(label_width_getter())
-                if label_width > 0:
-                    candidate_widths.append(label_width)
-            except Exception:
-                pass
-
-        parent_getter = getattr(label, 'parentWidget', None)
-        parent = None
-        if callable(parent_getter):
-            try:
-                parent = parent_getter()
-            except Exception:
-                parent = None
-        parent_width_getter = getattr(parent, 'width', None)
-        if callable(parent_width_getter):
-            try:
-                parent_width = int(parent_width_getter())
-                if parent_width > 0:
-                    margin_total = 0
-                    layout_getter = getattr(parent, 'layout', None)
-                    layout = None
-                    if callable(layout_getter):
-                        try:
-                            layout = layout_getter()
-                        except Exception:
-                            layout = None
-                    margins_getter = getattr(layout, 'contentsMargins', None)
-                    if callable(margins_getter):
-                        try:
-                            margins = margins_getter()
-                            margin_total = int(margins.left()) + int(margins.right())
-                        except Exception:
-                            margin_total = 0
-                    candidate_widths.append(max(1, parent_width - margin_total))
-            except Exception:
-                pass
-
-        reliable_widths = [width for width in candidate_widths if width >= 240]
-        if reliable_widths:
-            return max(reliable_widths)
-        if candidate_widths:
-            return max(candidate_widths)
-        return 320
+        return _preset_summary_label_measurement_width_impl(self, label)
 
     def _queue_preset_summary_label_layout_retry(self: MainWindow) -> None:
-        """Re-measure the preset summary after Qt has assigned the real label width."""
-        if getattr(self, '_preset_summary_layout_retry_queued', False):
-            return
-        timer_single_shot = getattr(QTimer, 'singleShot', None)
-        if not callable(timer_single_shot):
-            return
-        self._preset_summary_layout_retry_queued = True
-
-        def _retry() -> None:
-            self._preset_summary_layout_retry_queued = False
-            self._update_preset_summary_label_layout(queue_retry=False)
-
-        try:
-            timer_single_shot(0, _retry)
-        except Exception:
-            self._preset_summary_layout_retry_queued = False
+        _queue_preset_summary_label_layout_retry_impl(self, timer_class=QTimer)
 
     def _update_preset_summary_label_layout(self: MainWindow, *, queue_retry: bool = True) -> None:
-        label = getattr(self, 'preset_summary_label', None)
-        if label is None:
-            return
-        text = ''
-        text_getter = getattr(label, 'text', None)
-        if callable(text_getter):
-            try:
-                text = str(text_getter() or '')
-            except Exception:
-                text = ''
-        compact_text = studio_logic.compact_multiline_label_text(text)
-        if compact_text != text:
-            set_text = getattr(label, 'setText', None)
-            if callable(set_text):
-                try:
-                    set_text(compact_text)
-                    text = compact_text
-                except Exception:
-                    text = compact_text
-            else:
-                text = compact_text
-        height = 0
-        if text.strip():
-            width_value = self._preset_summary_label_measurement_width(label)
-            used_precise_metrics = False
-            font_metrics_getter = getattr(label, 'fontMetrics', None)
-            if callable(font_metrics_getter) and width_value > 0:
-                try:
-                    metrics = font_metrics_getter()
-                    text_word_wrap = getattr(Qt, 'TextWordWrap', 0)
-                    align_top = getattr(Qt, 'AlignTop', 0)
-                    align_left = getattr(Qt, 'AlignLeft', 0)
-                    flags = int(text_word_wrap) | int(align_top) | int(align_left)
-                    line_spacing_value = 0
-                    line_spacing_getter = getattr(metrics, 'lineSpacing', None)
-                    if callable(line_spacing_getter):
-                        try:
-                            line_spacing_value = max(1, int(line_spacing_getter()))
-                        except Exception:
-                            line_spacing_value = 0
-                    if line_spacing_value > 0:
-                        measured_height = 0
-                        for line in text.splitlines():
-                            rect = metrics.boundingRect(QRect(0, 0, width_value, 10000), flags, line)
-                            measured_height += max(line_spacing_value, int(rect.height()))
-                        if measured_height > 0:
-                            height = measured_height
-                            used_precise_metrics = True
-                    if height <= 0:
-                        rect = metrics.boundingRect(QRect(0, 0, width_value, 10000), flags, text)
-                        height = int(rect.height())
-                        if height > 0:
-                            used_precise_metrics = True
-                except Exception:
-                    height = 0
-            if height <= 0:
-                height_for_width = getattr(label, 'heightForWidth', None)
-                if callable(height_for_width) and width_value > 0:
-                    try:
-                        height = int(height_for_width(width_value))
-                    except Exception:
-                        height = 0
-            if height <= 0:
-                size_hint = getattr(label, 'sizeHint', None)
-                if callable(size_hint):
-                    try:
-                        height = int(size_hint().height())
-                    except Exception:
-                        height = 0
-            if height > 0 and not used_precise_metrics:
-                height = max(1, height - 2)
-        fixed_height_applied = False
-        if height > 0:
-            set_fixed_height = getattr(label, 'setFixedHeight', None)
-            if callable(set_fixed_height):
-                try:
-                    set_fixed_height(height)
-                    fixed_height_applied = True
-                except Exception:
-                    fixed_height_applied = False
-            if not fixed_height_applied:
-                for setter_name in ('setMinimumHeight', 'setMaximumHeight'):
-                    setter = getattr(label, setter_name, None)
-                    if callable(setter):
-                        try:
-                            setter(height)
-                        except Exception:
-                            pass
-        update_geometry = getattr(label, 'updateGeometry', None)
-        if callable(update_geometry):
-            update_geometry()
-        section_box = getattr(self, 'preset_section_box', None)
-        if section_box is not None:
-            try:
-                section_box.setMinimumHeight(max(1, int(section_box.sizeHint().height()) + 14))
-                section_box.updateGeometry()
-            except Exception:
-                pass
-        if queue_retry:
-            self._queue_preset_summary_label_layout_retry()
+        _update_preset_summary_label_layout_impl(
+            self,
+            queue_retry=queue_retry,
+            qt_namespace=Qt,
+            rect_class=QRect,
+        )
 
     def _sync_summary_payload(self: MainWindow, payload: PresetDefinition | None, *, summary_tag: str = '') -> None:
-        if not hasattr(self, 'preset_summary_label') or not hasattr(self, 'preset_combo'):
-            return
-        if not payload:
-            return
-        summary = self._preset_side_summary_text(
-            self._preset_summary_plain_text(payload, summary_tag=summary_tag, include_name_line=False)
-        )
-        self.preset_summary_label.setText(summary)
-        self.preset_combo.setToolTip(summary)
-        self._update_preset_summary_label_layout()
+        _sync_summary_payload_impl(self, payload, summary_tag=summary_tag)
 
     def _sync_current_settings_summary(self: MainWindow, key: str | None = None) -> None:
-        summary_payload = self._current_settings_summary_payload(key)
-        if not summary_payload:
-            return
-        self._sync_summary_payload(summary_payload, summary_tag='（現在の設定）')
+        _sync_current_settings_summary_impl(self, key)
 
     def _sync_selected_preset_summary(self: MainWindow, key: str | None = None) -> None:
-        if not hasattr(self, 'preset_summary_label') or not hasattr(self, 'preset_combo'):
-            return
-        selected_key = key or self.selected_preset_key()
-        preset = self.preset_definitions.get(selected_key) if selected_key else None
-        if not preset:
-            self.preset_summary_label.setText('')
-            self.preset_combo.setToolTip('')
-            return
-        summary = self._preset_side_summary_text(
-            self._preset_summary_plain_text(preset, include_name_line=False)
-        )
-        self.preset_summary_label.setText(summary)
-        self.preset_combo.setToolTip(summary)
-        adjust = getattr(self.preset_summary_label, 'adjustSize', None)
-        if callable(adjust):
-            adjust()
-        update = getattr(self.preset_summary_label, 'update', None)
-        if callable(update):
-            update()
-        self._update_preset_summary_label_layout()
+        _sync_selected_preset_summary_impl(self, key)
 
     def _refresh_preset_ui(self: MainWindow) -> None:
-        if not hasattr(self, 'preset_combo'):
-            return
-        current_key = self.preset_combo.currentData()
-        with _bulk_block_signals(self.preset_combo):
-            self.preset_combo.clear()
-            for key, p in self.preset_definitions.items():
-                self.preset_combo.addItem(self._preset_display_name(p), key)
-            if current_key:
-                idx = self.preset_combo.findData(current_key)
-                if idx >= 0:
-                    self.preset_combo.setCurrentIndex(idx)
-        self._sync_selected_preset_summary()
+        _refresh_preset_ui_impl(self, bulk_block_signals=_bulk_block_signals)
 
     def _selected_profile_key(self: MainWindow) -> str:
         current_key = self._current_profile_key_or_default()
@@ -8873,150 +4228,16 @@ class MainWindow(QMainWindow):
         key: str,
         payload: Mapping[str, object],
     ) -> tuple[bool, str]:
-        if not self._settings_status_is_ok(self.settings_store):
-            return False, f'設定ファイルへの書き込みに失敗しました。状態: {self._settings_status_text(self.settings_store)}'
-
-        readback_store = self._settings_store_for_disk_readback()
-        if not self._settings_status_is_ok(readback_store):
-            return False, f'設定ファイルの再読込に失敗しました。状態: {self._settings_status_text(readback_store)}'
-
-        prefix = self._preset_settings_prefix(key)
-        expected_fields = tuple(str(field) for field in payload.keys())
-        missing_fields: list[str] = []
-        readback_payload: dict[str, object] = {}
-        sentinel = object()
-        for field in expected_fields:
-            settings_key = f'{prefix}/{field}'
-            if not self._settings_store_contains_key(readback_store, settings_key):
-                missing_fields.append(field)
-                continue
-            value = self._settings_store_raw_value(readback_store, settings_key, sentinel)
-            if value is sentinel:
-                missing_fields.append(field)
-                continue
-            readback_payload[field] = value
-        if missing_fields:
-            sample = ', '.join(missing_fields[:4])
-            if len(missing_fields) > 4:
-                sample += f' ほか {len(missing_fields) - 4} 件'
-            return False, f'保存後に設定値を再読込できませんでした: {sample}'
-
-        fallback = DEFAULT_PRESET_DEFINITIONS.get(key)
-        fallback_font = self._default_font_name()
-        expected_norm = self._normalize_preset_payload(
-            payload,
-            fallback=fallback,
-            fallback_font=fallback_font,
-            fallback_wave_dash_drawing_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_drawing_mode', 'rotate')),
-            fallback_wave_dash_position_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_position_mode', 'standard')),
-        )
-        actual_norm = self._normalize_preset_payload(
-            readback_payload,
-            fallback=fallback,
-            fallback_font=fallback_font,
-            fallback_wave_dash_drawing_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_drawing_mode', 'rotate')),
-            fallback_wave_dash_position_mode=str(DEFAULT_RENDER_SETTINGS.get('wave_dash_position_mode', 'standard')),
-        )
-        mismatched: list[str] = []
-        for field in expected_fields:
-            if field in PRESET_FIELDS and expected_norm.get(field) != actual_norm.get(field):
-                mismatched.append(field)
-        if mismatched:
-            sample = ', '.join(mismatched[:4])
-            if len(mismatched) > 4:
-                sample += f' ほか {len(mismatched) - 4} 件'
-            return False, f'保存後に再読込した設定値が一致しません: {sample}'
-        return True, ''
+        return _verify_preset_save_readback_impl(self, key, payload)
 
     def _show_preset_save_failed(self: MainWindow, reason: str) -> None:
-        message = 'プリセットを保存できませんでした。\n\n'
-        message += str(reason or '設定ファイルへの書き込みを確認できませんでした。')
-        message += '\n\nアプリをzip内や書き込み不可フォルダから起動していないか確認してください。'
-        try:
-            APP_LOGGER.error('プリセット保存失敗: %s', reason)
-        except Exception:
-            pass
-        self._show_warning_dialog_with_status_fallback(
-            'プリセット保存',
-            message,
-            duration_ms=7000,
-        )
+        _show_preset_save_failed_impl(self, reason)
 
     def _request_preview_refresh_after_preset_apply(self: MainWindow) -> bool:
-        """Run the same lightweight preview refresh as the Preview Update button once.
-
-        Preset application touches many UI widgets at once.  The individual
-        value-change signals are blocked during the bulk update, so this method
-        intentionally performs a single manual preview refresh after the preset
-        has fully settled.  Guarding on an instance-created preview button keeps headless unit
-        stubs from accidentally invoking the heavy renderer before the UI has
-        been built.
-        """
-        instance_attrs = getattr(self, '__dict__', {})
-        has_preview_button = False
-        if isinstance(instance_attrs, Mapping):
-            has_preview_button = any(
-                instance_attrs.get(name) is not None
-                for name in ('preview_update_btn', 'preview_refresh_btn')
-            )
-        if not has_preview_button:
-            return False
-        refresh = getattr(self, 'manual_refresh_preview', None)
-        if not callable(refresh):
-            return False
-        try:
-            refresh()
-            return True
-        except Exception:
-            try:
-                APP_LOGGER.exception('プリセット読込後のプレビュー自動更新に失敗しました')
-            except Exception:
-                pass
-            try:
-                self.mark_preview_dirty()
-            except Exception:
-                pass
-            return False
+        return _request_preview_refresh_after_preset_apply_impl(self)
 
     def _preset_save_confirmation_text(self: MainWindow, preset: Mapping[str, object], preset_name: str) -> str:
-        profile_key = str(preset.get('profile', 'x4')).strip().lower() or 'x4'
-        profile_text = profile_key.upper()
-        out_key = str(preset.get('output_format', 'xtch')).strip().lower() or 'xtch'
-        out_text = OUTPUT_FORMAT_LABELS.get(out_key, out_key.upper())
-        font_text = core.describe_font_value(str(preset.get('font_file') or '')) or str(preset.get('font_file') or '未指定')
-        kinsoku_key = str(preset.get('kinsoku_mode', 'standard')).strip().lower() or 'standard'
-        tate_key = studio_logic.normalize_tatechuyoko_digit_mode(preset.get('tatechuyoko_digit_mode', '2'), '2')
-        glyph_default = 'standard'
-        def _int(name: str, default: int) -> int:
-            return worker_logic._int_config_value(preset, name, default)
-        def _bool_text(name: str, default: bool = False) -> str:
-            return 'ON' if worker_logic._bool_config_value(preset, name, default) else 'OFF'
-        def _label(mapping: Mapping[str, str], value: object, default: str = glyph_default) -> str:
-            key = str(value if value is not None else default).strip().lower() or default
-            return mapping.get(key, key)
-        page_number_text = 'ON' if worker_logic._bool_config_value(preset, 'page_number_enabled', False) else 'OFF'
-        page_number_size = _int('page_number_font_size', 12)
-        return '\n'.join([
-            f'保存先プリセット: {preset_name}',
-            '',
-            '[基本]',
-            f'  機種: {profile_text}  /  サイズ: {_int("width", 480)} x {_int("height", 800)}  /  出力形式: {out_text}',
-            f'  フォント: {font_text}',
-            '',
-            '[文字・組版]',
-            f'  本文: {_int("font_size", 26)}  /  ルビ: {_int("ruby_size", 12)}  /  行間: {_int("line_spacing", 44)}  /  ルビ消し: {_bool_text("ruby_hide")}',
-            f'  余白: 上 {_int("margin_t", 12)}  /  下 {_int("margin_b", 14)}  /  左 {_int("margin_l", 12)}  /  右 {_int("margin_r", 12)}',
-            f'  ページ番号: {page_number_text}  /  サイズ: {page_number_size}',
-            '',
-            '[画像処理]',
-            f'  白黒反転: {_bool_text("night_mode")}  /  ディザ: {_bool_text("dither")}  /  しきい値: {_int("threshold", 128)}',
-            '',
-            '[禁則・補正]',
-            f'  禁則: {KINSOKU_MODE_LABELS.get(kinsoku_key, kinsoku_key)}  /  縦中横: {TATECHUYOKO_DIGIT_MODE_LABELS.get(tate_key, tate_key)}',
-            f'  句読点: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("punctuation_position_mode"))}  /  漢数字 一: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("ichi_position_mode"))}  /  半角数字/記号: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("halfwidth_digit_position_mode"))}  /  半角英字: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("halfwidth_alpha_position_mode"))}',
-            f'  縦中横記号: {_label(GLYPH_POSITION_MODE_LABELS, preset.get("tatechuyoko_symbol_position_mode"))}  /  下鍵括弧: {_label(CLOSING_BRACKET_POSITION_MODE_LABELS, preset.get("lower_closing_bracket_position_mode"))}',
-            f'  波線描画: {_label(WAVE_DASH_DRAWING_MODE_LABELS, preset.get("wave_dash_drawing_mode"), "rotate")}  /  波線位置: {_label(WAVE_DASH_POSITION_MODE_LABELS, preset.get("wave_dash_position_mode"))}',
-        ])
+        return _preset_save_confirmation_text_impl(self, preset, preset_name)
 
     def _preset_rename_dialog_result(
         self: MainWindow,
@@ -9024,513 +4245,83 @@ class MainWindow(QMainWindow):
         current_name: str,
         default_name: str,
     ) -> tuple[str, str | None]:
-        dialog = QDialog(self)
-        dialog.setWindowTitle(self._ui_text('プリセット名称変更'))
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(8)
-
-        label = QLabel(self._ui_text('現在選択中のプリセット表示名を変更します。'))
-        layout.addWidget(label)
-
-        edit = QLineEdit(current_name)
-        edit.selectAll()
-        layout.addWidget(edit)
-
-        hint = QLabel(f'{self._ui_text("既定名:")} {default_name}')
-        hint.setObjectName('dimLabel')
-        layout.addWidget(hint)
-
-        row = QHBoxLayout()
-        reset_btn = QPushButton(self._ui_text('既定名に戻す'))
-        ok_btn = QPushButton('OK')
-        cancel_btn = QPushButton(self._ui_text('キャンセル'))
-        row.addWidget(reset_btn)
-        row.addStretch(1)
-        row.addWidget(ok_btn)
-        row.addWidget(cancel_btn)
-        layout.addLayout(row)
-
-        result: dict[str, str | None] = {'action': 'cancel', 'name': None}
-
-        def accept_name() -> None:
-            name = edit.text().strip()
-            if not name:
-                self._show_warning_dialog_with_status_fallback(
-                    'プリセット名称変更',
-                    'プリセット名を空欄にはできません。',
-                )
-                return
-            result['action'] = 'rename'
-            result['name'] = name
-            dialog.accept()
-
-        def reset_default() -> None:
-            result['action'] = 'reset'
-            result['name'] = None
-            dialog.accept()
-
-        ok_btn.clicked.connect(accept_name)
-        cancel_btn.clicked.connect(dialog.reject)
-        reset_btn.clicked.connect(reset_default)
-        edit.returnPressed.connect(accept_name)
-
-        exec_method = getattr(dialog, 'exec', None) or getattr(dialog, 'exec_', None)
-        accepted = exec_method() == getattr(QDialog, 'Accepted', 1) if callable(exec_method) else False
-        if not accepted:
-            return 'cancel', None
-        return str(result.get('action') or 'cancel'), result.get('name')
-
-    def rename_preset_display_name(self: MainWindow, key: str) -> None:
-        preset = self.preset_definitions.get(key)
-        if not preset:
-            self._show_warning_dialog_with_status_fallback(
-                'プリセット名称変更',
-                '名称を変更するプリセットが見つかりませんでした。',
-            )
-            return
-        default_name = self._default_preset_display_name(key)
-        current_name = self._normalize_preset_display_name(
-            preset.get('button_text') or preset.get('name'),
-            fallback=default_name,
-        )
-        action, new_name = self._preset_rename_dialog_result(
+        return _preset_rename_dialog_result_impl(
+            self,
             current_name=current_name,
             default_name=default_name,
+            dialog_cls=QDialog,
+            vbox_layout_cls=QVBoxLayout,
+            label_cls=QLabel,
+            line_edit_cls=QLineEdit,
+            hbox_layout_cls=QHBoxLayout,
+            push_button_cls=QPushButton,
         )
-        if action == 'cancel':
-            return
 
-        display_key = self._preset_display_name_settings_key(key)
-        if action == 'reset':
-            display_name = default_name
-            self.settings_store.remove(display_key)
-        else:
-            display_name = self._normalize_preset_display_name(new_name, fallback=default_name)
-            self.settings_store.setValue(display_key, display_name)
-
-        self.settings_store.sync()
-        updated = dict(preset)
-        updated['button_text'] = display_name
-        updated['name'] = display_name
-        self.preset_definitions[key] = updated
-        self._refresh_preset_ui()
-        self._set_combo_to_data(self.preset_combo, key)
-        self._sync_selected_preset_summary(key)
-        self.save_ui_state()
-        self._show_ui_status_message_unless_render_failure_visible(
-            f'プリセット名を「{display_name}」に変更しました。',
-            3500,
-        )
+    def rename_preset_display_name(self: MainWindow, key: str) -> None:
+        rename_preset_display_name_impl(self, key)
 
     def save_preset(self: MainWindow, key: str) -> None:
-        p = self.preset_definitions.get(key)
-        if not p:
-            return
-        payload = settings_controller.build_preset_save_payload(
-            current_preset=self.current_preset_payload(),
-            live_widget_payload=self._live_preset_widget_payload(),
-        )
-        summary_payload = settings_controller.build_preset_summary_payload(
-            stored_preset=p,
-            pending_payload=payload,
-        )
-        preset_name = self._preset_display_name(p)
-        summary = self._preset_save_confirmation_text(summary_payload, preset_name)
-        yes_button = getattr(QMessageBox, 'Yes', 1)
-        no_button = getattr(QMessageBox, 'No', 0)
-        ans = self._ask_question_dialog_with_status_fallback(
-            'プリセット保存',
-            f"現在の設定を{preset_name}へ保存しますか？\n\n{summary}",
-            yes_button | no_button,
-            yes_button,
-            fallback_status_message='プリセット保存の確認ダイアログを表示できませんでした。',
-            fallback_answer=no_button,
-        )
-        if ans != yes_button:
-            return
-        updated = deepcopy(p)
-        updated.update(payload)
-        prefix = self._preset_settings_prefix(key)
-        try:
-            for field, value in payload.items():
-                self.settings_store.setValue(f'{prefix}/{field}', value)
-            self.settings_store.sync()
-            verified, reason = self._verify_preset_save_readback(key, payload)
-        except Exception as exc:
-            APP_LOGGER.exception('プリセット保存中に例外が発生しました')
-            self._show_preset_save_failed(str(exc))
-            return
-        if not verified:
-            self._show_preset_save_failed(reason)
-            return
-
-        self.preset_definitions[key] = updated
-        self._refresh_preset_ui()
-        self._sync_selected_preset_summary(key)
-        self._show_ui_status_message_unless_render_failure_visible(
-            settings_controller.build_preset_status_message('save', preset_name),
-            4000,
-        )
+        save_preset_impl(self, key)
 
     def apply_preset(self: MainWindow, key: str) -> None:
-        p = self.preset_definitions.get(key)
-        if not p:
-            self._show_ui_status_message_unless_render_failure_visible(
-                '適用するプリセットが見つかりませんでした。',
-                3000,
-            )
-            return
-
-        apply_context_obj = settings_controller.build_preset_apply_context(
-            preset_key=key,
-            stored_preset=p,
-            fallback_preset=DEFAULT_PRESET_DEFINITIONS.get(key),
-            fallback_font=self._default_font_name(),
-            combo_entries=self._preset_combo_entries(),
-            normalize_preset_payload=self._normalize_preset_payload,
-            preset_display_name=self._preset_display_name,
-        )
-        apply_context = apply_context_obj if isinstance(apply_context_obj, Mapping) else {}
-        idx = self._payload_optional_int_value(apply_context, 'combo_index')
-        if idx is None:
-            idx = -1
-        preset_combo = getattr(self, 'preset_combo', None)
-        if idx >= 0 and preset_combo is not None and preset_combo.currentIndex() != idx:
-            with _bulk_block_signals(preset_combo):
-                preset_combo.setCurrentIndex(idx)
-
-        payload_obj = apply_context.get('payload', {})
-        payload = dict(payload_obj) if isinstance(payload_obj, Mapping) else {}
-        with _bulk_block_signals(*self._preset_apply_widgets()):
-            self._apply_settings_payload_to_ui(payload)
-
-        self._sync_loaded_xtc_profile_ui_override()
-        self._apply_profile_runtime_state()
-        self._apply_viewer_display_runtime_state()
-        mode = getattr(self, 'main_view_mode', 'font')
-        normalized_mode = self._normalized_main_view_mode(mode)
-        self._refresh_preset_ui()
-        self._finalize_setting_change(update_status=True)
-        self._sync_selected_preset_summary(key)
-
-        # sweep350: プリセット読込後の自動プレビュー更新は、手動の
-        # 「プレビュー更新」と同じ経路を優先し、1回だけ走らせる。
-        # これが使える実GUIでは、ここで古い runtime preview を先に再描画
-        # しない。ヘッドレス/旧スタブで手動更新経路が無い場合だけ、従来の
-        # 表示中ページ再描画へフォールバックする。
-        auto_refresh_requested = self._request_preview_refresh_after_preset_apply()
-        if not auto_refresh_requested:
-            try:
-                if normalized_mode == 'device':
-                    self._refresh_active_view_after_mode_change(mode)
-                elif self._runtime_preview_pages():
-                    self._refresh_font_preview_display_if_needed()
-                else:
-                    self._refresh_font_preview_display_if_needed()
-                    self._refresh_active_view_after_mode_change(mode)
-            except Exception:
-                pass
-
-        status_message = _coerce_ui_message_text(apply_context.get('status_message'))
-        self._show_ui_status_message_unless_render_failure_visible(status_message, 3000)
+        apply_preset_impl(self, key)
 
     # ── ファイル選択 ───────────────────────────────────────
 
     def _apply_dropped_target_path(self: MainWindow, path: object) -> None:
-        normalized_path = worker_logic.normalize_target_path_text(path)
-        if not normalized_path:
-            return
-        self._set_target_path_for_normal_preview(normalized_path)
-        self._update_top_status()
-        self.save_ui_state()
-        self._show_ui_status_message_unless_render_failure_visible('ドロップしたファイルを変換対象に設定しました。', 3000)
-        self._schedule_target_preview_refresh(reset_page=True)
+        return _apply_dropped_target_path_impl(self, path)
 
     def _default_output_folder_start_dir(self: MainWindow) -> str:
-        selected = worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', ''))
-        if selected:
-            return selected
-        current = worker_logic.normalize_target_path_text(self.target_edit.text()) or str(Path.home())
-        lower_current = current.lower()
-        if lower_current.endswith((
-            '.epub', '.zip', '.rar', '.cbz', '.cbr',
-            '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
-            '.xtc', '.xtch',
-        )):
-            slash_pos = max(current.rfind('/'), current.rfind('\\'))
-            if slash_pos > 0:
-                return current[:slash_pos] or current
-        return current
+        return _default_output_folder_start_dir_impl(self)
 
     def _selected_output_dir_label_text(self: MainWindow) -> str:
-        selected = worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', ''))
-        return selected or self._ui_text('ソースファイルと同じフォルダ')
+        return _selected_output_dir_label_text_impl(self)
 
     def _announce_selected_output_dir(self: MainWindow, timeout: int = 5000) -> None:
-        self._show_ui_status_message_unless_render_failure_visible(
-            f'{self._ui_text("保存先:")} {self._selected_output_dir_label_text()}',
-            timeout,
-        )
+        return _announce_selected_output_dir_impl(self, timeout)
 
     def reset_output_folder(self: MainWindow) -> None:
-        self.selected_output_dir = ''
-        # Clear any previously selected output-folder target held by the
-        # completion card.  Without this, pressing [保存先リセット] could leave
-        # the next [保存先を開く] action biased toward an older folder if the next
-        # conversion result did not provide a fresh explicit target.
-        self._completion_card_open_folder_target = ''
-        self._last_conversion_open_folder_target = ''
-        self._active_conversion_open_folder_target = ''
-        self.save_ui_state()
-        self._show_information_dialog_with_status_fallback(
-            '保存先リセット',
-            '保存先指定を解除しました。\n次回の単体変換は、ソースファイルと同じフォルダへ保存します。',
-            fallback_status_message='保存先指定を解除しました。次回の単体変換はソースファイルと同じフォルダへ保存します。',
-        )
-        self._announce_selected_output_dir()
-        try:
-            self._update_top_status()
-        except Exception:
-            pass
+        return reset_output_folder_impl(self)
 
     def select_output_folder(self: MainWindow) -> None:
-        start_dir = self._default_output_folder_start_dir()
-        path = self._get_existing_directory_with_status_fallback(
-            '保存先フォルダを選択',
-            start_dir,
-            fallback_status_message='保存先フォルダの選択ダイアログを開けませんでした。',
-        )
-        if not path:
-            return
-        normalized_path = worker_logic.normalize_target_path_text(path)
-        self.selected_output_dir = normalized_path
-        self._last_conversion_open_folder_target = normalized_path
-        self._completion_card_open_folder_target = normalized_path
-        self.save_ui_state()
-        self._announce_selected_output_dir()
+        return select_output_folder_impl(self)
 
     def select_target_path(self: MainWindow, as_file: bool) -> None:
-        if not as_file:
-            self.select_output_folder()
-            return
-        current = worker_logic.normalize_target_path_text(self.target_edit.text()) or str(Path.home())
-        if as_file:
-            path, _ = self._get_open_file_name_with_status_fallback(
-                '変換対象を選択',
-                current,
-                'Supported (*.epub *.zip *.rar *.cbz *.cbr *.txt *.md *.markdown *.png *.jpg *.jpeg *.webp);;All Files (*.*)',
-                fallback_status_message='変換対象のファイル選択ダイアログを開けませんでした。',
-            )
-        else:
-            start_dir = current
-            # 対象ファイルが入力済みの場合は、フォルダ選択ダイアログの
-            # 初期位置だけ親フォルダへ寄せる。ここでは Path(current).parent を
-            # 使わず、文字列だけで処理する。Windows では Path が "C:/..." を
-            # "C:\\..." に変換するため、テストや保存値が揺れるうえ、将来の
-            # stat 系呼び出し混入を見落としやすくなる。対象指定時は軽量処理に限定する。
-            lower_current = current.lower()
-            if lower_current.endswith((
-                '.epub', '.zip', '.rar', '.cbz', '.cbr',
-                '.txt', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp',
-                '.xtc', '.xtch',
-            )):
-                slash_pos = max(current.rfind('/'), current.rfind('\\'))
-                if slash_pos > 0:
-                    start_dir = current[:slash_pos] or current
-            path = self._get_existing_directory_with_status_fallback(
-                '変換対象フォルダを選択',
-                start_dir,
-                fallback_status_message='変換対象フォルダの選択ダイアログを開けませんでした。',
-            )
-        if path:
-            normalized_path = worker_logic.normalize_target_path_text(path)
-            self._set_target_path_for_normal_preview(normalized_path)
-            self._update_top_status()
-            self.save_ui_state()
-            # ファイル／フォルダ指定直後はプレビューを更新する。
-            # ただし handler 内では重い生成を直接走らせず、UI イベントループへ
-            # 一度戻してから preview_page_limit_spin の指定ページ数だけを生成する。
-            # 全文変換・本変換ルートへは入らない。
-            self._schedule_target_preview_refresh(reset_page=True)
+        return select_target_path_impl(self, as_file)
+
+
+    def export_current_preview_share_png(self: MainWindow) -> bool:
+        return export_current_preview_share_png_impl(self)
 
     def select_font_file(self: MainWindow) -> None:
-        path, _ = self._get_open_file_name_with_status_fallback(
-            'フォントファイルを選択',
-            str(Path.home()),
-            'Fonts (*.ttf *.ttc *.otf);;All Files (*.*)',
-            fallback_status_message='フォントファイル選択ダイアログを開けませんでした。',
-        )
-        if path:
-            preserved_night_mode = None
-            if hasattr(self, 'night_check') and hasattr(self.night_check, 'isChecked'):
-                try:
-                    preserved_night_mode = bool(self.night_check.isChecked())
-                except Exception:
-                    preserved_night_mode = None
-            normalized = self._normalize_font_setting_value(
-                path,
-                self.current_font_value() or self._default_font_name(),
-            )
-            if not normalized:
-                return
-            self._ensure_font_combo_value(normalized)
-            self._set_current_font_value(normalized)
-            if preserved_night_mode is not None and bool(self.night_check.isChecked()) != preserved_night_mode:
-                self.night_check.setChecked(preserved_night_mode)
-            self._finalize_setting_change()
+        return select_font_file_impl(self)
 
     def current_font_value(self: MainWindow) -> str:
-        if not hasattr(self, 'font_combo'):
-            return ''
-        value = self.font_combo.currentData()
-        if value in (None, ''):
-            value = self.font_combo.currentText()
-        fallback = self._default_font_name() if hasattr(self, '_default_font_name') else ''
-        normalized = self._normalize_font_setting_value(value, fallback)
-        return normalized or fallback or str(value or '').strip()
+        return current_font_value_impl(self)
 
     def _available_font_entries(self: MainWindow) -> list[dict[str, str]]:
-        fonts = []
-        for entry in core.get_font_entries():
-            path_value, _font_index = core.parse_font_spec(entry.get('value', ''))
-            lower = str(path_value).lower()
-            if any(t in lower for t in ('msgothic', 'msmincho', 'ms gothic', 'ms mincho')):
-                continue
-            fonts.append({'label': str(entry.get('label', '')), 'value': str(entry.get('value', ''))})
-
-        def sort_key(entry: dict):
-            path_value, font_index = core.parse_font_spec(entry.get('value', ''))
-            base = Path(path_value).name.lower()
-            label = str(entry.get('label', '')).lower()
-
-            def weight_priority(text: str) -> int:
-                if 'thin' in text or 'hairline' in text:
-                    return 0
-                if 'extralight' in text or 'ultralight' in text or 'extra-light' in text or 'ultra-light' in text:
-                    return 1
-                if 'light' in text:
-                    return 2
-                if 'regular' in text or 'normal' in text or 'book' in text:
-                    return 3
-                if 'medium' in text:
-                    return 4
-                if 'demibold' in text or 'demi-bold' in text:
-                    return 5
-                if 'semibold' in text or 'semi-bold' in text:
-                    return 6
-                if 'bold' in text:
-                    return 7
-                if 'extrabold' in text or 'ultrabold' in text or 'extra-bold' in text or 'ultra-bold' in text:
-                    return 8
-                if 'black' in text or 'heavy' in text:
-                    return 9
-                return 50
-
-            family_key = base
-            for token in (
-                'hairline', 'thin', 'ultralight', 'ultra-light', 'extralight', 'extra-light',
-                'light', 'regular', 'normal', 'book', 'medium', 'demibold', 'demi-bold',
-                'semibold', 'semi-bold', 'bold', 'extrabold', 'extra-bold', 'ultrabold',
-                'ultra-bold', 'black', 'heavy'
-            ):
-                family_key = family_key.replace(token, '')
-            family_key = family_key.replace('--', '-').replace('__', '_').replace('  ', ' ').strip(' -_')
-            combined = f'{base} {label}'
-            return (family_key or base, weight_priority(combined), base, label, int(font_index or 0))
-
-        return sorted(fonts, key=sort_key)
+        return _available_font_entries_impl(self)
 
     def _populate_font_combo(self: MainWindow) -> None:
-        core.clear_font_entry_cache()
-        self.font_combo.clear()
-        for entry in self._available_font_entries():
-            self.font_combo.addItem(entry['label'], entry['value'])
+        return _populate_font_combo_impl(self)
 
     def _missing_font_combo_label(self: MainWindow, font_value: str) -> str:
-        path_value, _font_index = core.parse_font_spec(font_value)
-        base_label = core.describe_font_value(font_value) or Path(path_value or font_value).name
-        suffix = '（プリセット値 / 未検出）'
-        if suffix in base_label:
-            return base_label
-        return f'{base_label}{suffix}'
+        return _missing_font_combo_label_impl(self, font_value)
 
     def _combo_find_data_index(self: MainWindow, combo: object, value: object) -> int:
         return _combo_find_data_index_for_widget(combo, value)
 
     def _ensure_font_combo_value(self: MainWindow, font_value: str) -> None:
-        font_value = core.build_font_spec(*core.parse_font_spec(font_value))
-        if not font_value or not hasattr(self, 'font_combo'):
-            return
-        if self._combo_find_data_index(self.font_combo, font_value) >= 0:
-            return
-        added = False
-        path_value, _font_index = core.parse_font_spec(font_value)
-        candidate_entries = core.get_font_entries_for_value(path_value or font_value)
-        exact_detected = False
-        for entry in candidate_entries:
-            value = str(entry.get('value', '')).strip()
-            if not value:
-                continue
-            if value == font_value:
-                exact_detected = True
-            if self._combo_find_data_index(self.font_combo, value) >= 0:
-                continue
-            self.font_combo.addItem(str(entry.get('label', value)), value)
-            added = True
-        if self._combo_find_data_index(self.font_combo, font_value) < 0:
-            label = self._missing_font_combo_label(font_value) if not exact_detected else (core.describe_font_value(font_value) or Path(path_value or font_value).name)
-            self.font_combo.addItem(label, font_value)
-        elif added:
-            ordered_entries = self._available_font_entries()
-            ordered_values = {entry['value'] for entry in ordered_entries}
-            existing_values = {self.font_combo.itemData(i): self.font_combo.itemText(i) for i in range(self.font_combo.count())}
-            self.font_combo.clear()
-            for entry in ordered_entries:
-                self.font_combo.addItem(entry['label'], entry['value'])
-            for value, label in existing_values.items():
-                if value not in ordered_values:
-                    self.font_combo.addItem(label, value)
+        return _ensure_font_combo_value_impl(self, font_value)
 
     def _set_current_font_value(self: MainWindow, font_value: str) -> None:
-        font_value = core.build_font_spec(*core.parse_font_spec(font_value))
-        if not font_value or not hasattr(self, 'font_combo'):
-            return
-        preserved_night_mode = None
-        if hasattr(self, 'night_check') and hasattr(self.night_check, 'isChecked'):
-            try:
-                preserved_night_mode = bool(self.night_check.isChecked())
-            except Exception:
-                preserved_night_mode = None
-        self._ensure_font_combo_value(font_value)
-        idx = self._combo_find_data_index(self.font_combo, font_value)
-        if idx >= 0:
-            self.font_combo.setCurrentIndex(idx)
-            reset_popup_scroll = getattr(self.font_combo, '_reset_popup_scroll_to_top', None)
-            if callable(reset_popup_scroll):
-                reset_popup_scroll()
-        if preserved_night_mode is not None and bool(self.night_check.isChecked()) != preserved_night_mode:
-            self.night_check.setChecked(preserved_night_mode)
+        return _set_current_font_value_impl(self, font_value)
 
     def _default_font_name(self: MainWindow) -> str:
-        preferred = ['NotoSansJP-SemiBold.ttf', 'NotoSansJP-SemiBold.otf', 'NotoSansJP-SemiBold.ttc']
-        available = self._available_font_entries()
-        for preferred_name in preferred:
-            for entry in available:
-                path_value, _font_index = core.parse_font_spec(entry['value'])
-                base = Path(path_value).name
-                label = entry['label'].lower()
-                if base == preferred_name and (not preferred_name.lower().endswith('.ttc') or 'semibold' in label or 'semi-bold' in label):
-                    return entry['value']
-        for entry in available:
-            if 'semibold' in entry['label'].lower():
-                return entry['value']
-        return available[0]['value'] if available else ''
+        return _default_font_name_impl(self)
 
     def _apply_default_font_selection(self: MainWindow) -> None:
-        name = self._default_font_name()
-        if name:
-            self._set_current_font_value(name)
+        return _apply_default_font_selection_impl(self)
 
     def _update_top_status(self: MainWindow) -> None:
         if self.__dict__.get('worker') is not None:
@@ -9560,52 +4351,12 @@ class MainWindow(QMainWindow):
         return default
 
     def _current_render_settings_base(self: MainWindow) -> WorkerConversionSettings:
-        width, height = self._effective_output_dimensions()
-        defaults = DEFAULT_RENDER_SETTINGS
-        return {
-            'target': worker_logic.normalize_target_path_text(self._safe_line_edit_text('target_edit')),
-            'output_dir': worker_logic.normalize_target_path_text(self.__dict__.get('selected_output_dir', '')),
-            'font_file': self.current_font_value() if hasattr(self, 'current_font_value') else str(defaults['font_file']),
-            'font_size': self._safe_widget_value('font_size_spin', defaults['font_size']),
-            'ruby_size': self._safe_widget_value('ruby_size_spin', defaults['ruby_size']),
-            'ruby_hide': self._safe_widget_checked('ruby_hide_check', bool(defaults['ruby_hide'])),
-            'page_number_enabled': self._safe_widget_checked('page_number_check', bool(defaults.get('page_number_enabled', False))),
-            'page_number_font_size': self._safe_widget_value('page_number_font_size_spin', int(defaults.get('page_number_font_size', 12))),
-            'progress_bar_enabled': self._safe_widget_checked('progress_bar_check', bool(defaults.get('progress_bar_enabled', False))),
-            'progress_bar_position': self._safe_combo_data('progress_bar_position_combo', str(defaults.get('progress_bar_position', 'center'))),
-            'line_spacing': self._safe_widget_value('line_spacing_spin', defaults['line_spacing']),
-            'margin_t': self._safe_widget_value('margin_t_spin', defaults['margin_t']),
-            'margin_b': self._safe_widget_value('margin_b_spin', defaults['margin_b']),
-            'margin_r': self._safe_widget_value('margin_r_spin', defaults['margin_r']),
-            'margin_l': self._safe_widget_value('margin_l_spin', defaults['margin_l']),
-            'dither': self._safe_widget_checked('dither_check', bool(defaults['dither'])),
-            'threshold': self._safe_widget_value('threshold_spin', defaults['threshold']),
-            'night_mode': self._safe_widget_checked('night_check', bool(defaults['night_mode'])),
-            'kinsoku_mode': self.current_kinsoku_mode() if hasattr(self, 'current_kinsoku_mode') else str(defaults['kinsoku_mode']),
-            'tatechuyoko_digit_mode': self.current_tatechuyoko_digit_mode() if hasattr(self, 'current_tatechuyoko_digit_mode') else str(defaults['tatechuyoko_digit_mode']),
-            'punctuation_position_mode': self.current_punctuation_position_mode() if hasattr(self, 'current_punctuation_position_mode') else str(defaults['punctuation_position_mode']),
-            'ichi_position_mode': self.current_ichi_position_mode() if hasattr(self, 'current_ichi_position_mode') else str(defaults['ichi_position_mode']),
-            'halfwidth_digit_position_mode': self.current_halfwidth_digit_position_mode() if hasattr(self, 'current_halfwidth_digit_position_mode') else str(defaults['halfwidth_digit_position_mode']),
-            'halfwidth_alpha_position_mode': self.current_halfwidth_alpha_position_mode() if hasattr(self, 'current_halfwidth_alpha_position_mode') else str(defaults['halfwidth_alpha_position_mode']),
-            'tatechuyoko_symbol_position_mode': self.current_tatechuyoko_symbol_position_mode() if hasattr(self, 'current_tatechuyoko_symbol_position_mode') else str(defaults['tatechuyoko_symbol_position_mode']),
-            'lower_closing_bracket_position_mode': self.current_lower_closing_bracket_position_mode() if hasattr(self, 'current_lower_closing_bracket_position_mode') else str(defaults['lower_closing_bracket_position_mode']),
-            'wave_dash_drawing_mode': self.current_wave_dash_drawing_mode() if hasattr(self, 'current_wave_dash_drawing_mode') else str(defaults['wave_dash_drawing_mode']),
-            'wave_dash_position_mode': self.current_wave_dash_position_mode() if hasattr(self, 'current_wave_dash_position_mode') else str(defaults['wave_dash_position_mode']),
-            'output_format': self.current_output_format() if hasattr(self, 'current_output_format') else str(defaults['output_format']),
-            'width': width,
-            'height': height,
-        }
+        return _current_render_settings_base_impl(self)
 
     # ── 変換 ──────────────────────────────────────────────
 
     def current_settings_dict(self: MainWindow) -> WorkerConversionSettings:
-        return settings_controller.build_current_settings_payload(
-            render_settings_base=self._current_render_settings_base(),
-            output_conflict=self.current_output_conflict_mode(),
-            # v1.3.3.48: 変換完了後に Windows エクスプローラーを自動起動しない。
-            # 保存先を開く操作は完了カード / 変換結果タブの手動ボタンに限定する。
-            open_folder=False,
-        )
+        return current_settings_dict_impl(self)
 
     def _folder_batch_worker_settings(
         self: MainWindow,
@@ -9613,89 +4364,13 @@ class MainWindow(QMainWindow):
         output_path: object = None,
         item: object = None,
     ) -> WorkerConversionSettings:
-        """Return current worker settings for one folder-batch item.
-
-        The folder-batch worker bridge overrides target/output fields per item,
-        so this hook deliberately avoids the normal single-file output-name
-        prompt used by ``_prepare_conversion_settings()``.
-        """
-        return dict(self.current_settings_dict())
+        return _folder_batch_worker_settings_impl(self, source_path, output_path, item)
 
     def _window_state_save_payload(self: MainWindow) -> dict[str, object]:
-        normal_geom = self.normalGeometry() if self.isMaximized() else self.geometry()
-        raw_payload: dict[str, object] = {
-            'window_width': int(normal_geom.width()),
-            'window_height': int(normal_geom.height()),
-            'is_maximized': bool(self.isMaximized()),
-            # Keep the historical payload / INI key names, but resolve the
-            # v1.3.8 center-settings splitter through center-named helpers.
-            CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY: self._center_settings_splitter_state_value(),
-            'left_panel_visible': self.left_panel.isVisible(),
-        }
-        if not self.isMaximized():
-            raw_payload['geometry'] = self.saveGeometry()
-        sizes = self.main_splitter.sizes()
-        left_panel_width = 0
-        if len(sizes) >= 3:
-            preset_width, center_width, _preview_width = sizes[:3]
-            for key, width in zip(THREE_PANE_PANEL_WIDTH_KEYS, sizes[:3]):
-                if width > 0:
-                    raw_payload[key] = width
-            if preset_width > 0 or center_width > 0:
-                left_panel_width = max(0, preset_width) + max(0, center_width)
-            raw_payload[MAIN_THREE_PANE_SPLITTER_STATE_KEY] = self.main_splitter.saveState()
-        elif sizes and sizes[0] > 0:
-            left_panel_width = sizes[0]
-        elif not self.left_panel.isVisible():
-            pending_width = getattr(self, '_pending_left_panel_width', None)
-            if pending_width and pending_width > 0:
-                left_panel_width = pending_width
-        if left_panel_width > 0:
-            raw_payload['left_panel_width'] = left_panel_width
-        center_settings_splitter_sizes = self._center_settings_splitter_sizes_value()
-        if len(center_settings_splitter_sizes) >= 2:
-            raw_payload[CENTER_SETTINGS_LEGACY_SPLITTER_TOP_KEY] = center_settings_splitter_sizes[0]
-            raw_payload[CENTER_SETTINGS_LEGACY_SPLITTER_BOTTOM_KEY] = center_settings_splitter_sizes[1]
-        payload = studio_logic.build_window_state_save_payload(raw_payload)
-        if raw_payload.get(MAIN_THREE_PANE_SPLITTER_STATE_KEY) is not None:
-            payload[MAIN_THREE_PANE_SPLITTER_STATE_KEY] = raw_payload.get(MAIN_THREE_PANE_SPLITTER_STATE_KEY)
-        if raw_payload.get(PRESET_PANEL_WIDTH_KEY) is not None and raw_payload.get(CENTER_SETTINGS_PANEL_WIDTH_KEY) is not None:
-            payload[PRESET_PANEL_WIDTH_KEY] = raw_payload[PRESET_PANEL_WIDTH_KEY]
-            payload[CENTER_SETTINGS_PANEL_WIDTH_KEY] = raw_payload[CENTER_SETTINGS_PANEL_WIDTH_KEY]
-        if raw_payload.get(PREVIEW_PANEL_WIDTH_KEY) is not None:
-            payload[PREVIEW_PANEL_WIDTH_KEY] = raw_payload[PREVIEW_PANEL_WIDTH_KEY]
-        return payload
+        return _window_state_save_payload_impl(self)
 
     def _settings_save_payload(self: MainWindow) -> dict[str, object]:
-        ui_state = settings_controller.build_settings_save_ui_state(
-            bottom_tab_index=int(self.bottom_tabs.currentIndex()),
-            main_view_mode=getattr(self, 'main_view_mode', 'font'),
-            ui_theme=str(getattr(self, 'current_ui_theme', 'light') or 'light'),
-            panel_button_visible=bool(getattr(self, 'panel_button_visible', True)),
-            preset_index=int(self.preset_combo.currentIndex()),
-            preset_key=self.selected_preset_key() or '',
-            profile=self._selected_profile_key(),
-            actual_size=self.actual_size_check.isChecked(),
-            show_guides=self.guides_check.isChecked(),
-            calibration_pct=int(self.calib_spin.value()),
-            nav_buttons_reversed=self.nav_reverse_check.isChecked(),
-            preview_page_limit=self.preview_page_limit_spin.value() if hasattr(self, 'preview_page_limit_spin') else DEFAULT_PREVIEW_PAGE_LIMIT,
-            ui_language=self.current_ui_language_value(),
-        )
-        payload = settings_controller.build_settings_save_payload(
-            current_settings=self.current_settings_dict(),
-            ui_state=ui_state,
-            allowed_view_modes={'font'},
-            allowed_profiles=DEVICE_PROFILES,
-            allowed_kinsoku_modes=KINSOKU_MODE_LABELS,
-            allowed_glyph_position_modes=GLYPH_POSITION_MODE_LABELS,
-            allowed_output_formats=OUTPUT_FORMAT_LABELS,
-            allowed_output_conflicts=OUTPUT_CONFLICT_LABELS,
-            default_preview_page_limit=DEFAULT_PREVIEW_PAGE_LIMIT,
-        )
-        payload.update(self._bottom_overlay_margin_auto_save_payload())
-        payload['preview_zoom_pct'] = self._normalize_preview_zoom_pct()
-        return payload
+        return _settings_save_payload_impl(self)
 
     def _supported_targets_for_path(self: MainWindow, target_raw: str) -> list[Path]:
         return _supported_targets_for_path(target_raw, ConversionWorker._resolve_supported_targets)
@@ -9709,590 +4384,87 @@ class MainWindow(QMainWindow):
         )
 
     def _prepare_conversion_settings(self: MainWindow) -> WorkerConversionSettings | None:
-        cfg = self.current_settings_dict()
-        target_value = str(cfg.get('target', '')).strip()
-        supported = self._supported_targets_for_path(target_value)
-        is_file_target = Path(target_value).is_file() if target_value else False
-        if not studio_logic.should_prompt_for_output_name(len(supported), is_file_target):
-            return cfg
-
-        current_name = ConversionWorker._sanitize_output_stem(self._settings_str_value('last_output_name', ''))
-        default_name = self._default_output_name_for_target(supported[0])
-        suggested = studio_logic.suggest_output_name_for_target(
-            current_name,
-            default_name,
-            target_path=supported[0],
-            last_output_source=self._settings_str_value('last_output_source', ''),
+        return _prepare_conversion_settings_impl(
+            self,
+            qinputdialog_cls=QInputDialog,
+            path_cls=Path,
+            sanitize_output_stem_func=ConversionWorker._sanitize_output_stem,
         )
-        new_name, ok = QInputDialog.getText(
-            self, '出力ファイル名', '保存する .xtc / .xtch のファイル名を入力してください', text=suggested,
-        )
-        if not ok:
-            try:
-                self._sync_active_display_context_for_visible_page()
-            except Exception:
-                pass
-            try:
-                self._show_ui_status_message_with_reflection_or_direct_fallback('変換をキャンセルしました。', 3000)
-            except Exception:
-                pass
-            return None
-
-        sanitized = ConversionWorker._sanitize_output_stem(new_name)
-        if not sanitized:
-            try:
-                self._sync_active_display_context_for_visible_page()
-            except Exception:
-                pass
-            self._show_warning_dialog_with_status_fallback('出力ファイル名', '空の名前は使えません。')
-            return None
-
-        cfg['output_name'] = sanitized
-        self.settings_store.setValue('last_output_name', sanitized)
-        try:
-            self.settings_store.setValue('last_output_source', str(supported[0]))
-        except Exception:
-            APP_LOGGER.exception('最終出力名の入力元保存に失敗しました')
-        self.settings_store.sync()
-        return cfg
 
     def _preview_page_cache_token(self: MainWindow, page_b64: object) -> int:
         return preview_controller._preview_page_cache_token(page_b64)
 
     def _rebuild_preview_page_cache_tokens(self: MainWindow) -> None:
-        self._preview_page_cache_tokens = preview_controller._preview_page_cache_tokens(
-            self._runtime_preview_pages()
-        )
-        self._device_preview_page_cache_tokens = preview_controller._preview_page_cache_tokens(
-            self._runtime_device_preview_pages()
-        )
+        _rebuild_preview_page_cache_tokens_impl(self)
 
     def _clear_font_preview_page_pixmap_cache(self: MainWindow) -> None:
-        cache = self.__dict__.get('_font_preview_page_pixmap_cache')
-        if isinstance(cache, OrderedDict):
-            cache.clear()
-        else:
-            self._font_preview_page_pixmap_cache = OrderedDict()
+        _clear_font_preview_page_pixmap_cache_impl(self)
 
     def _font_preview_page_pixmap_cache_key(self: MainWindow, index: object = None) -> tuple[int, int] | None:
-        pages = self._runtime_preview_pages()
-        if not pages:
-            return None
-        current_index = worker_logic._int_config_value(
-            {'value': self.__dict__.get('current_preview_page_index', 0) if index is None else index},
-            'value',
-            0,
-        )
-        current_index = max(0, min(len(pages) - 1, current_index))
-        tokens = self.__dict__.get('_preview_page_cache_tokens')
-        if not isinstance(tokens, list) or len(tokens) != len(pages):
-            self._rebuild_preview_page_cache_tokens()
-            tokens = self.__dict__.get('_preview_page_cache_tokens', [])
-        token = int(tokens[current_index]) if current_index < len(tokens) else self._preview_page_cache_token(pages[current_index])
-        return (current_index, token)
+        return _font_preview_page_pixmap_cache_key_impl(self, index)
 
     def _cached_font_preview_page_pixmap(self: MainWindow, key: object) -> object | None:
-        if key is None:
-            return None
-        cache = self.__dict__.get('_font_preview_page_pixmap_cache')
-        if not isinstance(cache, OrderedDict):
-            cache = OrderedDict()
-            self._font_preview_page_pixmap_cache = cache
-        pixmap = cache.get(key)
-        if pixmap is not None:
-            cache.move_to_end(key)
-        return pixmap
+        return _cached_font_preview_page_pixmap_impl(self, key)
 
     def _store_font_preview_page_pixmap(self: MainWindow, key: object, pixmap: object) -> None:
-        if key is None or pixmap is None:
-            return
-        cache = self.__dict__.get('_font_preview_page_pixmap_cache')
-        if not isinstance(cache, OrderedDict):
-            cache = OrderedDict()
-            self._font_preview_page_pixmap_cache = cache
-        cache[key] = pixmap
-        cache.move_to_end(key)
-        while len(cache) > _FONT_PREVIEW_PAGE_PIXMAP_CACHE_LIMIT:
-            cache.popitem(last=False)
+        _store_font_preview_page_pixmap_impl(self, key, pixmap, cache_limit=_FONT_PREVIEW_PAGE_PIXMAP_CACHE_LIMIT)
 
     def _clear_xtc_page_qimage_cache(self: MainWindow) -> None:
-        cache = self.__dict__.get('_xtc_page_qimage_cache')
-        if isinstance(cache, OrderedDict):
-            cache.clear()
-        else:
-            self._xtc_page_qimage_cache = OrderedDict()
+        _clear_xtc_page_qimage_cache_impl(self)
 
     def _clear_device_preview_page_qimage_cache(self: MainWindow) -> None:
-        cache = self.__dict__.get('_device_preview_page_qimage_cache')
-        if isinstance(cache, OrderedDict):
-            cache.clear()
-        else:
-            self._device_preview_page_qimage_cache = OrderedDict()
+        _clear_device_preview_page_qimage_cache_impl(self)
 
     def _device_preview_page_qimage_cache_key(self: MainWindow, index: object = None) -> tuple[int, int] | None:
-        if self._effective_device_view_source(self.__dict__.get('device_view_source', 'xtc')) != 'preview':
-            return None
-        pages = self._runtime_device_preview_pages()
-        if not pages:
-            return None
-        current_index = self._normalized_device_preview_page_index(
-            self.__dict__.get('current_device_preview_page_index', 0) if index is None else index,
-            total=len(pages),
-        )
-        tokens = self.__dict__.get('_device_preview_page_cache_tokens')
-        if not isinstance(tokens, list) or len(tokens) != len(pages):
-            self._rebuild_preview_page_cache_tokens()
-            tokens = self.__dict__.get('_device_preview_page_cache_tokens', [])
-        token = int(tokens[current_index]) if current_index < len(tokens) else self._preview_page_cache_token(pages[current_index])
-        if token == 0:
-            return None
-        return (int(current_index), token)
+        return _device_preview_page_qimage_cache_key_impl(self, index)
 
     def _cached_device_preview_page_qimage(self: MainWindow, key: object) -> object | None:
-        if key is None:
-            return None
-        cache = self.__dict__.get('_device_preview_page_qimage_cache')
-        if not isinstance(cache, OrderedDict):
-            cache = OrderedDict()
-            self._device_preview_page_qimage_cache = cache
-        image = cache.get(key)
-        if image is not None:
-            cache.move_to_end(key)
-        return image
+        return _cached_device_preview_page_qimage_impl(self, key)
 
     def _store_device_preview_page_qimage(self: MainWindow, key: object, image: object) -> None:
-        if key is None or image is None:
-            return
-        cache = self.__dict__.get('_device_preview_page_qimage_cache')
-        if not isinstance(cache, OrderedDict):
-            cache = OrderedDict()
-            self._device_preview_page_qimage_cache = cache
-        cache[key] = image
-        cache.move_to_end(key)
-        while len(cache) > _DEVICE_PREVIEW_PAGE_QIMAGE_CACHE_LIMIT:
-            cache.popitem(last=False)
+        _store_device_preview_page_qimage_impl(self, key, image, cache_limit=_DEVICE_PREVIEW_PAGE_QIMAGE_CACHE_LIMIT)
 
     def _xtc_page_qimage_cache_key(self: MainWindow, index: object = None) -> tuple[int, int, int] | None:
-        if self._effective_device_view_source(self.__dict__.get('device_view_source', 'xtc')) != 'xtc':
-            return None
-        payload = self._xtc_page_state_payload(index)
-        page = payload.get('page')
-        if page is None:
-            return None
-        current_index = worker_logic._int_config_value(payload, 'current_index', 0)
-        offset = max(0, worker_logic._int_config_value({'value': getattr(page, 'offset', 0)}, 'value', 0))
-        length = max(0, worker_logic._int_config_value({'value': getattr(page, 'length', 0)}, 'value', 0))
-        return (current_index, offset, length)
+        return _xtc_page_qimage_cache_key_impl(self, index)
 
     def _cached_xtc_page_qimage(self: MainWindow, key: object) -> object | None:
-        if not isinstance(key, tuple):
-            return None
-        cache = self.__dict__.get('_xtc_page_qimage_cache')
-        if not isinstance(cache, OrderedDict):
-            cache = OrderedDict()
-            self._xtc_page_qimage_cache = cache
-        image = cache.get(key)
-        if image is not None:
-            cache.move_to_end(key)
-        return image
+        return _cached_xtc_page_qimage_impl(self, key)
 
     def _store_xtc_page_qimage(self: MainWindow, key: object, image: object) -> None:
-        if not isinstance(key, tuple) or image is None:
-            return
-        cache = self.__dict__.get('_xtc_page_qimage_cache')
-        if not isinstance(cache, OrderedDict):
-            cache = OrderedDict()
-            self._xtc_page_qimage_cache = cache
-        cache[key] = image
-        cache.move_to_end(key)
-        while len(cache) > _XTC_PAGE_QIMAGE_CACHE_LIMIT:
-            cache.popitem(last=False)
+        _store_xtc_page_qimage_impl(self, key, image, cache_limit=_XTC_PAGE_QIMAGE_CACHE_LIMIT)
 
     def _clear_loaded_xtc_state(self: MainWindow) -> None:
-        self.xtc_bytes = b''
-        self.xtc_pages = []
-        self._clear_xtc_page_qimage_cache()
-        self.current_page_index = 0
-        self.device_preview_pages_b64 = []
-        self._clear_font_preview_page_pixmap_cache()
-        self._clear_device_preview_page_qimage_cache()
-        self._preview_page_cache_tokens = []
-        self._device_preview_page_cache_tokens = []
-        self.device_preview_pages_truncated = False
-        self.current_device_preview_page_index = 0
-        self.device_view_source = 'xtc'
-        self.loaded_xtc_viewer_profile = None
-        self.loaded_xtc_profile_ui_override = False
-        self._loaded_xtc_display_name = None
-        self._loaded_xtc_path_text = None
-        self._set_current_xtc_display_name(None)
-        self._clear_xtc_viewer_page(refresh_navigation=False)
-        self.update_navigation_ui()
+        clear_loaded_xtc_state_impl(self)
 
     def _leave_file_viewer_mode_for_target_change(self: MainWindow) -> None:
-        """Exit loaded XTC/XTCH viewer state before normal source preview.
-
-        The XTC/XTCH file viewer intentionally neutralizes the preview update
-        button and owns the right-pane page source.  When the user chooses a
-        normal conversion target via 「ファイルを選択」/drop/folder selection, the
-        new target must switch back to the standard preview path immediately;
-        otherwise the stale viewer identity keeps the button stuck at
-        「ファイル表示中」 and the preview refresh is treated as unnecessary.
-        """
-        was_viewer_active = False
-        try:
-            was_viewer_active = bool(self._is_file_viewer_mode_active())
-        except Exception:
-            was_viewer_active = False
-        if was_viewer_active:
-            try:
-                self._clear_loaded_xtc_state()
-            except Exception:
-                APP_LOGGER.exception('変換対象変更時のファイルビューワー状態解除に失敗しました')
-        try:
-            self._refresh_preview_update_button_for_current_state()
-        except Exception:
-            try:
-                self._restore_preview_update_button_from_file_viewer_state()
-            except Exception:
-                pass
+        leave_file_viewer_mode_for_target_change_impl(self)
 
     def _set_current_xtc_display_name(self: MainWindow, display_name: object = None) -> None:
-        if not hasattr(self, 'current_xtc_label'):
-            return
-        text = _coerce_ui_message_text(display_name, 'なし').strip() or 'なし'
-        self.current_xtc_label.setText(studio_logic.build_displaying_document_label(text, fallback='なし', language=self.current_ui_language_value()))
+        _set_current_xtc_display_name_impl(self, display_name)
 
     def _set_current_xtc_display_name_with_fallback(self: MainWindow, display_name: object = None) -> bool:
-        text = _coerce_ui_message_text(display_name, 'なし').strip() or 'なし'
-        expected_label = studio_logic.build_displaying_document_label(text, fallback='なし', language=self.current_ui_language_value())
-        try:
-            self._set_current_xtc_display_name(display_name)
-        except Exception:
-            pass
-        if not hasattr(self, 'current_xtc_label'):
-            return True
-        if self._ui_widget_text(getattr(self, 'current_xtc_label', None)) == expected_label:
-            return True
-        try:
-            self.current_xtc_label.setText(expected_label)
-        except Exception:
-            return False
-        return self._ui_widget_text(getattr(self, 'current_xtc_label', None)) == expected_label
+        return _set_current_xtc_display_name_with_fallback_impl(self, display_name)
 
     def _sync_loaded_xtc_display_context_for_device_view(self: MainWindow) -> None:
-        if self._effective_device_view_source() == 'preview':
-            return
-        if not self._runtime_xtc_pages():
-            return
-        path_text = worker_logic._normalized_path_text(self.__dict__.get('_loaded_xtc_path_text')).strip()
-        display_name = worker_logic._normalized_path_text(self.__dict__.get('_loaded_xtc_display_name')).strip()
-        if not display_name and path_text:
-            display_name = worker_logic._normalized_path_text(self._xtc_display_name(path_text)).strip()
-        if display_name:
-            try:
-                self._set_current_xtc_display_name_with_fallback(display_name)
-            except Exception:
-                pass
-        if path_text:
-            self._sync_results_selection_for_loaded_path_with_fallback(path_text)
-        else:
-            self._clear_results_selection_with_fallback(
-                results_controller.build_results_clear_selection_context()
-            )
+        _sync_loaded_xtc_display_context_for_device_view_impl(self)
 
     def _sync_preview_display_context_for_device_view(self: MainWindow) -> None:
-        if self._effective_device_view_source() != 'preview':
-            return
-        if not self._runtime_device_preview_pages():
-            return
-        try:
-            self._set_current_xtc_display_name_with_fallback('プレビュー')
-        except Exception:
-            pass
-        self._clear_results_selection_with_fallback(
-            results_controller.build_results_clear_selection_context()
-        )
+        _sync_preview_display_context_for_device_view_impl(self)
 
     def _sync_blank_device_display_context(self: MainWindow) -> None:
-        try:
-            self._set_current_xtc_display_name_with_fallback(None)
-        except Exception:
-            pass
-        self._clear_results_selection_with_fallback(
-            results_controller.build_results_clear_selection_context()
-        )
+        _sync_blank_device_display_context_impl(self)
 
     def _restore_shared_status_for_visible_display_context(self: MainWindow) -> None:
-        try:
-            view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
-        except Exception:
-            view_mode = 'font'
-        replacement = ''
-        stale_progress_status = False
-        stale_status_bar = False
-        current_progress_status = ''
-        current_status_bar_status = ''
-        replacement_is_render_failure = False
-        if view_mode == 'font':
-            preview_status_text = self._ui_widget_text(getattr(self, 'preview_status_label', None))
-            preview_status_text_is_meaningful = bool(preview_status_text) and preview_status_text.startswith('プレビュー')
-            try:
-                preview_pages_visible = bool(self._runtime_preview_pages())
-            except Exception:
-                preview_pages_visible = False
-            current_progress_status = self._ui_widget_text(getattr(self, 'progress_label', None))
-            current_status_bar_status = self._status_bar_message_text()
-            if not preview_pages_visible:
-                active_preview_progress_failure = self._preview_render_failure_matches_visible_display_context(current_progress_status)
-                active_preview_status_failure = self._preview_render_failure_matches_visible_display_context(current_status_bar_status)
-                active_preview_label_failure = (
-                    preview_status_text_is_meaningful
-                    and self._preview_render_failure_matches_visible_display_context(preview_status_text)
-                )
-                if active_preview_label_failure:
-                    replacement = preview_status_text
-                elif preview_status_text_is_meaningful:
-                    replacement = preview_status_text
-                else:
-                    return
-                stale_progress_status = self._is_device_render_failure_status_text(current_progress_status) or (
-                    self._is_preview_render_failure_status_text(current_progress_status)
-                    and not active_preview_progress_failure
-                )
-                stale_status_bar = self._is_device_render_failure_status_text(current_status_bar_status) or (
-                    self._is_preview_render_failure_status_text(current_status_bar_status)
-                    and not active_preview_status_failure
-                )
-                replacement_is_render_failure = self._is_preview_render_failure_status_text(replacement)
-            elif (
-                self._is_preview_render_failure_status_text(preview_status_text)
-                and self._preview_render_failure_matches_visible_display_context(preview_status_text)
-            ):
-                replacement = preview_status_text
-            else:
-                replacement = self._current_preview_render_status_message()
-            if preview_pages_visible:
-                stale_progress_status = self._is_device_render_failure_status_text(current_progress_status)
-                stale_status_bar = self._is_device_render_failure_status_text(current_status_bar_status)
-                replacement_is_render_failure = self._is_preview_render_failure_status_text(replacement)
-        else:
-            preview_source_active = self._normalized_device_view_source_value(
-                getattr(self, 'device_view_source', 'xtc'),
-                default='xtc',
-            ) == 'preview'
-            device_pages_visible = False
-            if preview_source_active:
-                try:
-                    device_pages_visible = bool(self._runtime_device_preview_pages())
-                except Exception:
-                    device_pages_visible = False
-            else:
-                try:
-                    device_pages_visible = bool(self._runtime_xtc_pages())
-                except Exception:
-                    device_pages_visible = False
-            current_progress_status = self._ui_widget_text(getattr(self, 'progress_label', None))
-            current_status_bar_status = self._status_bar_message_text()
-            if preview_source_active and not device_pages_visible:
-                preview_status_text = self._ui_widget_text(getattr(self, 'preview_status_label', None))
-                active_preview_progress_failure = self._preview_render_failure_matches_visible_display_context(current_progress_status)
-                active_preview_status_failure = self._preview_render_failure_matches_visible_display_context(current_status_bar_status)
-                active_preview_label_failure = self._preview_render_failure_matches_visible_display_context(preview_status_text)
-                for candidate, is_active_preview_failure in (
-                    (current_progress_status, active_preview_progress_failure),
-                    (current_status_bar_status, active_preview_status_failure),
-                    (preview_status_text, active_preview_label_failure),
-                ):
-                    if is_active_preview_failure:
-                        replacement = candidate
-                        break
-                if not replacement:
-                    replacement = self._ui_widget_text(getattr(self, 'current_xtc_label', None))
-                if not replacement:
-                    return
-                stale_progress_status = self._is_device_render_failure_status_text(current_progress_status) or (
-                    self._is_preview_render_failure_status_text(current_progress_status)
-                    and not active_preview_progress_failure
-                )
-                stale_status_bar = self._is_device_render_failure_status_text(current_status_bar_status) or (
-                    self._is_preview_render_failure_status_text(current_status_bar_status)
-                    and not active_preview_status_failure
-                )
-                replacement_is_render_failure = self._is_preview_render_failure_status_text(replacement)
-            else:
-                if not device_pages_visible:
-                    return
-                active_device_progress_failure = self._device_render_failure_matches_visible_display_context(current_progress_status)
-                active_device_status_failure = self._device_render_failure_matches_visible_display_context(current_status_bar_status)
-                for candidate, is_active_device_failure in (
-                    (current_progress_status, active_device_progress_failure),
-                    (current_status_bar_status, active_device_status_failure),
-                ):
-                    if is_active_device_failure:
-                        replacement = candidate
-                        break
-                if not replacement:
-                    replacement = self._ui_widget_text(getattr(self, 'current_xtc_label', None))
-                stale_progress_status = self._is_preview_render_failure_status_text(current_progress_status) or (
-                    self._is_device_render_failure_status_text(current_progress_status)
-                    and not active_device_progress_failure
-                )
-                stale_status_bar = self._is_preview_render_failure_status_text(current_status_bar_status) or (
-                    self._is_device_render_failure_status_text(current_status_bar_status)
-                    and not active_device_status_failure
-                )
-                replacement_is_render_failure = self._is_device_render_failure_status_text(replacement)
-        if not replacement:
-            return
-        sync_status_bar_to_replacement = stale_progress_status or stale_status_bar
-        if replacement_is_render_failure:
-            if stale_progress_status or stale_status_bar:
-                if current_progress_status != replacement:
-                    stale_progress_status = True
-            elif current_progress_status != replacement and (
-                current_status_bar_status == replacement
-                or not current_status_bar_status
-                or not self._is_render_failure_status_text(current_status_bar_status)
-            ):
-                stale_progress_status = True
-            if current_status_bar_status != replacement and (
-                stale_status_bar
-                or (
-                    current_progress_status == replacement
-                    and current_status_bar_status
-                    and not self._is_render_failure_status_text(current_status_bar_status)
-                )
-            ):
-                sync_status_bar_to_replacement = True
-        elif view_mode == 'font':
-            if self._is_preview_render_failure_status_text(current_progress_status):
-                stale_progress_status = True
-            if self._is_preview_render_failure_status_text(current_status_bar_status):
-                sync_status_bar_to_replacement = True
-        if stale_progress_status and hasattr(self, 'progress_label'):
-            try:
-                self.progress_label.setText(replacement)
-            except Exception:
-                pass
-        if stale_progress_status or sync_status_bar_to_replacement:
-            self._show_ui_status_message_direct_with_reflection_best_effort(replacement, 5000)
+        _restore_shared_status_for_visible_display_context_impl(self)
 
     def _sync_active_display_context_for_visible_page(self: MainWindow) -> None:
-        try:
-            view_mode = self._normalized_main_view_mode(getattr(self, 'main_view_mode', 'font'))
-        except Exception:
-            view_mode = 'font'
-        if view_mode == 'font':
-            if self._is_file_viewer_mode_active():
-                try:
-                    self._sync_loaded_xtc_display_context_for_device_view()
-                except Exception:
-                    pass
-            elif self._runtime_preview_pages():
-                self._sync_preview_display_context_for_font_view()
-            try:
-                self._restore_shared_status_for_visible_display_context()
-            except Exception:
-                pass
-            return
-        if self._effective_device_view_source() == 'preview':
-            if self._runtime_device_preview_pages():
-                self._sync_preview_display_context_for_device_view()
-            else:
-                self._sync_blank_device_display_context()
-            try:
-                self._restore_shared_status_for_visible_display_context()
-            except Exception:
-                pass
-            return
-        if self._runtime_xtc_pages():
-            self._sync_loaded_xtc_display_context_for_device_view()
-            try:
-                self._restore_shared_status_for_visible_display_context()
-            except Exception:
-                pass
-            return
-        self._sync_blank_device_display_context()
-        try:
-            self._restore_shared_status_for_visible_display_context()
-        except Exception:
-            pass
+        _sync_active_display_context_for_visible_page_impl(self)
 
     def _set_worker_controls_running(self: MainWindow, running: bool) -> None:
-        if hasattr(self, 'run_btn'):
-            try:
-                self.run_btn.setEnabled(not running)
-            except Exception:
-                pass
-            try:
-                self.run_btn.setText(self._ui_text('変換中…') if running else self._ui_text('▶  変換実行'))
-            except Exception:
-                pass
-        for name in ('folder_batch_btn', 'folder_batch_action'):
-            widget = getattr(self, name, None)
-            setter = getattr(widget, 'setEnabled', None)
-            if callable(setter):
-                try:
-                    setter(not running)
-                except Exception:
-                    pass
-        if hasattr(self, 'stop_btn'):
-            try:
-                self.stop_btn.setEnabled(running)
-            except Exception:
-                pass
+        _set_worker_controls_running_impl(self, running)
 
     def _prepare_conversion_ui_for_run(self: MainWindow, settings: WorkerConversionSettings) -> None:
-        try:
-            self.__dict__['_conversion_stop_requested'] = False
-        except Exception:
-            pass
-        try:
-            self._hide_conversion_completion_card()
-        except Exception:
-            pass
-        try:
-            self._clear_results_view(studio_logic.build_running_results_summary(self.current_ui_language_value()))
-        except Exception:
-            pass
-        try:
-            self._clear_loaded_xtc_state()
-        except Exception:
-            pass
-        self._set_worker_controls_running(True)
-        target_count = len(self._supported_targets_for_path(str(settings.get('target', ''))))
-        try:
-            self._append_log_without_status_best_effort(
-                studio_logic.build_start_log_message(self.current_output_format(), target_count, self.current_ui_language_value()),
-            )
-        except Exception:
-            pass
-        if hasattr(self, 'progress_bar'):
-            try:
-                self.progress_bar.setRange(0, 0)
-                self.progress_bar.setValue(0)
-            except Exception:
-                pass
-        if hasattr(self, 'progress_label'):
-            try:
-                self.progress_label.setText(self._ui_text('変換中…'))
-            except Exception:
-                pass
-        if hasattr(self, 'busy_badge'):
-            try:
-                self.busy_badge.setText(self._ui_text('変換中'))
-            except Exception:
-                pass
-        try:
-            self._show_ui_status_message_with_reflection_or_direct_fallback(self._ui_text('変換中…'), None)
-        except Exception:
-            pass
-        if hasattr(self, 'bottom_tabs'):
-            try:
-                self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)
-            except Exception:
-                pass
+        _prepare_conversion_ui_for_run_impl(self, settings)
 
     def _apply_direct_conversion_terminal_fallback(
         self: MainWindow,
@@ -10302,49 +4474,13 @@ class MainWindow(QMainWindow):
         status_message: object = None,
         status_timeout: int | None = None,
     ) -> bool:
-        normalized_message = self._ui_text(_coerce_ui_message_text(message))
-        normalized_badge_text = self._ui_text(_coerce_ui_message_text(badge_text))
-        status_text = normalized_message if status_message is None else self._ui_text(_coerce_ui_message_text(status_message))
-        terminal_visible = False
-        if hasattr(self, 'progress_bar'):
-            try:
-                self.progress_bar.setRange(0, 1)
-                self.progress_bar.setValue(0)
-                terminal_visible = True
-            except Exception:
-                pass
-        if hasattr(self, 'progress_label'):
-            try:
-                self.progress_label.setText(normalized_message)
-                terminal_visible = True
-            except Exception:
-                pass
-        if hasattr(self, 'busy_badge'):
-            try:
-                self.busy_badge.setText(normalized_badge_text)
-                terminal_visible = True
-            except Exception:
-                pass
-        status_visible = False
-        try:
-            if self._is_render_failure_status_text(status_text):
-                status_visible = self._show_ui_status_message_direct_with_reflection_best_effort(
-                    status_text,
-                    status_timeout,
-                )
-            else:
-                status_visible = bool(
-                    self._show_ui_status_message_with_reflection_or_direct_fallback(
-                        status_text,
-                        status_timeout,
-                        reuse_existing_message=False,
-                    )
-                )
-        except Exception:
-            status_visible = False
-        if status_visible:
-            terminal_visible = True
-        return terminal_visible
+        return _apply_direct_conversion_terminal_fallback_impl(
+            self,
+            message,
+            badge_text=badge_text,
+            status_message=status_message,
+            status_timeout=status_timeout,
+        )
 
     def _apply_conversion_terminal_state(
         self: MainWindow,
@@ -10354,7 +4490,8 @@ class MainWindow(QMainWindow):
         status_message: str | None = None,
         status_timeout: int | None = None,
     ) -> None:
-        self._apply_direct_conversion_terminal_fallback(
+        _apply_conversion_terminal_state_impl(
+            self,
             message,
             badge_text=badge_text,
             status_message=status_message,
@@ -10362,84 +4499,21 @@ class MainWindow(QMainWindow):
         )
 
     def _load_xtc_from_path_with_result(self: MainWindow, path: object) -> bool:
-        def _report_load_failure(exc: Exception) -> None:
-            try:
-                self._restore_results_selection_after_xtc_load_failure()
-            except Exception:
-                pass
-            try:
-                status_message = self._xtc_load_failure_status_message(path, exc)
-            except Exception:
-                target = worker_logic._normalized_path_text(path).strip() or '指定ファイル'
-                detail = worker_logic._normalized_path_text(exc).strip() or '不明なエラー'
-                status_message = f'XTC/XTCH読込失敗: {target} / {detail}'
-            reflect_failure_in_status = True
-            try:
-                reflect_failure_in_status = not self._visible_render_failure_status_text()
-            except Exception:
-                reflect_failure_in_status = True
-            try:
-                self._append_log_with_status_fallback(
-                    status_message,
-                    reflect_in_status=reflect_failure_in_status,
-                )
-            except Exception:
-                if reflect_failure_in_status:
-                    try:
-                        self._show_ui_status_message_with_reflection_or_direct_fallback(status_message, 5000)
-                    except Exception:
-                        pass
-
-        loader = getattr(self, 'load_xtc_from_path', None)
-        if not callable(loader):
-            _report_load_failure(RuntimeError('読込処理を開始できませんでした。'))
-            return False
-        try:
-            result = loader(path)
-        except Exception as exc:
-            _report_load_failure(exc)
-            return False
-        return result is not False
+        return _load_xtc_from_path_with_result_impl(self, path)
 
     def _show_conversion_results(
         self: MainWindow,
         converted_files: list[object],
         summary_lines: list[str] | None = None,
     ) -> None:
-        self.populate_results(converted_files, summary_lines)
-        context = self._resolved_result_load_context()
-        resolved_path = context.get('resolved_path') if self._payload_bool_value(context, 'has_path', False) else None
-        if not worker_logic._normalized_path_text(resolved_path).strip():
-            fallback_state = results_controller.build_results_view_state(converted_files, summary_lines, language=self.current_ui_language_value())
-            entries = list(fallback_state.get('entries', []))
-            initial_index = studio_logic.payload_optional_int_value(fallback_state, 'initial_index')
-            if initial_index is not None and 0 <= initial_index < len(entries):
-                resolved_path = entries[initial_index][1]
-            elif entries:
-                resolved_path = entries[0][1]
-        result_tab_index = RESULT_TAB_INDEX
-        if worker_logic._normalized_path_text(resolved_path).strip():
-            if not self._load_xtc_from_path_with_result(resolved_path):
-                result_tab_index = LOG_TAB_INDEX
-        else:
-            try:
-                self._clear_loaded_xtc_state()
-            except Exception:
-                APP_LOGGER.exception('結果プレビュー状態クリアに失敗しました')
-            selection_cleared = False
-            self._clear_results_selection_with_fallback({'clear_selection': True})
-        if hasattr(self, 'bottom_tabs'):
-            try:
-                self._set_bottom_tab_index_with_fallback(result_tab_index)
-            except Exception:
-                APP_LOGGER.exception('結果タブ切替に失敗しました')
+        return _show_conversion_results_impl(self, converted_files, summary_lines)
 
     def _build_conversion_failure_summary_text(
         self: MainWindow,
         prefix: object,
         message: object,
     ) -> str:
-        return studio_logic.build_conversion_failure_summary_text(prefix, message, self.current_ui_language_value())
+        return _build_conversion_failure_summary_text_impl(self, prefix, message)
 
     def _apply_conversion_failure_ui(
         self: MainWindow,
@@ -10453,330 +4527,88 @@ class MainWindow(QMainWindow):
         progress_error_context: str,
         tab_error_context: str,
     ) -> None:
-        clear_results_succeeded = False
-        try:
-            clear_results_succeeded = bool(self._clear_results_view(summary_text))
-        except Exception:
-            APP_LOGGER.exception(clear_results_error_context)
-            clear_results_succeeded = False
-        if not clear_results_succeeded:
-            try:
-                self._set_results_summary_text_with_fallback(summary_text)
-            except Exception:
-                pass
-        try:
-            self._clear_loaded_xtc_state()
-        except Exception:
-            APP_LOGGER.exception(clear_preview_error_context)
-        selection_cleared = False
-        try:
-            self._clear_results_selection_with_fallback({'clear_selection': True})
-        except Exception:
-            APP_LOGGER.exception('%s_selection_direct', clear_results_error_context)
-        if hasattr(self, 'progress_bar'):
-            try:
-                self.progress_bar.setRange(0, 1)
-                self.progress_bar.setValue(0)
-            except Exception:
-                APP_LOGGER.exception(progress_error_context)
-        try:
-            self._append_log_without_status_or_status_bar(summary_text)
-        except Exception:
-            APP_LOGGER.exception(log_error_context)
-        normalized_summary_text = _coerce_ui_message_text(summary_text)
-        normalized_status_message = _coerce_ui_message_text(status_message, '不明なエラー')
-        try:
-            self._apply_conversion_terminal_state(
-                normalized_summary_text,
-                badge_text='エラー',
-                status_message=normalized_status_message,
-            )
-        except Exception:
-            APP_LOGGER.exception(terminal_state_error_context)
-            self._apply_direct_conversion_terminal_fallback(
-                normalized_summary_text,
-                badge_text='エラー',
-                status_message=normalized_status_message,
-            )
-        if hasattr(self, 'bottom_tabs'):
-            try:
-                self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)
-            except Exception:
-                APP_LOGGER.exception(tab_error_context)
+        _apply_conversion_failure_ui_impl(
+            self,
+            summary_text,
+            status_message=status_message,
+            log_error_context=log_error_context,
+            terminal_state_error_context=terminal_state_error_context,
+            clear_results_error_context=clear_results_error_context,
+            clear_preview_error_context=clear_preview_error_context,
+            progress_error_context=progress_error_context,
+            tab_error_context=tab_error_context,
+        )
 
     def _handle_conversion_startup_failure(self: MainWindow, message: object) -> None:
-        self._clear_active_conversion_run_token()
-        message_text = _coerce_ui_message_text(message, '不明なエラー')
-        APP_LOGGER.error('変換開始エラー: %s', message_text)
-        if self.worker:
-            _safe_delete_qobject_later(self.worker, context='変換開始エラー時の worker 解放')
-            self.worker = None
-        if self.worker_thread:
-            _safe_delete_qobject_later(self.worker_thread, context='変換開始エラー時の thread 解放')
-            self.worker_thread = None
-        try:
-            self._set_worker_controls_running(False)
-        except Exception:
-            APP_LOGGER.exception('変換開始エラー時の実行中UI解除に失敗しました')
-        failure_summary_text = self._build_conversion_failure_summary_text('開始エラー', message_text)
-        self._apply_conversion_failure_ui(
-            failure_summary_text,
-            status_message=message_text,
-            log_error_context='変換開始エラー時のログ追記に失敗しました',
-            terminal_state_error_context='変換開始エラー時の終端状態反映に失敗しました',
-            clear_results_error_context='変換開始エラー時の結果表示クリアに失敗しました',
-            clear_preview_error_context='変換開始エラー時の実機ビュー状態クリアに失敗しました',
-            progress_error_context='変換開始エラー時の進捗バー更新に失敗しました',
-            tab_error_context='変換開始エラー時のタブ切替に失敗しました',
-        )
-        try:
-            self._show_critical_dialog_with_status_fallback(
-                '変換開始エラー',
-                message_text,
-                fallback_status_message=message_text,
-            )
-        except Exception:
-            APP_LOGGER.exception('変換開始エラーダイアログの表示に失敗しました')
+        _handle_conversion_startup_failure_impl(self, message)
 
     def _next_conversion_run_token(self: MainWindow) -> int:
-        try:
-            current_token = int(self.__dict__.get('_conversion_run_token', 0) or 0)
-        except Exception:
-            current_token = 0
-        token = current_token + 1
-        self._conversion_run_token = token
-        self._active_conversion_run_token = token
-        return token
+        return _next_conversion_run_token_impl(self)
 
     def _clear_active_conversion_run_token(self: MainWindow) -> None:
-        self._active_conversion_run_token = 0
+        return _clear_active_conversion_run_token_impl(self)
 
     def _is_active_conversion_run_token(self: MainWindow, token: object) -> bool:
-        try:
-            token_value = int(token)
-            active_token = int(self.__dict__.get('_active_conversion_run_token', 0) or 0)
-        except Exception:
-            return False
-        return token_value == active_token
+        return _is_active_conversion_run_token_impl(self, token)
 
     def _connect_worker_dispatch_signals(self: MainWindow) -> None:
-        if bool(self.__dict__.get('_worker_dispatch_signals_connected', False)):
-            return
-        self._worker_dispatch_signals_connected = True
-        _connect_signal_best_effort(self._worker_finished_requested, self._dispatch_conversion_finished, queued=True)
-        _connect_signal_best_effort(self._worker_error_requested, self._dispatch_conversion_error, queued=True)
-        _connect_signal_best_effort(self._worker_log_requested, self._dispatch_worker_log, queued=True)
-        _connect_signal_best_effort(self._worker_progress_requested, self._dispatch_conversion_progress, queued=True)
-        _connect_signal_best_effort(self._worker_cleanup_requested, self._dispatch_worker_cleanup, queued=True)
+        return _connect_worker_dispatch_signals_impl(
+            self,
+            connect_signal_best_effort_func=_connect_signal_best_effort,
+        )
 
     def _emit_worker_finished_request(self: MainWindow, run_token: object, result: object) -> None:
-        if not bool(self.__dict__.get('_worker_dispatch_signals_connected', False)):
-            self._dispatch_conversion_finished(run_token, cast(ConversionResult, result))
-            return
-        try:
-            self._worker_finished_requested.emit(run_token, result)
-        except Exception:
-            self._dispatch_conversion_finished(run_token, cast(ConversionResult, result))
+        return _emit_worker_finished_request_impl(self, run_token, result)
 
     def _emit_worker_error_request(self: MainWindow, run_token: object, message: object) -> None:
-        if not bool(self.__dict__.get('_worker_dispatch_signals_connected', False)):
-            self._dispatch_conversion_error(run_token, message)
-            return
-        try:
-            self._worker_error_requested.emit(run_token, message)
-        except Exception:
-            self._dispatch_conversion_error(run_token, message)
+        return _emit_worker_error_request_impl(self, run_token, message)
 
     def _emit_worker_log_request(self: MainWindow, run_token: object, text: object) -> None:
-        if not bool(self.__dict__.get('_worker_dispatch_signals_connected', False)):
-            self._dispatch_worker_log(run_token, text)
-            return
-        try:
-            self._worker_log_requested.emit(run_token, text)
-        except Exception:
-            self._dispatch_worker_log(run_token, text)
+        return _emit_worker_log_request_impl(self, run_token, text)
 
     def _emit_worker_progress_request(self: MainWindow, run_token: object, current: object, total: object, message: object) -> None:
-        if not bool(self.__dict__.get('_worker_dispatch_signals_connected', False)):
-            self._dispatch_conversion_progress(run_token, current, total, message)
-            return
-        try:
-            self._worker_progress_requested.emit(run_token, current, total, message)
-        except Exception:
-            self._dispatch_conversion_progress(run_token, current, total, message)
+        return _emit_worker_progress_request_impl(self, run_token, current, total, message)
 
     def _emit_worker_cleanup_request(self: MainWindow, expected_worker: object = None, expected_thread: object = None) -> None:
-        if not bool(self.__dict__.get('_worker_dispatch_signals_connected', False)):
-            self.cleanup_worker(expected_worker=expected_worker, expected_thread=expected_thread)
-            return
-        try:
-            self._worker_cleanup_requested.emit(expected_worker, expected_thread)
-        except Exception:
-            self.cleanup_worker(expected_worker=expected_worker, expected_thread=expected_thread)
+        return _emit_worker_cleanup_request_impl(self, expected_worker, expected_thread)
 
     def _dispatch_worker_cleanup(self: MainWindow, expected_worker: object = None, expected_thread: object = None) -> None:
-        try:
-            self.cleanup_worker(expected_worker=expected_worker, expected_thread=expected_thread)
-        except Exception:
-            APP_LOGGER.exception('worker後始末のUIスレッド反映に失敗しました')
+        return _dispatch_worker_cleanup_impl(self, expected_worker, expected_thread)
 
     def _dispatch_worker_log(self: MainWindow, run_token: object, text: object) -> None:
-        if not self._is_active_conversion_run_token(run_token):
-            return
-        try:
-            self._append_log_without_status_best_effort(self._ui_text(_coerce_ui_message_text(text, '').rstrip()))
-        except Exception:
-            APP_LOGGER.exception('workerログのUI反映に失敗しました')
+        return _dispatch_worker_log_impl(self, run_token, text)
 
     def _dispatch_conversion_progress(self: MainWindow, run_token: object, current: object, total: object, message: object) -> None:
-        if not self._is_active_conversion_run_token(run_token):
-            return
-        try:
-            self.update_conversion_progress(current, total, message)
-        except Exception:
-            APP_LOGGER.exception('worker進捗のUI反映に失敗しました')
+        return _dispatch_conversion_progress_impl(self, run_token, current, total, message)
 
     def _dispatch_conversion_finished(self: MainWindow, run_token: object, result: ConversionResult) -> None:
-        if not self._is_active_conversion_run_token(run_token):
-            return
-        try:
-            self.on_conversion_finished(result)
-        except Exception:
-            APP_LOGGER.exception('worker完了シグナルのUI反映に失敗しました')
+        return _dispatch_conversion_finished_impl(self, run_token, result)
 
     def _dispatch_conversion_error(self: MainWindow, run_token: object, message: object) -> None:
-        if not self._is_active_conversion_run_token(run_token):
-            return
-        try:
-            self.on_conversion_error(self._ui_text(_coerce_ui_message_text(message, '不明なエラー')))
-        except Exception:
-            APP_LOGGER.exception('workerエラーシグナルのUI反映に失敗しました')
+        return _dispatch_conversion_error_impl(self, run_token, message)
 
     def start_conversion(self: MainWindow) -> None:
-        cfg = self._prepare_conversion_settings()
-        if not cfg:
-            return
-        if not self._check_conversion_dependencies(cfg):
-            return
-        self._prepare_conversion_ui_for_run(cfg)
-        try:
-            self._active_conversion_open_folder_target = self._planned_open_folder_target_from_settings(cfg)
-        except Exception:
-            self._active_conversion_open_folder_target = ''
-
-        worker_thread = None
-        worker = None
-        run_token = self._next_conversion_run_token()
-        try:
-            worker_thread = QThread(self)
-            self.worker_thread = worker_thread
-            worker = ConversionWorker(cfg)
-            self.worker = worker
-            worker.moveToThread(worker_thread)
-            worker_thread.started.connect(worker.run)
-            worker.finished.connect(lambda result, token=run_token: self._emit_worker_finished_request(token, result))
-            worker.error.connect(lambda message, token=run_token: self._emit_worker_error_request(token, message))
-            worker.log.connect(lambda text, token=run_token: self._emit_worker_log_request(token, text))
-            worker.progress.connect(lambda current, total, message, token=run_token: self._emit_worker_progress_request(token, current, total, message))
-            if hasattr(worker, 'deleteLater'):
-                worker.finished.connect(worker.deleteLater)
-                worker.error.connect(worker.deleteLater)
-            worker.finished.connect(worker_thread.quit)
-            worker.error.connect(worker_thread.quit)
-            worker_thread.finished.connect(
-                lambda worker_ref=worker, thread_ref=worker_thread: self._emit_worker_cleanup_request(worker_ref, thread_ref)
-            )
-            worker_thread.start()
-        except Exception as exc:
-            if self.__dict__.get('worker_thread') is None and worker_thread is not None:
-                _safe_delete_qobject_later(worker_thread, context='変換開始失敗時の thread 解放')
-            if self.__dict__.get('worker') is None and worker is not None:
-                _safe_delete_qobject_later(worker, context='変換開始失敗時の worker 解放')
-            self._handle_conversion_startup_failure(str(exc))
+        return _start_conversion_impl(
+            self,
+            qthread_cls=QThread,
+            conversion_worker_cls=ConversionWorker,
+            safe_delete_qobject_later_func=_safe_delete_qobject_later,
+        )
 
     def stop_conversion(self: MainWindow) -> None:
-        if bool(self.__dict__.get('_folder_batch_running', False)) and not self.worker:
-            try:
-                from tategakiXTC_folder_batch_mainwindow_launcher import (
-                    request_folder_batch_cancel_best_effort,
-                )
-
-                request_folder_batch_cancel_best_effort(self)
-            except Exception:
-                self.__dict__['_folder_batch_cancel_requested'] = True
-                APP_LOGGER.exception('フォルダ一括変換の停止要求に失敗しました')
-            return
-        if not self.worker:
-            return
-        try:
-            self.__dict__['_conversion_stop_requested'] = True
-        except Exception:
-            pass
-        try:
-            self.worker.stop()
-        except Exception as exc:
-            message_text = _coerce_ui_message_text(exc, str(exc)).strip() or '不明なエラー'
-            APP_LOGGER.exception('停止要求の送信に失敗しました')
-            log_message = f'停止要求の送信に失敗しました: {message_text}'
-            helper_succeeded = False
-            try:
-                helper_succeeded = bool(self._append_log_without_status_best_effort(log_message))
-            except Exception:
-                helper_succeeded = False
-            if not helper_succeeded:
-                try:
-                    self._show_ui_status_message_with_reflection_or_direct_fallback(log_message, 5000)
-                except Exception:
-                    pass
-            return
-        try:
-            stop_btn = getattr(self, 'stop_btn', None)
-            if stop_btn is not None:
-                stop_btn.setEnabled(False)
-        except Exception:
-            APP_LOGGER.exception('停止ボタンの更新に失敗しました')
-        log_message = '停止要求を送りました。現在の変換単位が終わりしだい停止します。'
-        try:
-            if hasattr(self, 'progress_bar'):
-                self.progress_bar.setRange(0, 1)
-                self.progress_bar.setValue(0)
-            if hasattr(self, 'progress_label'):
-                self.progress_label.setText(log_message)
-            if hasattr(self, 'busy_badge'):
-                self.busy_badge.setText(self._ui_text('停止中'))
-            self._show_ui_status_message_with_reflection_or_direct_fallback(log_message, 5000)
-        except Exception:
-            APP_LOGGER.exception('停止要求後の進捗表示停止に失敗しました')
-        helper_succeeded = False
-        try:
-            helper_succeeded = bool(self._append_log_without_status_best_effort(log_message))
-        except Exception:
-            helper_succeeded = False
-        if not helper_succeeded:
-            try:
-                APP_LOGGER.warning('停止ログを通常ログへ追記できなかったため status helper にフォールバックします')
-            except Exception:
-                pass
-            try:
-                self._show_ui_status_message_with_reflection_or_direct_fallback(log_message, 5000)
-            except Exception:
-                pass
+        _stop_conversion_impl(self)
 
     def _schedule_cleanup_worker(
         self: MainWindow,
         expected_worker: object = None,
         expected_thread: object = None,
     ) -> None:
-        callback = self.cleanup_worker
-        if expected_worker is not None or expected_thread is not None:
-            callback = lambda worker=expected_worker, thread=expected_thread: self.cleanup_worker(
-                expected_worker=worker,
-                expected_thread=thread,
-            )
-        try:
-            QTimer.singleShot(0, callback)
-        except Exception:
-            callback()
+        return _schedule_cleanup_worker_impl(
+            self,
+            qtimer_cls=QTimer,
+            expected_worker=expected_worker,
+            expected_thread=expected_thread,
+        )
 
     def cleanup_worker(
         self: MainWindow,
@@ -10784,36 +4616,19 @@ class MainWindow(QMainWindow):
         expected_worker: object = None,
         expected_thread: object = None,
     ) -> None:
-        active_worker = getattr(self, 'worker', None)
-        active_thread = getattr(self, 'worker_thread', None)
-        worker_ref = expected_worker if expected_worker is not None else active_worker
-        thread_ref = expected_thread if expected_thread is not None else active_thread
-
-        if expected_worker is None or active_worker is expected_worker:
-            self.worker = None
-        if expected_thread is None or active_thread is expected_thread:
-            self.worker_thread = None
-
-        # worker.finished で worker.deleteLater が既に予約済みのことがあるため、
-        # 二重 deleteLater や破棄済み wrapper 参照で完了直後に落ちないよう安全化する。
-        _safe_delete_qobject_later(worker_ref, context='worker後始末')
-        _safe_delete_qobject_later(thread_ref, context='thread後始末')
-
-        if getattr(self, 'worker', None) is None and getattr(self, 'worker_thread', None) is None:
-            try:
-                self._set_worker_controls_running(False)
-            except Exception:
-                APP_LOGGER.exception('worker後始末後のUI解除に失敗しました')
+        return _cleanup_worker_impl(
+            self,
+            expected_worker=expected_worker,
+            expected_thread=expected_thread,
+            safe_delete_qobject_later_func=_safe_delete_qobject_later,
+        )
 
     def _merge_results_summary_lines_with_warnings(
         self: MainWindow,
         summary_lines: object,
         warning_values: object,
     ) -> list[object]:
-        return worker_logic.merge_postprocess_warnings_into_summary_lines(
-            summary_lines,
-            warning_values,
-        )
+        return _merge_results_summary_lines_with_warnings_impl(self, summary_lines, warning_values)
 
     def _merge_results_summary_lines_and_collect_warnings(
         self: MainWindow,
@@ -10821,15 +4636,11 @@ class MainWindow(QMainWindow):
         collected_warnings: object,
         warning_values: object,
     ) -> tuple[object, list[str]]:
-        merged_warnings = studio_logic.merge_unique_message_values(
-            worker_logic.coerce_postprocess_warning_messages(collected_warnings),
-            worker_logic.coerce_postprocess_warning_messages(warning_values),
-        )
-        if not merged_warnings:
-            return summary_lines, []
-        return (
-            self._merge_results_summary_lines_with_warnings(summary_lines, merged_warnings),
-            merged_warnings,
+        return _merge_results_summary_lines_and_collect_warnings_impl(
+            self,
+            summary_lines,
+            collected_warnings,
+            warning_values,
         )
 
     def _build_results_summary_text(
@@ -10839,14 +4650,7 @@ class MainWindow(QMainWindow):
         *,
         fallback: object = None,
     ) -> str:
-        try:
-            context = results_controller.build_results_apply_context(paths, summary_lines, language=self.current_ui_language_value())
-            summary_text = _coerce_ui_message_text(context.get('summary_text')).strip()
-            if summary_text:
-                return summary_text
-        except Exception:
-            pass
-        return _coerce_ui_message_text(fallback).strip()
+        return _build_results_summary_text_impl(self, paths, summary_lines, fallback=fallback)
 
     def _append_conversion_finish_error_log_with_fallback(
         self: MainWindow,
@@ -10854,29 +4658,11 @@ class MainWindow(QMainWindow):
         *,
         status_timeout_ms: int = 5000,
     ) -> bool:
-        helper_succeeded = False
-        try:
-            helper_succeeded = bool(
-                self._append_log_without_status_with_optional_status_fallback(
-                    log_message,
-                    allow_status_fallback=False,
-                    status_timeout_ms=status_timeout_ms,
-                )
-            )
-        except Exception:
-            helper_succeeded = False
-        if helper_succeeded:
-            return True
-        try:
-            return bool(
-                self._append_log_without_status_with_optional_status_fallback(
-                    log_message,
-                    allow_status_fallback=True,
-                    status_timeout_ms=status_timeout_ms,
-                )
-            )
-        except Exception:
-            return False
+        return _append_conversion_finish_error_log_with_fallback_impl(
+            self,
+            log_message,
+            status_timeout_ms=status_timeout_ms,
+        )
 
     def _handle_conversion_finish_ui_error(
         self: MainWindow,
@@ -10887,80 +4673,17 @@ class MainWindow(QMainWindow):
         badge_text: str = '完了',
         clear_results: bool = False,
     ) -> bool:
-        error_text = _coerce_ui_message_text(exc, str(exc)).strip() or '不明なエラー'
-        APP_LOGGER.exception('変換完了後の %s でエラーが発生しました', context)
-        log_message = f'{context}エラー: {error_text}'
-        helper_succeeded = bool(
-            self._append_conversion_finish_error_log_with_fallback(
-                log_message,
-                status_timeout_ms=5000,
-            )
+        return _handle_conversion_finish_ui_error_impl(
+            self,
+            msg,
+            exc,
+            context=context,
+            badge_text=badge_text,
+            clear_results=clear_results,
         )
-        status_message = f'{msg} / {context}エラー: {error_text}'
-        terminal_visible = False
-        if clear_results:
-            clear_summary_text = f'{msg}\n{context}エラー: {error_text}'
-            clear_results_succeeded = False
-            try:
-                clear_results_succeeded = bool(self._clear_results_view(clear_summary_text))
-            except Exception:
-                clear_results_succeeded = False
-            if not clear_results_succeeded:
-                try:
-                    self._set_results_summary_text_with_fallback(clear_summary_text)
-                except Exception:
-                    pass
-            try:
-                self._clear_loaded_xtc_state()
-            except Exception:
-                pass
-            selection_cleared = False
-            self._clear_results_selection_with_fallback({'clear_selection': True})
-        terminal_visible = bool(
-            self._apply_direct_conversion_terminal_fallback(
-                msg,
-                badge_text=badge_text,
-                status_message=status_message,
-                status_timeout=5000,
-            )
-        )
-        if clear_results and hasattr(self, 'bottom_tabs'):
-            try:
-                self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)
-            except Exception:
-                pass
-        return bool(helper_succeeded or terminal_visible)
-
 
     def _append_log_without_status(self: MainWindow, text: object) -> bool:
-        message = _coerce_ui_message_text(text)
-        if not message:
-            return False
-        try:
-            self.append_log(message, reflect_in_status=False)
-            return True
-        except TypeError:
-            pass
-        except Exception:
-            pass
-        try:
-            APP_LOGGER.info(message)
-        except Exception:
-            pass
-        try:
-            if hasattr(self, 'log_edit'):
-                self.log_edit.append(message)
-                return True
-        except Exception:
-            pass
-        try:
-            log_widget = getattr(self, 'log_edit', None)
-            if log_widget is not None and hasattr(log_widget, 'append'):
-                log_widget.append(message)
-                return True
-        except Exception:
-            pass
-        return False
+        return _append_log_without_status_impl(self, text)
 
     def _append_log_with_status_fallback(
         self: MainWindow,
@@ -10969,99 +4692,15 @@ class MainWindow(QMainWindow):
         reflect_in_status: bool = False,
         status_timeout_ms: int = 5000,
     ) -> bool:
-        message = _coerce_ui_message_text(text)
-        if not message:
-            return False
-        try:
-            self.append_log(message, reflect_in_status=reflect_in_status)
-            return True
-        except TypeError:
-            pass
-        except Exception:
-            pass
-        append_log_succeeded = False
-        try:
-            append_log_succeeded = bool(self._append_log_without_status(message))
-        except Exception:
-            append_log_succeeded = False
-            try:
-                self.append_log(message, reflect_in_status=False)
-                append_log_succeeded = True
-            except TypeError:
-                pass
-            except Exception:
-                pass
-            if not append_log_succeeded:
-                try:
-                    APP_LOGGER.info(message)
-                except Exception:
-                    pass
-                try:
-                    log_widget = getattr(self, 'log_edit', None)
-                    if log_widget is not None and hasattr(log_widget, 'append'):
-                        log_widget.append(message)
-                        append_log_succeeded = True
-                except Exception:
-                    pass
-        if reflect_in_status or not append_log_succeeded:
-            try:
-                if self._is_render_failure_status_text(message):
-                    if self._show_ui_status_message_direct_with_reflection_best_effort(message, status_timeout_ms):
-                        return True
-            except Exception:
-                pass
-            try:
-                if self._show_ui_status_message_with_reflection_or_direct_fallback(message, status_timeout_ms):
-                    return True
-            except Exception:
-                pass
-        return append_log_succeeded
+        return _append_log_with_status_fallback_impl(
+            self,
+            text,
+            reflect_in_status=reflect_in_status,
+            status_timeout_ms=status_timeout_ms,
+        )
 
     def _append_log_without_status_best_effort(self: MainWindow, text: object) -> bool:
-        message = _coerce_ui_message_text(text)
-        if not message:
-            return False
-        helper = getattr(self, '_append_log_with_status_fallback', None)
-        if callable(helper):
-            try:
-                helper_result = helper(message, reflect_in_status=False)
-                if helper_result is not False:
-                    return True
-            except TypeError:
-                try:
-                    helper_result = helper(message)
-                    if helper_result is not False:
-                        return True
-                except Exception:
-                    pass
-            except Exception:
-                pass
-        fallback_helper = getattr(self, '_append_log_without_status', None)
-        if callable(fallback_helper):
-            try:
-                if bool(fallback_helper(message)):
-                    return True
-            except Exception:
-                pass
-        try:
-            self.append_log(message, reflect_in_status=False)
-            return True
-        except TypeError:
-            pass
-        except Exception:
-            pass
-        try:
-            APP_LOGGER.info(message)
-        except Exception:
-            pass
-        try:
-            log_widget = getattr(self, 'log_edit', None)
-            if log_widget is not None and hasattr(log_widget, 'append'):
-                log_widget.append(message)
-                return True
-        except Exception:
-            pass
-        return False
+        return _append_log_without_status_best_effort_impl(self, text)
 
     def _append_log_without_status_or_status_bar(
         self: MainWindow,
@@ -11069,20 +4708,11 @@ class MainWindow(QMainWindow):
         *,
         status_timeout_ms: int = 5000,
     ) -> bool:
-        message = _coerce_ui_message_text(text)
-        if not message:
-            return False
-        try:
-            if self._append_log_without_status_best_effort(message):
-                return True
-        except Exception:
-            pass
-        try:
-            if self._show_ui_status_message_with_reflection_or_direct_fallback(message, status_timeout_ms):
-                return True
-        except Exception:
-            pass
-        return False
+        return _append_log_without_status_or_status_bar_impl(
+            self,
+            text,
+            status_timeout_ms=status_timeout_ms,
+        )
 
     def _append_log_without_status_with_optional_status_fallback(
         self: MainWindow,
@@ -11091,20 +4721,12 @@ class MainWindow(QMainWindow):
         allow_status_fallback: bool = False,
         status_timeout_ms: int = 5000,
     ) -> bool:
-        message_text = _coerce_ui_message_text(log_message)
-        if not message_text:
-            return False
-        try:
-            if allow_status_fallback:
-                return bool(
-                    self._append_log_without_status_or_status_bar(
-                        message_text,
-                        status_timeout_ms=status_timeout_ms,
-                    )
-                )
-            return bool(self._append_log_without_status_best_effort(message_text))
-        except Exception:
-            return False
+        return _append_log_without_status_with_optional_status_fallback_impl(
+            self,
+            log_message,
+            allow_status_fallback=allow_status_fallback,
+            status_timeout_ms=status_timeout_ms,
+        )
 
     def _emit_postprocess_warning(
         self: MainWindow,
@@ -11113,41 +4735,12 @@ class MainWindow(QMainWindow):
         *,
         show_status: bool = True,
     ) -> bool:
-        message = _coerce_ui_message_text(warning_message).strip()
-        if not message:
-            return False
-        try:
-            APP_LOGGER.warning('非致命後処理警告: %s', message)
-        except Exception:
-            pass
-        helper_succeeded = False
-        try:
-            helper_succeeded = bool(self._append_log_without_status_best_effort(message))
-        except Exception:
-            helper_succeeded = False
-        if show_status and not helper_succeeded:
-            try:
-                helper_succeeded = bool(
-                    self._append_log_without_status_or_status_bar(
-                        message,
-                        status_timeout_ms=duration_ms,
-                    )
-                )
-            except Exception:
-                helper_succeeded = False
-        if not show_status:
-            return helper_succeeded
-        status_succeeded = False
-        try:
-            status_succeeded = bool(
-                self._show_ui_status_message_with_reflection_or_direct_fallback(
-                    message,
-                    duration_ms,
-                )
-            )
-        except Exception:
-            status_succeeded = False
-        return bool(helper_succeeded or status_succeeded)
+        return _emit_postprocess_warning_impl(
+            self,
+            warning_message,
+            duration_ms=duration_ms,
+            show_status=show_status,
+        )
 
     def _emit_postprocess_warning_via_log_and_optional_status_fallback(
         self: MainWindow,
@@ -11156,42 +4749,12 @@ class MainWindow(QMainWindow):
         *,
         show_status: bool = True,
     ) -> bool:
-        message_text = _coerce_ui_message_text(warning_message).strip()
-        if not message_text:
-            return False
-        try:
-            APP_LOGGER.warning('非致命後処理警告: %s', message_text)
-        except Exception:
-            pass
-        log_succeeded = False
-        try:
-            log_succeeded = bool(self._append_log_without_status_best_effort(message_text))
-        except Exception:
-            log_succeeded = False
-        helper_succeeded = log_succeeded
-        if show_status and not log_succeeded:
-            try:
-                helper_succeeded = bool(
-                    self._append_log_without_status_or_status_bar(
-                        message_text,
-                        status_timeout_ms=duration_ms,
-                    )
-                )
-            except Exception:
-                helper_succeeded = False
-        if not show_status:
-            return log_succeeded
-        status_succeeded = False
-        try:
-            status_succeeded = bool(
-                self._show_ui_status_message_with_reflection_or_direct_fallback(
-                    message_text,
-                    duration_ms,
-                )
-            )
-        except Exception:
-            status_succeeded = False
-        return bool(log_succeeded or helper_succeeded or status_succeeded)
+        return _emit_postprocess_warning_via_log_and_optional_status_fallback_impl(
+            self,
+            warning_message,
+            duration_ms=duration_ms,
+            show_status=show_status,
+        )
 
     def _emit_postprocess_warnings_and_collect(
         self: MainWindow,
@@ -11200,35 +4763,12 @@ class MainWindow(QMainWindow):
         *,
         show_status: bool = True,
     ) -> list[str]:
-        emitted_messages: list[str] = []
-        for message in worker_logic.coerce_postprocess_warning_messages(warning_values):
-            emitted_here = False
-            try:
-                try:
-                    emitted_result = self._emit_postprocess_warning(
-                        message,
-                        duration_ms=duration_ms,
-                        show_status=show_status,
-                    )
-                except TypeError:
-                    if show_status:
-                        emitted_result = self._emit_postprocess_warning(message, duration_ms=duration_ms)
-                    else:
-                        raise
-                emitted_here = emitted_result is not False
-            except Exception:
-                emitted_here = False
-            if not emitted_here:
-                emitted_here = bool(
-                    self._emit_postprocess_warning_via_log_and_optional_status_fallback(
-                        message,
-                        duration_ms=duration_ms,
-                        show_status=show_status,
-                    )
-                )
-            if emitted_here:
-                emitted_messages.append(message)
-        return emitted_messages
+        return _emit_postprocess_warnings_and_collect_impl(
+            self,
+            warning_values,
+            duration_ms=duration_ms,
+            show_status=show_status,
+        )
 
     def _emit_postprocess_warnings(
         self: MainWindow,
@@ -11237,12 +4777,11 @@ class MainWindow(QMainWindow):
         *,
         show_status: bool = True,
     ) -> bool:
-        return bool(
-            self._emit_postprocess_warnings_and_collect(
-                warning_values,
-                duration_ms=duration_ms,
-                show_status=show_status,
-            )
+        return _emit_postprocess_warnings_impl(
+            self,
+            warning_values,
+            duration_ms=duration_ms,
+            show_status=show_status,
         )
 
     def _emit_unique_postprocess_warnings_with_fallback(
@@ -11253,23 +4792,13 @@ class MainWindow(QMainWindow):
         *,
         show_status: bool = True,
     ) -> list[str]:
-        normalized_warnings = worker_logic.coerce_postprocess_warning_messages(warning_values)
-        if emitted_messages is None:
-            emitted_messages = set()
-        unique_warnings = [
-            warning_message for warning_message in normalized_warnings
-            if warning_message not in emitted_messages
-        ]
-        if not unique_warnings:
-            return []
-
-        emitted_now = self._emit_postprocess_warnings_and_collect(
-            unique_warnings,
+        return _emit_unique_postprocess_warnings_with_fallback_impl(
+            self,
+            warning_values,
+            emitted_messages,
             duration_ms=duration_ms,
             show_status=show_status,
         )
-        emitted_messages.update(emitted_now)
-        return emitted_now
 
     def _append_unique_postprocess_warnings_to_log_with_fallback(
         self: MainWindow,
@@ -11279,32 +4808,13 @@ class MainWindow(QMainWindow):
         allow_status_fallback: bool = False,
         status_timeout_ms: int = 5000,
     ) -> list[str]:
-        normalized_warnings = worker_logic.coerce_postprocess_warning_messages(warning_values)
-        if emitted_messages is None:
-            emitted_messages = set()
-        appended_now: list[str] = []
-        for warning_message in normalized_warnings:
-            if warning_message in emitted_messages:
-                continue
-            try:
-                APP_LOGGER.warning('非致命後処理警告: %s', warning_message)
-            except Exception:
-                pass
-            appended_here = False
-            try:
-                appended_here = bool(
-                    self._append_log_without_status_with_optional_status_fallback(
-                        warning_message,
-                        allow_status_fallback=allow_status_fallback,
-                        status_timeout_ms=status_timeout_ms,
-                    )
-                )
-            except Exception:
-                appended_here = False
-            if appended_here:
-                appended_now.append(warning_message)
-                emitted_messages.add(warning_message)
-        return appended_now
+        return _append_unique_postprocess_warnings_to_log_with_fallback_impl(
+            self,
+            warning_values,
+            emitted_messages,
+            allow_status_fallback=allow_status_fallback,
+            status_timeout_ms=status_timeout_ms,
+        )
 
     def _emit_unique_postprocess_warnings_or_append_to_log(
         self: MainWindow,
@@ -11314,35 +4824,13 @@ class MainWindow(QMainWindow):
         duration_ms: int = 5000,
         show_status: bool = True,
     ) -> list[str]:
-        effective_emitted_messages = emitted_messages if emitted_messages is not None else set()
-        emitted_now: list[str] = []
-        try:
-            emitted_now = self._emit_unique_postprocess_warnings_with_fallback(
-                warning_values,
-                effective_emitted_messages,
-                duration_ms=duration_ms,
-                show_status=show_status,
-            )
-        except Exception:
-            emitted_now = []
-        appended_now: list[str] = []
-        try:
-            appended_now = self._append_unique_postprocess_warnings_to_log_with_fallback(
-                warning_values,
-                effective_emitted_messages,
-                allow_status_fallback=show_status,
-                status_timeout_ms=duration_ms,
-            )
-        except Exception:
-            appended_now = []
-        combined_messages: list[str] = []
-        seen_messages: set[str] = set()
-        for warning_message in list(emitted_now) + list(appended_now):
-            if warning_message in seen_messages:
-                continue
-            seen_messages.add(warning_message)
-            combined_messages.append(warning_message)
-        return combined_messages
+        return _emit_unique_postprocess_warnings_or_append_to_log_impl(
+            self,
+            warning_values,
+            emitted_messages,
+            duration_ms=duration_ms,
+            show_status=show_status,
+        )
 
     def _build_conversion_completion_summary_lines(
         self: MainWindow,
@@ -11350,15 +4838,12 @@ class MainWindow(QMainWindow):
         summary_lines: object,
         result: Mapping[str, object] | None = None,
     ) -> list[str]:
-        base_lines = results_controller.coerce_summary_line_list(summary_lines)
-        payload = result or {}
-        guidance_lines = results_controller.build_conversion_completion_guidance_lines(
+        return _build_conversion_completion_summary_lines_impl(
+            self,
             converted_files,
-            open_folder_target=payload.get('open_folder_target', ''),
-            stopped=payload.get('stopped', False),
-            language=self.current_ui_language_value(),
+            summary_lines,
+            result,
         )
-        return studio_logic.merge_unique_message_values(base_lines, guidance_lines)
 
     def _apply_conversion_completion_guidance_to_results_view(
         self: MainWindow,
@@ -11366,241 +4851,22 @@ class MainWindow(QMainWindow):
         summary_lines: object,
         result: Mapping[str, object] | None = None,
     ) -> bool:
-        if not hasattr(self, 'results_summary_label'):
-            return False
-        enriched_lines = self._build_conversion_completion_summary_lines(
+        return _apply_conversion_completion_guidance_to_results_view_impl(
+            self,
             converted_files,
             summary_lines,
             result,
         )
-        base_lines = results_controller.coerce_summary_line_list(summary_lines)
-        if enriched_lines == base_lines:
-            return False
-        entry_count = len(results_controller.coerce_result_path_list(converted_files))
-        summary_text = results_controller.build_completion_summary_text(enriched_lines, entry_count, language=self.current_ui_language_value())
-        updated = bool(self._set_results_summary_text_with_fallback(summary_text))
-        try:
-            self._sync_results_action_buttons_state()
-        except Exception:
-            pass
-        return updated
 
     def _open_finished_conversion_folder(self: MainWindow, result: ConversionResult) -> list[str]:
         """変換完了後のフォルダ自動オープンは行わない。"""
         return []
 
     def on_conversion_finished(self: MainWindow, result: ConversionResult) -> None:
-        self._clear_active_conversion_run_token()
-        msg = worker_logic._str_config_value(result, 'message', '変換完了しました。').strip() or '変換完了しました。'
-        for helper_name in (
-            '_open_finished_conversion_folder',
-            '_merge_results_summary_lines_with_warnings',
-            '_merge_results_summary_lines_and_collect_warnings',
-            '_append_log_without_status_best_effort',
-            '_append_log_without_status_or_status_bar',
-            '_append_log_without_status_with_optional_status_fallback',
-            '_emit_postprocess_warning_via_log_and_optional_status_fallback',
-            '_emit_postprocess_warnings_and_collect',
-            '_emit_unique_postprocess_warnings_with_fallback',
-            '_append_unique_postprocess_warnings_to_log_with_fallback',
-            '_emit_unique_postprocess_warnings_or_append_to_log',
-            '_build_results_summary_text',
-            '_build_conversion_completion_summary_lines',
-            '_apply_conversion_completion_guidance_to_results_view',
-            '_coerce_mapping_payload',
-            '_clear_results_selection_with_fallback',
-            '_ui_widget_index',
-            '_set_bottom_tab_index_with_fallback',
-            '_set_results_summary_text_with_fallback',
-            '_show_ui_status_message_with_reflection_or_direct_fallback',
-        ):
-            if hasattr(self, helper_name):
-                continue
-            helper = getattr(MainWindow, helper_name, None)
-            if callable(helper):
-                try:
-                    setattr(self, helper_name, helper.__get__(self, type(self)))
-                except Exception:
-                    pass
-        stopped = worker_logic._bool_config_value(result, 'stopped', False)
-        converted_files = results_controller.coerce_result_path_list(result.get('converted_files'))
-        try:
-            self._last_conversion_open_folder_target = self._resolve_conversion_open_folder_target(
-                converted_files,
-                result,
-            )
-        except Exception:
-            self._last_conversion_open_folder_target = ''
-        postprocess_warnings = worker_logic.coerce_postprocess_warning_messages(
-            result.get('postprocess_warnings')
-        )
-        postprocess_warnings = worker_logic.coerce_postprocess_warning_messages(
-            list(postprocess_warnings) + self._open_finished_conversion_folder(result)
-        )
-        terminal_state_fallback_warnings: list[str] = []
-
-        emitted_postprocess_warnings: set[str] = set()
-
-        try:
-            self._apply_conversion_terminal_state(msg, badge_text='停止' if stopped else '完了')
-        except Exception as exc:
-            finish_error_visible = bool(
-                self._handle_conversion_finish_ui_error(
-                    msg,
-                    exc,
-                    context='完了表示',
-                    badge_text='停止' if stopped else '完了',
-                    clear_results=False,
-                )
-            )
-            if not finish_error_visible:
-                finish_error_text = _coerce_ui_message_text(exc, str(exc)).strip() or '不明なエラー'
-                terminal_state_fallback_warnings = worker_logic.coerce_postprocess_warning_messages(
-                    f'完了表示エラー: {finish_error_text}'
-                )
-        if stopped and not converted_files:
-            try:
-                result.setdefault('show_without_paths', True)
-                result.setdefault('completion_title', '変換を中止しました')
-            except Exception:
-                pass
-        summary_lines = result.get('summary_lines')
-        show_postprocess_warning_status = not stopped
-        summary_lines, final_postprocess_warnings = self._merge_results_summary_lines_and_collect_warnings(
-            summary_lines,
-            terminal_state_fallback_warnings,
-            postprocess_warnings,
-        )
-        try:
-            self._show_conversion_results(converted_files, summary_lines)
-            try:
-                self._apply_conversion_completion_guidance_to_results_view(
-                    converted_files,
-                    summary_lines,
-                    result,
-                )
-            except Exception:
-                APP_LOGGER.exception('変換完了後の確認導線表示に失敗しました')
-            try:
-                self._show_conversion_completion_card(converted_files, result)
-            except Exception:
-                APP_LOGGER.exception('変換完了カード表示に失敗しました')
-            if hasattr(self, 'bottom_tabs'):
-                try:
-                    if stopped and not converted_files:
-                        self._set_bottom_tab_index_with_fallback(LOG_TAB_INDEX)
-                    elif converted_files:
-                        self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX)
-                    elif self._ui_widget_index(self.bottom_tabs) is None:
-                        self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX)
-                except Exception:
-                    pass
-        except Exception as exc:
-            try:
-                status_message = self._render_failure_status_message('変換結果表示エラー', exc)
-            except Exception as render_exc:
-                status_message = f'変換結果表示エラー: {_coerce_ui_message_text(render_exc, str(render_exc)).strip() or _coerce_ui_message_text(exc, str(exc)).strip() or "不明なエラー"}'
-            fallback_warnings = worker_logic.coerce_postprocess_warning_messages(status_message)
-            if fallback_warnings:
-                summary_lines, final_postprocess_warnings = self._merge_results_summary_lines_and_collect_warnings(
-                    summary_lines,
-                    final_postprocess_warnings,
-                    fallback_warnings,
-                )
-                self._emit_unique_postprocess_warnings_or_append_to_log(
-                    fallback_warnings,
-                    emitted_postprocess_warnings,
-                    duration_ms=5000,
-                    show_status=show_postprocess_warning_status,
-                )
-            else:
-                try:
-                    self._append_log_without_status_with_optional_status_fallback(status_message)
-                except Exception:
-                    pass
-                if show_postprocess_warning_status:
-                    try:
-                        self._show_ui_status_message_with_reflection_or_direct_fallback(status_message, 5000)
-                    except Exception:
-                        pass
-            fallback_summary_text = _coerce_ui_message_text(status_message).strip()
-            fallback_results_visible = False
-            try:
-                self.populate_results(converted_files, summary_lines)
-                fallback_results_visible = not hasattr(self, 'results_list')
-            except Exception:
-                try:
-                    fallback_summary_text = self._build_results_summary_text(
-                        converted_files,
-                        summary_lines,
-                        fallback=status_message,
-                    )
-                except Exception:
-                    fallback_summary_text = _coerce_ui_message_text(status_message).strip()
-                try:
-                    clear_results_succeeded = bool(self._clear_results_view(fallback_summary_text))
-                except Exception:
-                    clear_results_succeeded = False
-                if not clear_results_succeeded:
-                    try:
-                        self._set_results_summary_text_with_fallback(fallback_summary_text)
-                    except Exception:
-                        pass
-            try:
-                self._clear_loaded_xtc_state()
-            except Exception:
-                pass
-            selection_cleared = False
-            self._clear_results_selection_with_fallback({'clear_selection': True})
-            if hasattr(self, 'bottom_tabs'):
-                try:
-                    self._set_bottom_tab_index_with_fallback(
-                        RESULT_TAB_INDEX if fallback_results_visible else LOG_TAB_INDEX
-                    )
-                except Exception:
-                    pass
-        self._emit_unique_postprocess_warnings_or_append_to_log(
-            final_postprocess_warnings,
-            emitted_postprocess_warnings,
-            duration_ms=5000,
-            show_status=show_postprocess_warning_status,
-        )
-        try:
-            self.__dict__['_conversion_stop_requested'] = False
-        except Exception:
-            pass
+        _handle_conversion_finished_impl(self, result)
 
     def on_conversion_error(self: MainWindow, message: str) -> None:
-        self._clear_active_conversion_run_token()
-        try:
-            self._hide_conversion_completion_card()
-        except Exception:
-            pass
-        message_text = _coerce_ui_message_text(message, '不明なエラー')
-        APP_LOGGER.error('変換エラー: %s', message_text)
-        try:
-            self._show_critical_dialog_with_status_fallback(
-                '変換エラー',
-                message_text,
-                fallback_status_message=message_text,
-            )
-        except Exception:
-            APP_LOGGER.exception('変換エラーダイアログの表示に失敗しました')
-        failure_summary_text = self._build_conversion_failure_summary_text('エラー', message_text)
-        self._apply_conversion_failure_ui(
-            failure_summary_text,
-            status_message=message_text,
-            log_error_context='変換エラー時のログ追記に失敗しました',
-            terminal_state_error_context='変換エラー時の終端状態反映に失敗しました',
-            clear_results_error_context='変換エラー時の結果表示クリアに失敗しました',
-            clear_preview_error_context='変換エラー時の実機ビュー状態クリアに失敗しました',
-            progress_error_context='変換エラー時の進捗バー更新に失敗しました',
-            tab_error_context='変換エラー時のタブ切替に失敗しました',
-        )
-        try:
-            self.__dict__['_conversion_stop_requested'] = False
-        except Exception:
-            pass
+        return _handle_conversion_error_impl(self, message)
 
     def append_log(
         self: MainWindow,
@@ -11608,120 +4874,21 @@ class MainWindow(QMainWindow):
         *,
         reflect_in_status: bool = True,
     ) -> None:
-        message_text = _coerce_ui_message_text(text)
-        if not message_text:
-            return
-        try:
-            APP_LOGGER.info(message_text)
-        except Exception:
-            pass
-        try:
-            log_widget = getattr(self, 'log_edit', None)
-            if log_widget is not None and hasattr(log_widget, 'append'):
-                log_widget.append(message_text)
-        except Exception:
-            pass
-        try:
-            visible_render_failure = bool(self._visible_render_failure_status_text())
-        except Exception:
-            visible_render_failure = False
-        try:
-            message_is_render_failure = self._is_render_failure_status_text(message_text)
-        except Exception:
-            message_is_render_failure = False
-        preserve_visible_render_failure = visible_render_failure and not message_is_render_failure
-        if reflect_in_status and not self.worker and not preserve_visible_render_failure and hasattr(self, 'progress_label'):
-            try:
-                self.progress_label.setText(message_text)
-            except Exception:
-                pass
-        if reflect_in_status and not preserve_visible_render_failure:
-            if message_is_render_failure:
-                self._show_ui_status_message_direct_with_reflection_best_effort(message_text, 5000)
-            else:
-                try:
-                    self._show_ui_status_message_with_reflection_or_direct_fallback(message_text, 5000)
-                except Exception:
-                    pass
+        return append_log_impl(self, text, reflect_in_status=reflect_in_status)
 
     def _progress_status_text(self: MainWindow, current: int, total: int, message: object) -> str:
         return studio_logic.build_progress_status_text(current, total, message, self.current_ui_language_value())
 
     def update_conversion_progress(self: MainWindow, current: int, total: int, message: str) -> None:
-        stop_requested = False
-        try:
-            stop_requested = bool(self.__dict__.get('_conversion_stop_requested', False))
-            worker_obj = getattr(self, 'worker', None)
-            is_stop_requested = getattr(worker_obj, '_is_stop_requested', None)
-            if callable(is_stop_requested):
-                stop_requested = stop_requested or bool(is_stop_requested())
-        except Exception:
-            stop_requested = bool(self.__dict__.get('_conversion_stop_requested', False))
-        if stop_requested:
-            text = self._ui_text('停止要求を受け付けました。現在の変換単位が終わりしだい停止します。')
-            if hasattr(self, 'progress_bar'):
-                try:
-                    self.progress_bar.setRange(0, 1)
-                    self.progress_bar.setValue(0)
-                except Exception:
-                    pass
-            if hasattr(self, 'progress_label'):
-                try:
-                    self.progress_label.setText(text)
-                except Exception:
-                    pass
-            if hasattr(self, 'busy_badge'):
-                try:
-                    self.busy_badge.setText(self._ui_text('停止中'))
-                except Exception:
-                    pass
-            try:
-                self._show_ui_status_message_with_reflection_or_direct_fallback(text, 5000)
-            except Exception:
-                pass
-            return
-        total_value = max(1, _coerce_progress_number(total, 1))
-        current_value = max(0, min(_coerce_progress_number(current, 0), total_value))
-        text = self._progress_status_text(current_value, total_value, message)
-        if hasattr(self, 'progress_bar'):
-            try:
-                self.progress_bar.setRange(0, 0)
-                self.progress_bar.setValue(0)
-            except Exception:
-                pass
-        try:
-            visible_render_failure = bool(self._visible_render_failure_status_text())
-        except Exception:
-            visible_render_failure = False
-        if hasattr(self, 'progress_label') and not visible_render_failure:
-            try:
-                self.progress_label.setText(text)
-            except Exception:
-                pass
-        if not visible_render_failure:
-            try:
-                self._show_ui_status_message_with_reflection_or_direct_fallback(text, None)
-            except Exception:
-                pass
+        _update_conversion_progress_impl(self, current, total, message)
 
     def open_log_folder(self: MainWindow) -> None:
-        try:
-            target_dir = _resolve_log_dir()
-        except Exception:
-            target_dir = LOG_DIR
-        if _open_path_in_file_manager(target_dir):
-            return
-        try:
-            self._show_information_dialog_with_status_fallback(
-                'ログフォルダ',
-                str(target_dir),
-                fallback_status_message=f'ログフォルダ: {target_dir}',
-            )
-        except Exception:
-            try:
-                self._show_ui_status_message_with_reflection_or_direct_fallback(f'ログフォルダ: {target_dir}', 5000)
-            except Exception:
-                pass
+        return open_log_folder_impl(
+            self,
+            resolve_log_dir_func=_resolve_log_dir,
+            log_dir=LOG_DIR,
+            open_path_in_file_manager_func=_open_path_in_file_manager,
+        )
 
     def _set_results_summary_text_fallback(
         self: MainWindow,
@@ -11729,16 +4896,7 @@ class MainWindow(QMainWindow):
         *,
         default_text: str = '保存されたファイルはありません。',
     ) -> bool:
-        if not hasattr(self, 'results_summary_label'):
-            return False
-        text = _coerce_ui_message_text(summary_text)
-        visible_text = text or default_text
-        try:
-            self.results_summary_label.setText(visible_text)
-            self._set_results_summary_placeholder_state(False)
-            return True
-        except Exception:
-            return False
+        return _set_results_summary_text_fallback_impl(self, summary_text, default_text=default_text)
 
     def _set_results_summary_text_with_fallback(
         self: MainWindow,
@@ -11746,185 +4904,31 @@ class MainWindow(QMainWindow):
         *,
         default_text: str = '保存されたファイルはありません。',
     ) -> bool:
-        expected_text = _coerce_ui_message_text(summary_text).strip() or default_text
-        try:
-            if bool(self._set_results_summary_text_fallback(summary_text, default_text=default_text)):
-                if self._ui_widget_text(getattr(self, 'results_summary_label', None)) == expected_text:
-                    return True
-                # sweep353: the primary helper may be monkey-patched or may report
-                # success without mutating the visible label.  Fall through to the
-                # direct label update path so tests and stubbed UI objects still see
-                # the requested summary text.
-        except Exception:
-            pass
-        if not hasattr(self, 'results_summary_label'):
-            return False
-        if self._ui_widget_text(getattr(self, 'results_summary_label', None)) == expected_text:
-            return True
-        try:
-            self.results_summary_label.setText(expected_text)
-            self._set_results_summary_placeholder_state(False)
-        except Exception:
-            return False
-        return self._ui_widget_text(getattr(self, 'results_summary_label', None)) == expected_text
+        return _set_results_summary_text_with_fallback_impl(self, summary_text, default_text=default_text)
 
     def _set_bottom_tab_index_with_fallback(self: MainWindow, index: object) -> bool:
-        if not hasattr(self, 'bottom_tabs'):
-            return False
-        try:
-            normalized_index = int(index)
-        except Exception:
-            return False
-        tab_count = getattr(self.bottom_tabs, 'count', None)
-        if callable(tab_count):
-            try:
-                if normalized_index < 0 or normalized_index >= max(0, int(tab_count())):
-                    return False
-            except Exception:
-                return False
-        try:
-            self.bottom_tabs.setCurrentIndex(normalized_index)
-        except Exception:
-            pass
-        if self._ui_widget_index(getattr(self, 'bottom_tabs', None)) == normalized_index:
-            return True
-        tab_bar_getter = getattr(self.bottom_tabs, 'tabBar', None)
-        if callable(tab_bar_getter):
-            try:
-                tab_bar = tab_bar_getter()
-            except Exception:
-                tab_bar = None
-            set_tab_bar_index = getattr(tab_bar, 'setCurrentIndex', None)
-            if callable(set_tab_bar_index):
-                try:
-                    set_tab_bar_index(normalized_index)
-                except Exception:
-                    pass
-            if self._ui_widget_index(getattr(self, 'bottom_tabs', None)) == normalized_index:
-                return True
-            if self._ui_widget_index(tab_bar) == normalized_index:
-                return True
-        widget_getter = getattr(self.bottom_tabs, 'widget', None)
-        set_current_widget = getattr(self.bottom_tabs, 'setCurrentWidget', None)
-        if callable(widget_getter) and callable(set_current_widget):
-            try:
-                target_widget = widget_getter(normalized_index)
-            except Exception:
-                target_widget = None
-            if target_widget is not None:
-                try:
-                    set_current_widget(target_widget)
-                except Exception:
-                    pass
-            if self._ui_widget_index(getattr(self, 'bottom_tabs', None)) == normalized_index:
-                return True
-        return False
+        return _set_bottom_tab_index_with_fallback_impl(self, index)
 
     def _clear_results_view(self: MainWindow, summary_text: object = None) -> bool:
-        has_results_list = hasattr(self, 'results_list')
-        list_cleared = False
-        if has_results_list:
-            try:
-                self.results_list.clear()
-                list_cleared = True
-            except Exception:
-                APP_LOGGER.exception('結果一覧クリアに失敗しました')
-        selection_cleared = False
-        if has_results_list:
-            try:
-                selection_cleared = bool(self._clear_results_selection_state())
-            except Exception:
-                APP_LOGGER.exception('結果一覧選択状態クリアに失敗しました')
-        summary_updated = False
-        normalized_summary_text = _coerce_ui_message_text(summary_text)
-        summary_requested = bool(normalized_summary_text) or hasattr(self, 'results_summary_label')
-        try:
-            summary_updated = bool(self._set_results_summary_text_with_fallback(summary_text))
-        except Exception:
-            APP_LOGGER.exception('結果一覧サマリ更新に失敗しました')
-        try:
-            self._sync_results_action_buttons_state()
-        except Exception:
-            pass
-        if summary_requested and not summary_updated:
-            return False
-        return bool(list_cleared or selection_cleared or summary_updated)
+        return _clear_results_view_impl(self, summary_text)
 
     def _sync_results_action_buttons_state(self: MainWindow) -> bool:
-        has_results = False
-        try:
-            has_results = self._result_item_count() > 0
-        except Exception:
-            has_results = False
-        for attr_name in ('open_results_folder_btn', 'open_selected_result_btn'):
-            button = getattr(self, attr_name, None)
-            if button is None or not hasattr(button, 'setEnabled'):
-                continue
-            try:
-                button.setEnabled(has_results)
-            except Exception:
-                pass
-        return has_results
+        return _sync_results_action_buttons_state_impl(self)
 
     def _preferred_result_path_for_action(self: MainWindow) -> str:
-        context = self._resolved_result_load_context()
-        path = worker_logic._normalized_path_text(context.get('resolved_path')).strip()
-        if path:
-            return path
-        item = self._result_item_at(0)
-        return worker_logic._normalized_path_text(self._results_item_path(item)).strip() if item is not None else ''
+        return _preferred_result_path_for_action_impl(self)
 
     def open_results_folder_from_results(self: MainWindow) -> None:
-        folder_override = ''
-        for candidate in (
-            self.__dict__.get('_last_conversion_open_folder_target', ''),
-            self.__dict__.get('_completion_card_open_folder_target', ''),
-            self.__dict__.get('_active_conversion_open_folder_target', ''),
-        ):
-            folder_override = self._meaningful_open_folder_target_text(candidate)
-            if folder_override:
-                break
-        if folder_override:
-            if _open_path_in_file_manager(folder_override):
-                return
-            self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先を開けませんでした。\n{folder_override}')
-            return
-
-        path = self._preferred_result_path_for_action()
-        if not path:
-            self._show_result_load_dialog_with_status_fallback('information', '保存先', '開ける変換結果がありません。')
-            return
-        try:
-            if worker_logic._is_windows_like_path(path):
-                folder = ntpath.dirname(ntpath.normpath(path))
-            else:
-                folder = str(Path(path).parent)
-        except Exception:
-            folder = ''
-        # _meaningful_open_folder_target_text と同じ基準でフォルダを
-        # 検証する。これにより ``'./'``/``'.\\'``/``'..'`` 等の相対
-        # 表記が ``os.startfile`` に届いてアプリのある cwd を開いて
-        # しまう不具合を、フォールバック経路でも防ぐ。
-        target = self._meaningful_open_folder_target_text(folder)
-        if not target:
-            self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先フォルダを特定できませんでした。\n{path}')
-            return
-        if _open_path_in_file_manager(target):
-            return
-        self._show_result_load_dialog_with_status_fallback('warning', '保存先', f'保存先を開けませんでした。\n{target}')
+        return open_results_folder_from_results_impl(self)
 
     def open_selected_result_from_results(self: MainWindow) -> None:
-        item = self._resolved_results_item_for_loading() or self._result_item_at(0)
-        if item is None:
-            self._show_result_load_dialog_with_status_fallback('information', '右ペイン', '確認できる変換結果がありません。')
-            return
-        self.on_result_item_clicked(item)
+        return open_selected_result_from_results_impl(self)
 
     def _result_display_name(self: MainWindow, path_text: str) -> str:
-        return studio_logic.build_result_display_name(path_text)
+        return _result_display_name_impl(self, path_text)
 
     def _normalized_result_entries(self: MainWindow, paths: list[object]) -> list[tuple[str, str]]:
-        return results_controller.build_results_entries(paths)
+        return _normalized_result_entries_impl(self, paths)
 
     def _apply_results_entries_to_ui(
         self: MainWindow,
@@ -11932,377 +4936,76 @@ class MainWindow(QMainWindow):
         summary_text: object = None,
         initial_index: object = None,
     ) -> None:
-        self._clear_results_view()
-        if hasattr(self, 'results_summary_label'):
-            normalized_summary = _coerce_ui_message_text(summary_text)
-            if normalized_summary:
-                self._set_results_summary_text_with_fallback(normalized_summary)
-        if not hasattr(self, 'results_list'):
-            return
-        for display_name, raw in entries:
-            item = QListWidgetItem(display_name)
-            item.setData(Qt.UserRole, raw)
-            self.results_list.addItem(item)
-        try:
-            self._sync_results_action_buttons_state()
-        except Exception:
-            pass
-        try:
-            self._bind_bottom_panel_external_scrollbar()
-        except Exception:
-            pass
-        try:
-            normalized_index = int(initial_index)
-        except Exception:
-            normalized_index = None
-        if normalized_index is not None:
-            self._set_results_current_index_with_fallback(normalized_index)
+        return _apply_results_entries_to_ui_impl(self, entries, summary_text, initial_index)
 
     def populate_results(self: MainWindow, paths: list[object], summary_lines: list[str] | None = None) -> None:
-        context = results_controller.build_results_apply_context(paths, summary_lines, language=self.current_ui_language_value())
-        self._apply_results_entries_to_ui(
-            context.get('entries', []),
-            context.get('summary_text', ''),
-            context.get('initial_index'),
-        )
-        remembered_path = worker_logic._normalized_path_text(self.__dict__.get('_loaded_xtc_path_text')).strip()
-        if not remembered_path or self._result_item_count() <= 0:
-            return
-        selection_context = results_controller.build_results_selection_context(
-            remembered_path,
-            self._result_item_paths(),
-        )
-        if studio_logic.payload_optional_int_value(selection_context, 'matched_index') is None:
-            return
-        self._apply_results_selection_context_with_fallback(selection_context)
+        return populate_results_impl(self, paths, summary_lines)
 
     def on_result_item_clicked(self: MainWindow, item: QListWidgetItem) -> None:
-        def _load_result_path_with_tab_fallback(path_value: object) -> None:
-            load_succeeded = self._load_xtc_from_path_with_result(path_value)
-            if hasattr(self, 'bottom_tabs'):
-                try:
-                    self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX if load_succeeded else LOG_TAB_INDEX)
-                except Exception:
-                    APP_LOGGER.exception('結果項目クリック時のタブ切替に失敗しました')
-
-        path = worker_logic._normalized_path_text(self._results_item_path(item)).strip()
-        if path:
-            matched_index = results_controller.find_matching_loaded_path_index(path, self._result_item_paths())
-            if matched_index is not None:
-                self._apply_results_selection_context_with_fallback({'matched_index': matched_index, 'clear_selection': False})
-                _load_result_path_with_tab_fallback(path)
-                return
-            if self._result_item_count() <= 0:
-                _load_result_path_with_tab_fallback(path)
-                return
-        resolved_context = self._resolved_result_load_context()
-        resolved_path = worker_logic._normalized_path_text(resolved_context.get('resolved_path')).strip()
-        preferred_index = studio_logic.payload_optional_int_value(resolved_context, 'preferred_index')
-        if resolved_path and self._payload_bool_value(resolved_context, 'has_path', False) and preferred_index is not None:
-            self._apply_results_selection_context_with_fallback({'matched_index': preferred_index, 'clear_selection': False})
-            _load_result_path_with_tab_fallback(resolved_path)
-            return
-        remembered_path = worker_logic._normalized_path_text(self.__dict__.get('_loaded_xtc_path_text')).strip()
-        try:
-            if remembered_path:
-                self._sync_results_selection_for_loaded_path_with_fallback(remembered_path)
-            else:
-                self._clear_results_selection_with_fallback(
-                    results_controller.build_results_clear_selection_context()
-                )
-        except Exception:
-            pass
-        try:
-            self._sync_active_display_context_for_visible_page()
-        except Exception:
-            pass
-        self._show_result_load_dialog_with_status_fallback(
-            'warning',
-            '右ペイン',
-            '選択した項目のファイルパスを取得できませんでした。',
-        )
+        return on_result_item_clicked_impl(self, item)
 
     def _normalize_results_path_key(self: MainWindow, path: object) -> str:
-        return results_controller.normalize_results_path_key(path)
-
+        return _normalize_results_path_key_impl(self, path)
 
     def _clear_results_selection_state(self: MainWindow) -> bool:
-        if not hasattr(self, 'results_list'):
-            return False
-        selection_cleared = False
-        clear_selection = getattr(self.results_list, 'clearSelection', None)
-        if callable(clear_selection):
-            try:
-                clear_selection()
-                selection_cleared = True
-            except Exception:
-                pass
-        set_current_item = getattr(self.results_list, 'setCurrentItem', None)
-        if callable(set_current_item):
-            try:
-                set_current_item(None)
-                return True
-            except Exception:
-                pass
-        set_current_row = getattr(self.results_list, 'setCurrentRow', None)
-        if callable(set_current_row):
-            try:
-                set_current_row(-1)
-                return True
-            except Exception:
-                pass
-        return selection_cleared
+        return _clear_results_selection_state_impl(self)
 
     def _clear_results_selection_with_fallback(
         self: MainWindow,
         context: Mapping[str, object] | object = None,
     ) -> bool:
-        selection_context = self._coerce_mapping_payload(context)
-        if not selection_context:
-            selection_context = results_controller.build_results_clear_selection_context()
-        try:
-            self._apply_results_selection_context(selection_context)
-        except Exception:
-            pass
-        try:
-            return bool(self._clear_results_selection_state())
-        except Exception:
-            return False
+        return _clear_results_selection_with_fallback_impl(self, context)
 
     def _apply_results_selection_context_with_fallback(
         self: MainWindow,
         context: Mapping[str, object] | object,
     ) -> bool:
-        selection_context = self._coerce_mapping_payload(context)
-        if not selection_context:
-            return self._clear_results_selection_with_fallback(
-                results_controller.build_results_clear_selection_context()
-            )
-        if self._payload_bool_value(selection_context, 'clear_selection', False):
-            return self._clear_results_selection_with_fallback(selection_context)
-        matched_index = studio_logic.payload_optional_int_value(selection_context, 'matched_index')
-        if matched_index is None:
-            return self._clear_results_selection_with_fallback(
-                results_controller.build_results_clear_selection_context()
-            )
-        try:
-            self._apply_results_selection_context(selection_context)
-            current_index = self._current_results_index()
-            if current_index == matched_index:
-                return True
-            if matched_index in self._selected_result_indexes():
-                return True
-        except Exception:
-            pass
-        return self._clear_results_selection_with_fallback(
-            results_controller.build_results_clear_selection_context()
-        )
+        return _apply_results_selection_context_with_fallback_impl(self, context)
 
     def _sync_results_selection_for_loaded_path_with_fallback(
         self: MainWindow,
         path: object,
     ) -> bool:
-        normalized_path = worker_logic._normalized_path_text(path).strip()
-        if not normalized_path:
-            return self._clear_results_selection_with_fallback(
-                results_controller.build_results_clear_selection_context()
-            )
-        selection_context = results_controller.build_results_selection_context(
-            normalized_path,
-            self._result_item_paths(),
-        )
-        matched_index = studio_logic.payload_optional_int_value(selection_context, 'matched_index')
-        try:
-            self._sync_results_selection_for_loaded_path(normalized_path)
-            if matched_index is None:
-                return self._clear_results_selection_with_fallback(
-                    results_controller.build_results_clear_selection_context()
-                )
-            current_index = self._current_results_index()
-            if current_index == matched_index:
-                return True
-            if matched_index in self._selected_result_indexes():
-                return True
-        except Exception:
-            pass
-        return self._clear_results_selection_with_fallback(
-            results_controller.build_results_clear_selection_context()
-        )
-
+        return _sync_results_selection_for_loaded_path_with_fallback_impl(self, path)
 
     def _result_item_count(self: MainWindow) -> int:
-        if not hasattr(self, 'results_list'):
-            return 0
-        count = getattr(self.results_list, 'count', None)
-        if not callable(count):
-            return 0
-        try:
-            return max(0, int(count()))
-        except Exception:
-            return 0
+        return _result_item_count_impl(self)
 
     def _result_item_at(self: MainWindow, index: object) -> QListWidgetItem | None:
-        if not hasattr(self, 'results_list'):
-            return None
-        item_at = getattr(self.results_list, 'item', None)
-        if not callable(item_at):
-            return None
-        try:
-            normalized_index = int(index)
-        except Exception:
-            return None
-        if normalized_index < 0 or normalized_index >= self._result_item_count():
-            return None
-        try:
-            return item_at(normalized_index)
-        except Exception:
-            return None
+        return _result_item_at_impl(self, index)
 
     def _result_item_paths(self: MainWindow) -> list[object]:
-        paths: list[object] = []
-        for idx in range(self._result_item_count()):
-            item = self._result_item_at(idx)
-            paths.append(self._results_item_path(item) if item is not None else None)
-        return paths
+        return _result_item_paths_impl(self)
 
     def _result_item_path_keys(self: MainWindow) -> list[str]:
-        return [self._normalize_results_path_key(path) for path in self._result_item_paths()]
+        return _result_item_path_keys_impl(self)
 
     def _set_results_current_index_with_fallback(self: MainWindow, index: object) -> bool:
-        if not hasattr(self, 'results_list'):
-            return False
-        try:
-            normalized_index = int(index)
-        except Exception:
-            return False
-        if normalized_index < 0 or normalized_index >= self._result_item_count():
-            return False
-        matched_item = self._result_item_at(normalized_index)
-        if matched_item is None:
-            return False
-        current_item_getter = getattr(self.results_list, 'currentItem', None)
-        selected_items_getter = getattr(self.results_list, 'selectedItems', None)
-        can_verify_current_index = callable(current_item_getter) or callable(selected_items_getter)
-        set_current_row = getattr(self.results_list, 'setCurrentRow', None)
-        if callable(set_current_row):
-            try:
-                set_current_row(normalized_index)
-            except Exception:
-                pass
-        if self._current_results_index() == normalized_index:
-            return True
-        if normalized_index in self._selected_result_indexes():
-            return True
-        set_current_item = getattr(self.results_list, 'setCurrentItem', None)
-        if callable(set_current_item):
-            try:
-                set_current_item(matched_item)
-            except Exception:
-                pass
-        if self._current_results_index() == normalized_index:
-            return True
-        if normalized_index in self._selected_result_indexes():
-            return True
-        if callable(set_current_item) and not can_verify_current_index:
-            return True
-        if callable(set_current_row) and not can_verify_current_index:
-            return True
-        return False
+        return _set_results_current_index_with_fallback_impl(self, index)
 
     def _apply_results_selection_context(self: MainWindow, context: Mapping[str, object] | object) -> QListWidgetItem | None:
-        context = self._coerce_mapping_payload(context)
-        if not hasattr(self, 'results_list'):
-            return None
-        if self._payload_bool_value(context, 'clear_selection', False):
-            self._clear_results_selection_state()
-            return None
-        matched_index = studio_logic.payload_optional_int_value(context, 'matched_index')
-        if matched_index is None:
-            self._clear_results_selection_state()
-            return None
-        matched_item = self._result_item_at(matched_index)
-        if matched_item is None:
-            self._clear_results_selection_state()
-            return None
-        if self._set_results_current_index_with_fallback(matched_index):
-            return matched_item
-        self._clear_results_selection_state()
-        return None
+        return _apply_results_selection_context_impl(self, context)
 
     def _sync_results_selection_for_loaded_path(self: MainWindow, path: object) -> None:
-        if not hasattr(self, 'results_list'):
-            return
-        context = results_controller.build_results_selection_context(path, self._result_item_paths())
-        self._apply_results_selection_context(context)
+        _sync_results_selection_for_loaded_path_impl(self, path)
 
     def _selected_result_indexes(self: MainWindow) -> list[int]:
-        if not hasattr(self, 'results_list'):
-            return []
-        selected_items = getattr(self.results_list, 'selectedItems', None)
-        row = getattr(self.results_list, 'row', None)
-        if not callable(selected_items) or not callable(row):
-            return []
-        try:
-            selected = selected_items()
-        except Exception:
-            return []
-        indexes: list[int] = []
-        for item in selected or []:
-            try:
-                indexes.append(int(row(item)))
-            except Exception:
-                continue
-        return indexes
+        return _selected_result_indexes_impl(self)
 
     def _current_results_index(self: MainWindow) -> int | None:
-        if not hasattr(self, 'results_list'):
-            return None
-        current_item = getattr(self.results_list, 'currentItem', None)
-        if not callable(current_item):
-            return None
-        try:
-            item = current_item()
-        except Exception:
-            item = None
-        if item is None:
-            return None
-        row = getattr(self.results_list, 'row', None)
-        if not callable(row):
-            return None
-        try:
-            return int(row(item))
-        except Exception:
-            return None
+        return _current_results_index_impl(self)
 
     def _resolved_result_load_context(self: MainWindow) -> dict[str, object]:
-        return results_controller.build_results_load_context(
-            selected_indexes=self._selected_result_indexes(),
-            current_index=self._current_results_index(),
-            item_paths=self._result_item_paths(),
-            loaded_path=self.__dict__.get('_loaded_xtc_path_text'),
-        )
+        return _resolved_result_load_context_impl(self)
 
     def _resolved_results_item_for_loading(self: MainWindow) -> QListWidgetItem | None:
-        context = self._resolved_result_load_context()
-        preferred_index = studio_logic.payload_optional_int_value(context, 'preferred_index')
-        if preferred_index is None:
-            return None
-        return self._result_item_at(preferred_index)
+        return _resolved_results_item_for_loading_impl(self)
 
     def _fallback_loaded_result_load_context(self: MainWindow) -> dict[str, object]:
-        return results_controller.build_fallback_loaded_result_load_context(
-            self.__dict__.get('_loaded_xtc_path_text'),
-            self._result_item_paths(),
-        )
+        return _fallback_loaded_result_load_context_impl(self)
 
     def _results_item_path(self: MainWindow, item: object) -> object:
-        data = getattr(item, 'data', None)
-        if callable(data):
-            try:
-                return data(Qt.UserRole)
-            except Exception:
-                return None
-        return None
+        return _results_item_path_impl(self, item)
 
     def _show_result_load_dialog_with_status_fallback(
         self: MainWindow,
@@ -12310,302 +5013,69 @@ class MainWindow(QMainWindow):
         title: str,
         message: str,
     ) -> None:
-        dialog = getattr(QMessageBox, str(level), None)
-        if callable(dialog):
-            try:
-                dialog(self, title, message)
-                return
-            except Exception:
-                pass
-        try:
-            self._show_ui_status_message_with_reflection_or_direct_fallback(
-                message,
-                5000,
-                reuse_existing_message=False,
-            )
-        except Exception:
-            pass
+        return _show_result_load_dialog_with_status_fallback_impl(self, level, title, message)
 
     def load_selected_result(self: MainWindow) -> None:
-        context = self._resolved_result_load_context()
-        preferred_index = studio_logic.payload_optional_int_value(context, 'preferred_index')
-        if self._payload_bool_value(context, 'should_warn_no_selection', False) or preferred_index is None:
-            try:
-                self._sync_active_display_context_for_visible_page()
-            except Exception:
-                pass
-            self._show_result_load_dialog_with_status_fallback('information', '右ペイン', '表示する変換結果を選択してください。')
-            return
-        effective_context = dict(context)
-        effective_index = preferred_index
-        if self._payload_bool_value(context, 'should_warn_missing_path', False) or not self._payload_bool_value(context, 'has_path', False):
-            fallback_context = self._fallback_loaded_result_load_context()
-            fallback_index = studio_logic.payload_optional_int_value(fallback_context, 'preferred_index')
-            if fallback_index is not None and self._payload_bool_value(fallback_context, 'has_path', False):
-                effective_context = fallback_context
-                effective_index = fallback_index
-            else:
-                try:
-                    self._sync_active_display_context_for_visible_page()
-                except Exception:
-                    pass
-                self._show_result_load_dialog_with_status_fallback('warning', '右ペイン', '選択した項目のファイルパスを取得できませんでした。')
-                return
-        path = effective_context.get('resolved_path')
-        if not self._payload_bool_value(effective_context, 'has_path', False):
-            try:
-                self._sync_active_display_context_for_visible_page()
-            except Exception:
-                pass
-            self._show_result_load_dialog_with_status_fallback('warning', '右ペイン', '選択した項目のファイルパスを取得できませんでした。')
-            return
-        self._apply_results_selection_context_with_fallback({'matched_index': effective_index, 'clear_selection': False})
-        load_succeeded = self._load_xtc_from_path_with_result(path)
-        if hasattr(self, 'bottom_tabs'):
-            try:
-                self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX if load_succeeded else LOG_TAB_INDEX)
-            except Exception:
-                APP_LOGGER.exception('結果選択読込時のタブ切替に失敗しました')
+        return load_selected_result_impl(self)
 
     # ── XTCビューア ───────────────────────────────────────
 
     def _xtc_source_payload(self: MainWindow, path: object) -> dict[str, str]:
-        path_text = worker_logic._normalized_path_text(path).strip()
-        return studio_logic.build_xtc_source_payload(
-            path_text,
-            self._xtc_display_name(path_text),
-        )
+        return _xtc_source_payload_impl(self, path)
 
     def _normalized_xtc_bytes(self: MainWindow, data: object) -> bytes:
-        return studio_logic.normalize_xtc_bytes(data)
+        return _normalized_xtc_bytes_impl(self, data)
 
     def _xtc_document_payload(self: MainWindow, data: object) -> dict[str, object]:
-        xtc_data = self._normalized_xtc_bytes(data)
-        pages = parse_xtc_pages(xtc_data)
-        return studio_logic.build_xtc_document_payload_from_pages(xtc_data, pages)
+        return _xtc_document_payload_impl(self, data, parse_xtc_pages=parse_xtc_pages)
 
     def _xtc_source_document_payload(self: MainWindow, path: object) -> dict[str, object]:
-        source_payload = self._xtc_source_payload(path)
-        raw = Path(source_payload['path_text']).read_bytes()
-        document_payload = self._xtc_document_payload(raw)
-        return studio_logic.build_xtc_source_document_payload(source_payload, document_payload)
+        return _xtc_source_document_payload_impl(self, path)
 
     def _xtc_display_name(self: MainWindow, path: object) -> str:
-        path_text = worker_logic._normalized_path_text(path).strip()
-        return studio_logic.build_xtc_display_name(path_text)
+        return _xtc_display_name_impl(self, path)
 
     def _reset_xtc_page_input(self: MainWindow, total_pages: object, current_page: object = 0) -> None:
-        if not hasattr(self, 'page_input'):
-            return
-        nav_bar_plan = self._localized_plan(gui_layouts.build_nav_bar_plan())
-        page_input_state = studio_logic.build_page_input_apply_state(
-            total_pages=total_pages,
-            current_page=current_page,
-            empty_minimum=self._plan_int_value(nav_bar_plan, 'page_input_empty_minimum', 0),
-            empty_maximum=self._plan_int_value(nav_bar_plan, 'page_input_empty_maximum', 0),
-            active_minimum=self._plan_int_value(nav_bar_plan, 'page_input_active_minimum', 1),
+        _reset_xtc_page_input_impl(
+            self,
+            total_pages,
+            current_page,
+            bulk_block_signals=_bulk_block_signals,
+            build_nav_bar_plan=gui_layouts.build_nav_bar_plan,
         )
-        minimum = self._payload_int_value(page_input_state, 'minimum', 0)
-        maximum = self._payload_int_value(page_input_state, 'maximum', 0)
-        value = self._payload_int_value(page_input_state, 'value', 0)
-        with _bulk_block_signals(self.page_input):
-            self.page_input.setRange(minimum, maximum)
-            self.page_input.setValue(value)
 
     def _apply_xtc_document_payload(self: MainWindow, payload: Mapping[str, object]) -> None:
-        xtc_data = self._normalized_xtc_bytes(payload.get('data', b''))
-        pages = self._normalized_xtc_pages_for_runtime(payload.get('pages'))
-        total = max(0, worker_logic._int_config_value(payload, 'total', len(pages)))
-        total = len(pages) if pages else total
-        current_index = self._normalized_xtc_page_index(payload.get('current_index', 0), total=total) if pages else 0
-        current_page = current_index + 1 if total > 0 else 0
-        self.xtc_bytes = xtc_data
-        self.xtc_pages = pages
-        self._clear_xtc_page_qimage_cache()
-        self.loaded_xtc_profile_ui_override = False
-        self.device_view_source = 'xtc'
-        self.current_device_preview_page_index = 0
-        self.current_page_index = current_index
-        self._refresh_loaded_xtc_viewer_profile_cache()
-        self._reset_xtc_page_input(total, current_page if self.xtc_pages else 0)
-        self.render_current_page(refresh_navigation=True)
+        _apply_xtc_document_payload_impl(self, payload)
 
     def _apply_loaded_xtc_document(self: MainWindow, data: bytes, pages: list[PageInfo]) -> None:
-        self._apply_xtc_document_payload(
-            {
-                'data': data,
-                'pages': pages,
-                'total': len(pages),
-                'current_index': 0,
-                'current_page': 1 if pages else 0,
-            }
-        )
+        _apply_loaded_xtc_document_impl(self, data, pages)
 
     def _current_xtc_page_blob(self: MainWindow, *, force_loaded_xtc: bool = False) -> bytes | None:
-        if not getattr(self, 'xtc_bytes', b''):
-            return None
-        if force_loaded_xtc:
-            pages = self._runtime_xtc_pages()
-            total = len(pages)
-            if total <= 0:
-                return None
-            current_index = self._normalized_xtc_page_index(total=total)
-            payload = studio_logic.build_xtc_page_state_payload(pages, current_index)
-        else:
-            payload = self._xtc_page_state_payload()
-            total = worker_logic._int_config_value(payload, 'total', 0)
-            if total <= 0:
-                return None
-            current_index = worker_logic._int_config_value(payload, 'current_index', 0)
-        if current_index != getattr(self, 'current_page_index', 0):
-            self.current_page_index = current_index
-            self._refresh_loaded_xtc_viewer_profile_cache()
-        page = payload.get('page')
-        if page is None:
-            return None
-        offset = max(0, worker_logic._int_config_value({'value': getattr(page, 'offset', 0)}, 'value', 0))
-        length = max(0, worker_logic._int_config_value({'value': getattr(page, 'length', 0)}, 'value', 0))
-        return self.xtc_bytes[offset: offset + length]
+        return _current_xtc_page_blob_impl(self, force_loaded_xtc=force_loaded_xtc)
 
     def _clear_xtc_viewer_page(self: MainWindow, *, refresh_navigation: bool = True) -> None:
-        if hasattr(self, 'viewer_widget'):
-            try:
-                self.viewer_widget.set_profile(self._active_device_viewer_profile())
-            except Exception:
-                pass
-            self.viewer_widget.clear_page()
-            self._resync_device_preview_layout_now_and_later()
-        if refresh_navigation:
-            self.update_navigation_ui()
+        _clear_xtc_viewer_page_impl(self, refresh_navigation=refresh_navigation)
 
     def _page_image_dimensions(self: MainWindow, image: object) -> tuple[int, int]:
-        return studio_logic.read_image_dimensions(image)
+        return _page_image_dimensions_impl(self, image)
 
     def _viewer_profile_for_dimensions(self: MainWindow, width: object, height: object) -> DeviceProfile:
-        current_profile = self._current_viewer_profile()
-        resolution = studio_logic.build_viewer_profile_resolution_state(
-            width,
-            height,
-            current_width=getattr(current_profile, 'width_px', 0),
-            current_height=getattr(current_profile, 'height_px', 0),
-            profile_dimensions={
-                key: (getattr(profile, 'width_px', 0), getattr(profile, 'height_px', 0))
-                for key, profile in DEVICE_PROFILES.items()
-            },
-            preferred_profile_keys=('x4', 'x3'),
-        )
-        resolution_kind = str(resolution.get('kind') or '').strip()
-        if resolution_kind == 'current':
-            return current_profile
-        if resolution_kind == 'profile':
-            profile = DEVICE_PROFILES.get(str(resolution.get('profile_key') or '').strip())
-            if profile is not None:
-                return profile
-            return current_profile
-        width_px = max(0, worker_logic._int_config_value({'value': resolution.get('width_px')}, 'value', 0))
-        height_px = max(0, worker_logic._int_config_value({'value': resolution.get('height_px')}, 'value', 0))
-        return self._custom_viewer_profile_for_dimensions(width_px, height_px)
+        return _viewer_profile_for_dimensions_impl(self, width, height)
 
     def _custom_viewer_profile_for_dimensions(self: MainWindow, width: int, height: int) -> DeviceProfile:
-        base_profile = DEVICE_PROFILES.get('custom', DEVICE_PROFILES['x4'])
-        metrics = studio_logic.build_custom_viewer_profile_metrics(
-            width_px=width,
-            height_px=height,
-            ppi=getattr(base_profile, 'ppi', 300.0),
-            screen_w_mm=getattr(base_profile, 'screen_w_mm', 1.0),
-            screen_h_mm=getattr(base_profile, 'screen_h_mm', 1.0),
-            body_w_mm=getattr(base_profile, 'body_w_mm', 1.0),
-            body_h_mm=getattr(base_profile, 'body_h_mm', 1.0),
-        )
-        return replace(
-            base_profile,
-            width_px=int(metrics['width_px']),
-            height_px=int(metrics['height_px']),
-            screen_w_mm=float(metrics['screen_w_mm']),
-            screen_h_mm=float(metrics['screen_h_mm']),
-            body_w_mm=float(metrics['body_w_mm']),
-            body_h_mm=float(metrics['body_h_mm']),
-        )
+        return _custom_viewer_profile_for_dimensions_impl(self, width, height)
 
     def _viewer_profile_for_xtc_pages(self: MainWindow, pages: object) -> DeviceProfile | None:
-        page_list = self._normalized_xtc_pages_for_runtime(pages)
-        if not page_list:
-            return None
-        total = len(page_list)
-        current_index = self._normalized_xtc_page_index(getattr(self, 'current_page_index', 0), total=total)
-        candidates: list[object] = []
-        if 0 <= current_index < total:
-            candidates.append(page_list[current_index])
-        first_page = page_list[0]
-        if not candidates or candidates[0] is not first_page:
-            candidates.append(first_page)
-        for candidate in candidates:
-            width = max(0, worker_logic._int_config_value({'value': getattr(candidate, 'width', 0)}, 'value', 0))
-            height = max(0, worker_logic._int_config_value({'value': getattr(candidate, 'height', 0)}, 'value', 0))
-            if width > 0 and height > 0:
-                return self._viewer_profile_for_dimensions(width, height)
-        return None
+        return _viewer_profile_for_xtc_pages_impl(self, pages)
 
     def _viewer_profile_for_page_image(self: MainWindow, image: object) -> DeviceProfile:
-        current_key = getattr(self, 'current_profile_key', '')
-        if current_key and current_key != 'custom':
-            return self._current_viewer_profile()
-
-        width, height = self._page_image_dimensions(image)
-        return self._viewer_profile_for_dimensions(width, height)
+        return _viewer_profile_for_page_image_impl(self, image)
 
     def _viewer_profile_for_preview_payload(self: MainWindow, payload: object = None) -> DeviceProfile:
-        preview_payload_obj = payload if isinstance(payload, Mapping) else getattr(self, 'last_applied_preview_payload', None)
-        preview_payload = dict(preview_payload_obj) if isinstance(preview_payload_obj, Mapping) else {}
-        if not preview_payload:
-            return self._current_viewer_profile()
-
-        profile_key = self._normalize_choice_value(preview_payload.get('profile'), '', DEVICE_PROFILES)
-        width = worker_logic._int_config_value({'width': preview_payload.get('width')}, 'width', 0)
-        height = worker_logic._int_config_value({'height': preview_payload.get('height')}, 'height', 0)
-
-        if profile_key and profile_key != 'custom':
-            profile = DEVICE_PROFILES.get(profile_key)
-            if profile is not None:
-                return profile
-
-        if width > 0 and height > 0:
-            for key in ('x4', 'x3'):
-                profile = DEVICE_PROFILES.get(key)
-                if profile and int(profile.width_px) == width and int(profile.height_px) == height:
-                    return profile
-            return self._custom_viewer_profile_for_dimensions(width, height)
-
-        return self._current_viewer_profile()
+        return _viewer_profile_for_preview_payload_impl(self, payload)
 
     def _refresh_successful_device_render_status(self: MainWindow) -> None:
-        view_mode = self._normalized_main_view_mode(
-            getattr(self, 'main_view_mode', 'font')
-        )
-        has_font_preview_pages = bool(self._runtime_preview_pages()) if view_mode == 'font' else False
-        preview_replacement = self._current_preview_render_status_message() if has_font_preview_pages else ''
-        progress_status_text = ''
-        if hasattr(self, 'progress_label'):
-            progress_status_text = self._ui_widget_text(self.progress_label)
-        status_state = studio_logic.build_successful_device_render_status_refresh_state(
-            view_mode=view_mode,
-            current_label_text=self._ui_widget_text(getattr(self, 'current_xtc_label', None)),
-            preview_replacement=preview_replacement,
-            has_font_preview_pages=has_font_preview_pages,
-            progress_status_text=progress_status_text,
-            status_bar_text=self._status_bar_message_text(),
-        )
-        replacement = str(status_state.get('replacement', ''))
-        if not replacement:
-            return
-        stale_progress_status = bool(status_state.get('stale_progress_status'))
-        if stale_progress_status and hasattr(self, 'progress_label'):
-            try:
-                self.progress_label.setText(replacement)
-            except Exception:
-                pass
-        if status_state.get('should_notify_status_bar'):
-            self._show_ui_status_message_direct_with_reflection_best_effort(replacement, 5000)
+        _refresh_successful_device_render_status_impl(self)
 
     def _apply_rendered_xtc_page(
         self: MainWindow,
@@ -12614,473 +5084,76 @@ class MainWindow(QMainWindow):
         refresh_navigation: bool = True,
         profile: DeviceProfile | None = None,
     ) -> None:
-        if hasattr(self, 'viewer_widget'):
-            resolved_profile = profile or self._viewer_profile_for_page_image(image)
-            self.viewer_widget.set_profile(resolved_profile)
-            self.viewer_widget.set_page_image(image)
-            self._resync_device_preview_layout_now_and_later()
-        try:
-            self._refresh_successful_device_render_status()
-        except Exception:
-            pass
-        if refresh_navigation:
-            self.update_navigation_ui()
+        _apply_rendered_xtc_page_impl(
+            self,
+            image,
+            refresh_navigation=refresh_navigation,
+            profile=profile,
+        )
 
     def _render_failure_status_message(self: MainWindow, title: object, exc: Exception) -> str:
-        title_text = worker_logic._normalized_path_text(title).strip() or '表示エラー'
-        detail = worker_logic._normalized_path_text(exc).strip()
-        preserved = self._xtc_load_failure_preserved_display_name()
-        return studio_logic.build_render_failure_status_message(
-            title_text,
-            detail,
-            preserved,
-            language=self.current_ui_language_value(),
-        )
+        return _render_failure_status_message_impl(self, title, exc)
 
     def _handle_xtc_render_failure(self: MainWindow, exc: Exception, *, refresh_navigation: bool = True) -> None:
-        try:
-            self._sync_active_display_context_for_visible_page()
-        except Exception:
-            pass
-        self._clear_xtc_viewer_page(refresh_navigation=refresh_navigation)
-        status_message = self._render_failure_status_message('ページ表示エラー', exc)
-        device_view_visible = self._normalized_main_view_mode(
-            getattr(self, 'main_view_mode', 'font')
-        ) == 'device'
-        reflect_failure_in_status = device_view_visible or not self._visible_render_failure_status_text()
-        self._append_log_with_status_fallback(
-            status_message,
-            reflect_in_status=reflect_failure_in_status,
-        )
-        if not device_view_visible:
-            return
-        try:
-            self._show_critical_dialog_with_status_fallback(
-                'ページ表示エラー',
-                str(exc),
-                fallback_status_message=status_message,
-            )
-        except Exception:
-            pass
+        _handle_xtc_render_failure_impl(self, exc, refresh_navigation=refresh_navigation)
 
     def _set_current_device_preview_page_index(self: MainWindow, index: object, *, refresh_navigation: bool = False) -> bool:
-        nav_state = studio_logic.build_navigation_target_state(
-            total=len(self._runtime_device_preview_pages()),
-            current_index=getattr(self, 'current_device_preview_page_index', 0),
-            target_index=index,
-        )
-        if not self._payload_bool_value(nav_state, 'active', False):
-            if refresh_navigation:
-                self.update_navigation_ui()
-            return False
-        new_idx = self._payload_int_value(
-            nav_state,
-            'target_index',
-            int(getattr(self, 'current_device_preview_page_index', 0)),
-        )
-        if new_idx == getattr(self, 'current_device_preview_page_index', 0):
-            try:
-                self._sync_active_display_context_for_visible_page()
-            except Exception:
-                pass
-            if refresh_navigation:
-                self.update_navigation_ui()
-            return False
-        self.current_device_preview_page_index = new_idx
-        self.render_current_page(refresh_navigation=refresh_navigation)
-        return True
+        return _set_current_device_preview_page_index_impl(self, index, refresh_navigation=refresh_navigation)
 
     def _set_current_page_index(self: MainWindow, index: object, *, refresh_navigation: bool = False) -> bool:
-        nav_state = studio_logic.build_navigation_target_state(
-            total=self._xtc_page_count(),
-            current_index=getattr(self, 'current_page_index', 0),
-            target_index=index,
-        )
-        if not self._payload_bool_value(nav_state, 'active', False):
-            if refresh_navigation:
-                self.update_navigation_ui()
-            return False
-        new_idx = self._payload_int_value(
-            nav_state,
-            'target_index',
-            int(getattr(self, 'current_page_index', 0)),
-        )
-        if new_idx == getattr(self, 'current_page_index', 0):
-            try:
-                self._sync_active_display_context_for_visible_page()
-            except Exception:
-                pass
-            if refresh_navigation:
-                self.update_navigation_ui()
-            return False
-        self.current_page_index = new_idx
-        self._refresh_loaded_xtc_viewer_profile_cache()
-        self.render_current_page(refresh_navigation=refresh_navigation)
-        return True
+        return _set_current_page_index_impl(self, index, refresh_navigation=refresh_navigation)
 
     def _apply_loaded_xtc_view_mode(self: MainWindow, mode: object, *, safe: bool = False) -> None:
-        # v1.3.8.10: the visible device-view switch was removed.  Legacy
-        # contexts/INI values may still request ``device``; pass the raw request
-        # through set_main_view_mode() so production code normalizes it to the
-        # remaining font/file-viewer surface, while tests and older adapters can
-        # still observe the compatibility input.
-        if mode is None:
-            return
-        requested_mode = str(mode or '').strip()
-        if not requested_mode:
-            return
-        if safe:
-            self.main_view_mode = self._normalized_main_view_mode(requested_mode)
-            return
-        if hasattr(self, 'preview_stack'):
-            self.set_main_view_mode(requested_mode)
-            return
-        self.main_view_mode = self._normalized_main_view_mode(requested_mode)
+        return _apply_loaded_xtc_view_mode_impl(self, mode, safe=safe)
 
     def _apply_loaded_xtc_ui_context(self: MainWindow, context: Mapping[str, object] | object) -> None:
-        context = self._coerce_mapping_payload(context)
-        if self._payload_bool_value(context, 'clear_loaded_state', False):
-            self._clear_loaded_xtc_state()
-        device_view_source = self._normalized_device_view_source_value(
-            context.get('device_view_source'),
-            default='',
-        )
-        if device_view_source:
-            self.device_view_source = device_view_source
-        selection_context = context.get('selection_context')
-        if isinstance(selection_context, Mapping):
-            self._apply_results_selection_context_with_fallback(selection_context)
-        log_message = worker_logic._normalized_path_text(context.get('log_message')).strip()
-        if log_message:
-            try:
-                self._append_log_without_status_or_status_bar(log_message)
-            except Exception:
-                pass
-        if 'path_text' in context:
-            normalized_path_text = worker_logic._normalized_path_text(context.get('path_text')).strip()
-            self._loaded_xtc_path_text = normalized_path_text or None
-        if 'display_name' in context:
-            display_name = context.get('display_name')
-            normalized_display_name = worker_logic._normalized_path_text(display_name).strip()
-            self._loaded_xtc_display_name = normalized_display_name or None
-            self._set_current_xtc_display_name(display_name)
-        self._apply_loaded_xtc_view_mode(
-            context.get('view_mode'),
-            safe=self._payload_bool_value(context, 'safe_view_mode', False),
-        )
+        return _apply_loaded_xtc_ui_context_impl(self, context)
 
     def _apply_loaded_xtc_path_success(self: MainWindow, path_text: str, display_name: str) -> None:
-        context = results_controller.build_loaded_xtc_path_success_context(
-            path_text,
-            display_name,
-            self._result_item_paths(),
-            language=self.current_ui_language_value(),
-        )
-        self._apply_loaded_xtc_ui_context(context)
+        _apply_loaded_xtc_path_success_impl(self, path_text, display_name)
 
     def _apply_loaded_xtc_path_failure(self: MainWindow) -> None:
-        self._apply_loaded_xtc_ui_context(results_controller.build_loaded_xtc_failure_context())
+        _apply_loaded_xtc_path_failure_impl(self)
 
     def _restore_results_selection_after_xtc_load_failure(self: MainWindow) -> None:
-        try:
-            preview_active = self._is_preview_display_active()
-        except Exception:
-            preview_active = False
-        if preview_active:
-            self._clear_results_selection_with_fallback(
-                results_controller.build_results_clear_selection_context()
-            )
-            return
-        restored_path = worker_logic._normalized_path_text(getattr(self, '_loaded_xtc_path_text', None)).strip()
-        if restored_path:
-            if self._sync_results_selection_for_loaded_path_with_fallback(restored_path):
-                return
-        self._clear_results_selection_with_fallback(
-            results_controller.build_results_clear_selection_context()
-        )
+        _restore_results_selection_after_xtc_load_failure_impl(self)
 
     def _xtc_load_failure_preserved_display_name(self: MainWindow) -> str:
-        try:
-            preview_active = self._is_preview_display_active()
-        except Exception:
-            preview_active = False
-        remembered_display_name = worker_logic._normalized_path_text(
-            getattr(self, '_loaded_xtc_display_name', None)
-        ).strip()
-        remembered_path = worker_logic._normalized_path_text(
-            getattr(self, '_loaded_xtc_path_text', None)
-        ).strip()
-        remembered_path_display_name = ''
-        if remembered_path:
-            remembered_path_display_name = worker_logic._normalized_path_text(
-                self._xtc_display_name(remembered_path)
-            ).strip()
-        label_text = ''
-        if hasattr(self, 'current_xtc_label'):
-            text_getter = getattr(self.current_xtc_label, 'text', None)
-            try:
-                label_text = text_getter() if callable(text_getter) else text_getter
-            except Exception:
-                label_text = ''
-        return studio_logic.build_xtc_load_failure_preserved_display_name(
-            preview_active=preview_active,
-            remembered_display_name=remembered_display_name,
-            remembered_path_display_name=remembered_path_display_name,
-            current_label_text=label_text,
-        )
+        return _xtc_load_failure_preserved_display_name_impl(self)
 
     def _xtc_load_failure_status_message(self: MainWindow, path: object, exc: Exception) -> str:
-        target = worker_logic._normalized_path_text(path).strip() or '指定ファイル'
-        detail = worker_logic._normalized_path_text(exc).strip()
-        preserved = self._xtc_load_failure_preserved_display_name()
-        return studio_logic.build_xtc_load_failure_status_message(
-            target,
-            detail,
-            preserved,
-            language=self.current_ui_language_value(),
-        )
+        return _xtc_load_failure_status_message_impl(self, path, exc)
 
     def _apply_loaded_xtc_bytes_success(self: MainWindow) -> None:
-        self._apply_loaded_xtc_ui_context(results_controller.build_loaded_xtc_bytes_success_context(language=self.current_ui_language_value()))
+        _apply_loaded_xtc_bytes_success_impl(self)
 
     def open_xtc_file(self: MainWindow) -> None:
-        path, _ = self._get_open_file_name_with_status_fallback(
-            'XTC/XTCHを開く',
-            str(Path.home()),
-            'XTC / XTCH Files (*.xtc *.xtch)',
-            warning_title='XTC読込エラー',
-            fallback_status_message='XTC/XTCH選択ダイアログを開けませんでした。',
+        return open_xtc_file_impl(
+            self,
+            home_path=Path.home(),
+            result_tab_index=RESULT_TAB_INDEX,
+            log_tab_index=LOG_TAB_INDEX,
         )
-        if path:
-            load_succeeded = self._load_xtc_from_path_with_result(path)
-            if hasattr(self, 'bottom_tabs'):
-                try:
-                    self._set_bottom_tab_index_with_fallback(RESULT_TAB_INDEX if load_succeeded else LOG_TAB_INDEX)
-                except Exception:
-                    APP_LOGGER.exception('XTC手動読込時のタブ切替に失敗しました')
 
     def load_xtc_from_path(self: MainWindow, path: object) -> bool:
-        try:
-            payload = self._xtc_source_document_payload(path)
-            self._apply_xtc_document_payload(payload)
-            self._apply_loaded_xtc_path_success(
-                str(payload.get('path_text', '')),
-                str(payload.get('display_name', '')),
-            )
-            return True
-        except Exception as exc:
-            self._restore_results_selection_after_xtc_load_failure()
-            status_message = self._xtc_load_failure_status_message(path, exc)
-            reflect_failure_in_status = not self._visible_render_failure_status_text()
-            self._append_log_with_status_fallback(
-                status_message,
-                reflect_in_status=reflect_failure_in_status,
-            )
-            try:
-                self._show_critical_dialog_with_status_fallback(
-                    'XTC読込エラー',
-                    str(exc),
-                    fallback_status_message=status_message,
-                )
-            except Exception:
-                try:
-                    APP_LOGGER.exception('XTC読込エラーダイアログの表示に失敗しました')
-                except Exception:
-                    pass
-            return False
+        return load_xtc_from_path_impl(self, path)
 
     def load_xtc_from_bytes(self: MainWindow, data: bytes) -> None:
-        self._apply_xtc_document_payload(self._xtc_document_payload(data))
-        self._apply_loaded_xtc_bytes_success()
+        load_xtc_from_bytes_impl(self, data)
 
     def render_current_page(self: MainWindow, *, refresh_navigation: bool = True) -> None:
-        device_view_visible = self._normalized_main_view_mode(
-            getattr(self, 'main_view_mode', 'font')
-        ) == 'device'
-        if self._has_loaded_xtc_viewer_document():
-            self.device_view_source = 'xtc'
-        effective_source = self._effective_device_view_source()
-        if effective_source == 'preview':
-            try:
-                self._sync_preview_display_context_for_device_view()
-            except Exception:
-                pass
-            preview_profile = self._active_device_viewer_profile()
-            if hasattr(self, 'viewer_widget'):
-                try:
-                    self.viewer_widget.set_profile(preview_profile)
-                except Exception:
-                    pass
-            pages = self._runtime_device_preview_pages()
-            current_index = self._normalized_device_preview_page_index(getattr(self, 'current_device_preview_page_index', 0), total=len(pages))
-            self.current_device_preview_page_index = current_index
-            cache_key = self._device_preview_page_qimage_cache_key(current_index)
-            cached_qimage = self._cached_device_preview_page_qimage(cache_key)
-            if cached_qimage is not None:
-                qimg = cached_qimage
-            else:
-                try:
-                    raw = base64.b64decode(self._coerce_preview_base64_text(pages[current_index]), validate=True)
-                    qimg = QImage.fromData(raw, 'PNG')
-                    qimg_is_null = getattr(qimg, 'isNull', None)
-                    if callable(qimg_is_null) and qimg_is_null():
-                        raise RuntimeError('プレビュー画像の読み込みに失敗しました。')
-                except Exception as exc:
-                    self._handle_xtc_render_failure(exc, refresh_navigation=refresh_navigation)
-                    return
-                self._store_device_preview_page_qimage(cache_key, qimg)
-            preview_profile = self._active_device_viewer_profile(qimg)
-            self._apply_rendered_xtc_page(
-                qimg,
-                refresh_navigation=refresh_navigation,
-                profile=preview_profile,
-            )
-            return
-
-        if self._normalized_device_view_source_value(getattr(self, 'device_view_source', 'xtc')) != 'xtc':
-            self.device_view_source = 'xtc'
-        should_sync_loaded_display_context = device_view_visible or not self._runtime_preview_pages()
-        if should_sync_loaded_display_context:
-            try:
-                self._sync_loaded_xtc_display_context_for_device_view()
-            except Exception:
-                pass
-        blob = self._current_xtc_page_blob()
-        if blob is None:
-            try:
-                self._sync_blank_device_display_context()
-            except Exception:
-                pass
-            self._clear_xtc_viewer_page(refresh_navigation=refresh_navigation)
-            return
-        cache_key = self._xtc_page_qimage_cache_key()
-        cached_qimage = self._cached_xtc_page_qimage(cache_key)
-        if cached_qimage is not None:
-            qi = cached_qimage
-        else:
-            try:
-                qi = xt_page_blob_to_qimage(blob)
-            except Exception as exc:
-                self._handle_xtc_render_failure(exc, refresh_navigation=refresh_navigation)
-                return
-            self._store_xtc_page_qimage(cache_key, qi)
-        self._apply_rendered_xtc_page(
-            qi,
+        render_current_page_impl(
+            self,
             refresh_navigation=refresh_navigation,
-            profile=self._active_device_viewer_profile(qi),
+            decode_preview_png=lambda raw, fmt: QImage.fromData(raw, fmt),
+            decode_preview_base64=base64.b64decode,
+            xt_page_blob_to_qimage=xt_page_blob_to_qimage,
         )
 
     # ── 設定の保存 / 読み込み ──────────────────────────────
 
     def _restore_settings(self: MainWindow) -> None:
-        previous_shutdown_clean = bool(self.__dict__.get('_previous_shutdown_clean', True))
-        window_payload = self._window_state_restore_payload()
-        if not previous_shutdown_clean:
-            window_payload = dict(window_payload)
-            window_payload['geometry'] = None
-            window_payload['is_maximized'] = False
-            window_payload[CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY] = None
-            window_payload['preset_settings_splitter_state'] = None
-            window_payload[MAIN_THREE_PANE_SPLITTER_STATE_KEY] = None
-            APP_LOGGER.warning('前回終了が正常に完了していないため、ウィンドウ配置の復元をスキップしました')
-        default_size = self._default_window_size()
-        window_width = max(1100, self._payload_int_value(window_payload, 'window_width', int(default_size.width())))
-        window_height = max(760, self._payload_int_value(window_payload, 'window_height', int(default_size.height())))
-        is_maximized = self._payload_bool_value(window_payload, 'is_maximized', False)
-        left_w = max(0, self._payload_int_value(window_payload, 'left_panel_width', DEFAULT_LEFT_PANEL_WIDTH))
-        # v1.3.8.3: 3ペイン試作では左+中央の合計幅を使うため、
-        # v1.3.6 以前の2ペイン保存幅が残っている環境では新既定値へ寄せる。
-        if left_w < 940 or left_w in (760, 800, 820):
-            left_w = DEFAULT_LEFT_PANEL_WIDTH
-            window_payload = dict(window_payload)
-            window_payload['left_panel_width'] = left_w
-        center_settings_splitter_sizes = self._payload_splitter_sizes_value(
-            window_payload,
-            CENTER_SETTINGS_LEGACY_SPLITTER_SIZES_KEY,
-            self._default_left_splitter_sizes(),
-        )
-        stored_left_vis = self._payload_bool_value(window_payload, 'left_panel_visible', True)
-        left_vis = True
-
-        geometry_restored = False
-        geometry_state = window_payload.get('geometry')
-        if geometry_state is not None:
-            try:
-                geometry_restored = bool(self.restoreGeometry(geometry_state))
-            except Exception:
-                geometry_restored = False
-        if not geometry_restored:
-            clamped_size = self._clamp_window_size_to_available(window_width, window_height)
-            self.resize(clamped_size.width(), clamped_size.height())
-        if is_maximized:
-            self.showMaximized()
-
-        self._restore_center_settings_splitter_from_payload(
-            splitter_state=window_payload.get(CENTER_SETTINGS_LEGACY_SPLITTER_STATE_KEY),
-            splitter_sizes=center_settings_splitter_sizes,
-        )
-
-        three_pane_sizes = self._payload_three_pane_splitter_sizes_value(
-            window_payload,
-            MAIN_THREE_PANE_SPLITTER_SIZES_KEY,
-            self._default_three_pane_splitter_sizes(),
-        )
-        if len(three_pane_sizes) < 3:
-            legacy_preset_center = studio_logic.payload_splitter_sizes_value(
-                window_payload,
-                'preset_settings_splitter_sizes',
-                self._default_preset_settings_splitter_sizes(),
-                min_top=220,
-                min_bottom=360,
-            )
-            legacy_preview = max(320, self._settings_int_value(PREVIEW_PANEL_WIDTH_KEY, 560))
-            three_pane_sizes = [*legacy_preset_center[:2], legacy_preview]
-        three_pane_restored = False
-        three_pane_state = window_payload.get(MAIN_THREE_PANE_SPLITTER_STATE_KEY)
-        if three_pane_state is not None and hasattr(self, 'main_splitter'):
-            try:
-                three_pane_restored = bool(self.main_splitter.restoreState(three_pane_state))
-            except Exception:
-                three_pane_restored = False
-        if not three_pane_restored and hasattr(self, 'main_splitter'):
-            try:
-                self.main_splitter.setSizes(three_pane_sizes)
-            except Exception:
-                pass
-
-        restore_payload = self._settings_restore_payload()
-        if not previous_shutdown_clean:
-            restore_payload = dict(restore_payload)
-            restore_payload['target'] = ''
-            restore_payload['main_view_mode'] = 'font'
-            APP_LOGGER.warning('前回終了が正常に完了していないため、変換対象と表示モードの自動復元をスキップしました')
-        restore_payload = self._startup_preview_defaults_payload(restore_payload)
-
-        with _bulk_block_signals(*self._restore_settings_widgets()):
-            self._apply_settings_payload_to_ui(restore_payload)
-            self._restore_preset_selection()
-
-        self._apply_viewer_display_runtime_state()
-        self._apply_render_option_ui_state()
-        self.on_profile_changed()
-        self.set_ui_theme(self._settings_str_value('ui_theme', 'light'), persist=False)
-        panel_button_visible = self._settings_bool_value('panel_button_visible', True)
-        self.set_panel_button_visible(bool(panel_button_visible), persist=False)
-        self.current_preview_mode = 'text'
-
-        self.left_panel.setVisible(left_vis)
-        self._pending_left_panel_width = left_w if left_w > 0 else None
-        if not stored_left_vis and self._pending_left_panel_width is None:
-            self._pending_left_panel_width = left_w if left_w > 0 else DEFAULT_LEFT_PANEL_WIDTH
-
-        # 起動復元では、保存済み target に対するプレビュー生成・EPUB 解析・
-        # 実機ページ再描画を開始しない。表示だけ dirty にして、
-        # ユーザーが「プレビュー更新」を押すまで待つ。
-        self.mark_preview_dirty_for_target_change()
-
-        self._refresh_preset_ui()
-        self._update_top_status()
-        self._initialized = True
+        _restore_settings_impl(self)
 
     def save_ui_state(self: MainWindow) -> None:
         if not getattr(self, '_initialized', False):

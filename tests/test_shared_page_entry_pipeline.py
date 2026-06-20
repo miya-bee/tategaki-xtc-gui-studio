@@ -61,7 +61,7 @@ class SharedPageEntryPipelineTests(unittest.TestCase):
         self.assertEqual(observed, [(320, 480, True), (300, 460, False)])
 
     def test_write_page_entries_to_xtc_self_verifies_before_publish(self):
-        args = core.ConversionArgs(width=16, height=16, output_format='xtc')
+        args = core.ConversionArgs(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc')
         entry = core._make_page_entry(Image.new('L', (16, 16), 255), page_args=args, label='本文ページ')
 
         with tempfile.TemporaryDirectory() as tmpdir:

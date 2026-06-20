@@ -76,7 +76,7 @@ class _FakeBook:
 
 class MiscConversionHelperRegressionTests(unittest.TestCase):
     def _args(self, **overrides):
-        params = dict(width=4, height=1, font_size=16, ruby_size=8, line_spacing=24, output_format='xtc', threshold=128, dither=False)
+        params = dict(width=6, height=6, font_size=6, ruby_size=4, line_spacing=6, margin_t=0, margin_b=0, margin_r=0, margin_l=0, output_format='xtc', threshold=128, dither=False)
         params.update(overrides)
         return core.ConversionArgs(**params)
 
@@ -222,8 +222,8 @@ class MiscConversionHelperRegressionTests(unittest.TestCase):
         self.assertIs(pages[0], created[0].prepared)
 
     def test_process_image_data_uses_prepared_canvas_path_without_repreparing(self):
-        args = self._args(width=4, height=4)
-        src = Image.new('L', (4, 4), 128)
+        args = self._args(width=6, height=6)
+        src = Image.new('L', (6, 6), 128)
         buf = io.BytesIO()
         src.save(buf, format='PNG')
 
@@ -238,10 +238,10 @@ class MiscConversionHelperRegressionTests(unittest.TestCase):
 
 
     def test_process_image_data_accepts_pathlike_without_reading_bytes_first(self):
-        args = self._args(width=4, height=4)
+        args = self._args(width=6, height=6)
         with tempfile.TemporaryDirectory() as tmpdir:
             image_path = Path(tmpdir) / 'sample.png'
-            Image.new('L', (4, 4), 96).save(image_path)
+            Image.new('L', (6, 6), 96).save(image_path)
             with mock.patch.object(core, '_prepare_canvas_image', wraps=core._prepare_canvas_image) as mocked_prepare:
                 blob = core.process_image_data(image_path, args)
 
@@ -249,8 +249,8 @@ class MiscConversionHelperRegressionTests(unittest.TestCase):
         self.assertEqual(mocked_prepare.call_count, 1)
 
     def test_process_image_data_accepts_binary_stream_without_copying_to_bytes(self):
-        args = self._args(width=4, height=4)
-        src = Image.new('L', (4, 4), 144)
+        args = self._args(width=6, height=6)
+        src = Image.new('L', (6, 6), 144)
         buf = io.BytesIO()
         src.save(buf, format='PNG')
         buf.seek(0)
@@ -261,8 +261,8 @@ class MiscConversionHelperRegressionTests(unittest.TestCase):
         self.assertEqual(mocked_prepare.call_count, 1)
 
     def test_process_image_data_reraises_cancel_after_image_prepare(self):
-        args = self._args(width=4, height=4)
-        src = Image.new('L', (4, 4), 144)
+        args = self._args(width=6, height=6)
+        src = Image.new('L', (6, 6), 144)
         buf = io.BytesIO()
         src.save(buf, format='PNG')
         cancel_states = iter([False, True])
@@ -295,7 +295,7 @@ class MiscConversionHelperRegressionTests(unittest.TestCase):
     def test_png_to_xtg_bytes_keeps_padding_bits_cleared_in_night_mode(self):
         img = Image.new('L', (5, 1), 255)
         img.putpixel((0, 0), 0)
-        xtg = core.png_to_xtg_bytes(img, 5, 1, self._args(width=5, height=1, night_mode=True))
+        xtg = core.png_to_xtg_bytes(img, 5, 1, self._args(width=6, height=6, night_mode=True))
         self.assertEqual(xtg[22:], bytes([0b1000_0000]))
 
 

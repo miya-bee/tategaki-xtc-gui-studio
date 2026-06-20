@@ -38,6 +38,10 @@ TATECHUYOKO_DIGIT_MODES: dict[str, str] = {
     '2': '2文字',
     'none': '無し',
 }
+OPENING_BRACKET_INDENT_MODES: dict[str, str] = {
+    'none': '空白なし',
+    'one_char': '1文字下げ',
+}
 PROGRESS_BAR_POSITIONS: dict[str, str] = {
     'center': '下中央',
     'left': '下左',
@@ -48,6 +52,10 @@ UI_LANGUAGES: dict[str, str] = {
     'ja': '日本語',
     'en': 'English',
 }
+
+
+def normalize_opening_bracket_indent_mode(value: object, default: str = 'none') -> str:
+    return normalize_choice_value(value, default, OPENING_BRACKET_INDENT_MODES)
 
 
 def normalize_ui_language(value: object, default: str = 'ja') -> str:
@@ -94,9 +102,51 @@ UI_TRANSLATIONS_EN: dict[str, str] = {
     '準備完了': 'Ready',
     'ファイルを開く': 'Open File',
     '1つのファイルを開いて変換します': 'Open one file for conversion.',
-    'XTC/XTCHを開く': 'Open XTC/XTCH',
+    'XTCファイルを開く': 'Open XTC File',
     '既存の .xtc / .xtch ファイルを右ペインで確認します': 'Open an existing .xtc / .xtch file in the right pane.',
+    '既存の .xtc / .xtch ファイルを右ペインで確認します。': 'Open an existing .xtc / .xtch file in the right pane.',
     '既存の .xtc / .xtch ファイルを右ペインへ読み込んで確認します。': 'Load an existing .xtc / .xtch file into the right pane for preview.',
+    '作品名・作者名で検索': 'Search by title or author',
+    '検索': 'Search',
+    'カタログ更新': 'Update Catalog',
+    'テキスト版がある作品のみ': 'Text editions only',
+    '変換可能な作品のみ': 'Convertible works only',
+    '取得形式': 'Source format',
+    'HTML優先': 'Prefer HTML',
+    'テキスト優先': 'Prefer Text',
+    'HTMLのみ': 'HTML only',
+    'テキストのみ': 'Text only',
+    '作品名': 'Title',
+    '作者': 'Author',
+    '文字遣い': 'Orthography',
+    '公開日': 'Published',
+    'HTML': 'HTML',
+    'テキスト': 'Text',
+    '選択作品の詳細': 'Selected work details',
+    '図書カードを開く': 'Open Book Card',
+    'ダウンロードして変換対象にする': 'Download and Set Source',
+    '閉じる': 'Close',
+    'カタログを読み込めませんでした。': 'Could not load the catalog.',
+    'カタログ読込完了': 'Catalog loaded',
+    '検索結果': 'Results',
+    'あり': 'Yes',
+    'なし': 'No',
+    '底本': 'Source book',
+    '図書カード': 'Book card',
+    '図書カードを開けませんでした': 'Could not open book card',
+    '作品を選択してください。': 'Please select a work.',
+    'テキストをダウンロード中...': 'Downloading text...',
+    '作品データをダウンロード中...': 'Downloading work data...',
+    'ダウンロードに失敗しました。': 'Download failed.',
+    'PNG保存': 'Save PNG',
+    '現在のプレビュー1ページを枠付きPNGとして保存します。': 'Save the current preview page as a framed PNG.',
+    'PNGを保存': 'Save PNG',
+    'PNG保存エラー': 'PNG Save Error',
+    '保存できるプレビュー画像がありません。': 'There is no preview image to save.',
+    '保存できるプレビュー画像がありません。先にプレビューを生成するか、XTC/XTCHを開いてください。': 'There is no preview image to save. Generate a preview or open an XTC/XTCH file first.',
+    'プレビュー画像の読み込みに失敗しました。': 'Could not load the preview image.',
+    'XTC/XTCHページ画像の読み込みに失敗しました。': 'Could not load the XTC/XTCH page image.',
+    'PNGファイルを保存できませんでした。': 'Could not save the PNG file.',
     '保存先を選ぶ': 'Save To...',
     '変換後のXTC / XTCH の保存先を選びます': 'Choose the destination folder for converted XTC / XTCH files.',
     '保存先指定を解除し、ソースファイルと同じフォルダへ戻します': 'Clear the custom destination and return to the source folder.',
@@ -112,6 +162,7 @@ UI_TRANSLATIONS_EN: dict[str, str] = {
     '表示設定': 'Display settings',
     '外観': 'Appearance',
     '上部ボタンの使い分け': 'Top button guide',
+    '上部ボタンの使い分け\n\n1) ファイルを開く\n1つのファイルだけを開いて変換するときに使います。TXT / Markdown / EPUB / 画像などを個別に確認したい場合はこちらです。\n\n2) フォルダ一括変換\nフォルダ内の複数ファイルをまとめて変換するときに使います。サブフォルダも対象にしたい場合や、フォルダ構造を保って出力したい場合はこちらです。\n\n3) 保存先を選ぶ\n変換後の XTC / XTCH を保存するフォルダを選びます。単体変換では、ここで選んだ場所に出力されます。\n\n4) 保存先リセット\n保存先指定を解除し、次回の単体変換をソースファイルと同じフォルダへ戻します。別保存先で試したあと、通常の保存場所へ戻したい場合に使います。\n\n補足\n既存の .xtc / .xtch ファイルを確認する場合は、右ペイン上部の「XTCファイルを開く」を使います。\n\n迷ったときの目安\n・1冊 / 1ファイルだけ試す → ファイルを開く\n・複数ファイルをまとめて処理したい → フォルダ一括変換\n・保存場所を変えたい → 保存先を選ぶ\n・ソースファイルと同じフォルダへ戻したい → 保存先リセット\n・出力済み XTC/XTCH を確認 → 右ペイン上部の XTCファイルを開く': 'Top button guide\n\n1) Open File\nUse this to open and convert a single file such as TXT, Markdown, EPUB, or image input.\n\n2) Batch Convert\nConvert multiple files in a folder. Use this when including subfolders or preserving folder structure.\n\n3) Save To...\nChoose the destination folder for converted XTC / XTCH files. Single-file conversion will save there.\n\n4) Reset Folder\nClear the custom destination and return the next single-file conversion to the source folder.\n\nNote\nUse Open XTC File in the right-pane toolbar to check an existing .xtc / .xtch file.\n\nRule of thumb\n- Try one book/file → Open File\n- Process many files → Batch Convert\n- Change save location → Save To...\n- Return to source folder → Reset Folder\n- Check an existing XTC/XTCH → Open XTC File in the right pane',
     '出力先': 'Output',
     '組版': 'Typesetting',
     '位置補正': 'Position',
@@ -137,6 +188,14 @@ UI_TRANSLATIONS_EN: dict[str, str] = {
     '左余白': 'Left Margin',
     '右余白': 'Right Margin',
     '縦中横': 'Tate-chu-yoko',
+    '欧文表示': 'Latin Text',
+    '行頭鍵括弧': 'Opening Quote',
+    '空白なし': 'No indent',
+    '1文字下げ': 'Indent 1 char',
+    '縦組み': 'Vertical',
+    '欧文表示: 縦組みは従来どおり半角英字を縦方向に組みます。\n横組みは短い半角英字・英文句を横書き run として扱い、縦書き本文内へ配置します。': 'Latin Text: Vertical keeps half-width Latin letters in the traditional vertical layout.\nHorizontal treats short Latin words and phrases as horizontal runs and places them within the vertical text flow.',
+    '行頭鍵括弧: 空白なしは従来どおり行頭に「/『を置きます。\n1文字下げは岩波文庫のように行頭鍵括弧の前へ1文字分の空きを入れます。': 'Opening Quote: No indent keeps opening quotes at the line head as before.\nIndent 1 char inserts a one-character space before opening quotes at the line head, similar to Iwanami Bunko style.',
+    '横組み': 'Horizontal',
     '禁則処理': 'Line Rules',
     'ページ番号': 'Page No.',
     'サイズ': 'Size',
@@ -147,6 +206,7 @@ UI_TRANSLATIONS_EN: dict[str, str] = {
     'ディザリング': 'Dithering',
     'しきい値': 'Threshold',
     '実寸近似': 'Actual Size',
+    '実寸': 'Actual',
     'ガイド': 'Guides',
     '実寸補正': 'Actual Size Adj.',
     '更新対象': 'Preview Pages',
@@ -174,10 +234,13 @@ UI_TRANSLATIONS_EN: dict[str, str] = {
     '漢数字 一': 'Kanji numeral 一',
     '半角数字/記号': 'Numbers/Symbols',
     '半角英字': 'Letters',
+    '中黒': 'Middle Dot',
+    '対象: 文中の中黒（・/･/·）です。\nフォントごとの差を抑えるため、実インク中心を本文の見た目中心へ合わせます。\n下補正強/弱: 標準より下へ寄せます。\n標準: 本文中心へ正規化して描画します。\n上補正弱/強: 標準より上へ寄せます。': 'Target: middle dots in body text (U+30FB / U+FF65 / U+00B7).\nTo reduce font-dependent differences, the ink center is aligned to the visual center of the body text flow.\nDown strong/weak: shift lower than Standard.\nStandard: normalize to the body-text center.\nUp weak/strong: shift higher than Standard.',
     '縦中横記号': 'TCY Symbols',
     '下鍵括弧': 'Closing Quote',
     '波線描画': 'Wave Dash',
     '波線位置': 'Wave Position',
+    '縦書きXTC Studio Public': 'TategakiXTC GUI Studio Public',
     '縦書きXTC Studio': 'TategakiXTC GUI Studio',
     'プリセット\n読み込み': 'Load\nPreset',
     'プリセット\n保存': 'Save\nPreset',
@@ -192,8 +255,9 @@ UI_TRANSLATIONS_EN: dict[str, str] = {
     '表示倍率を上げます。': 'Zoom in.',
     '右ペイン表示の表示倍率です。': 'Zoom level for the right pane.',
     '右ペイン表示の表示倍率です。実寸近似ONでは実寸補正として使います。': 'Zoom level for the right pane. With Actual Size enabled, it works as actual-size adjustment.',
-    '右ペイン: プレビュー生成後の見え方を確認します。\nXTC/XTCHを開くと、同じ右ペインでページ送りしながら確認できます。': 'Right Pane: check how the preview looks after generation.\nWhen you open an XTC/XTCH file, you can page through it in the same right pane.',
+    '右ペイン: プレビュー生成後の見え方を確認します。\n「XTCファイルを開く」では、既存のXTC/XTCHファイルを同じ右ペインでページ送りしながら確認できます。': 'Right Pane: check how the preview looks after generation.\nWhen you open an XTC/XTCH file, you can page through it in the same right pane.',
     '実寸近似: PC画面上の表示サイズを、選択中の機種の実物サイズに近づける表示モードです。\n端末に表示したときのおおよその大きさを確認したい場合に使います。\nONにすると右ペインの倍率欄は「実寸補正」に切り替わります。\n表示が実物より大きい/小さい場合は、この実寸補正を調整してください。\nOFFでは右ペイン倍率は通常の表示ズームとして働きます。': 'Actual Size: approximates the selected device\'s physical display size on your PC screen.\nUse this when you want to roughly check how large the page will look on the device.\nWhen enabled, the right-pane zoom control becomes Actual Size Adjustment.\nIf the preview looks larger or smaller than the real device, adjust that value.\nWhen disabled, the right-pane zoom works as normal display zoom.',
+    '実寸: PC画面上の表示サイズを、選択中の機種の実物サイズに近づける表示モードです。\n端末に表示したときのおおよその大きさを確認したい場合に使います。\nONにすると右ペインの倍率欄は「実寸補正」に切り替わります。\n表示が実物より大きい/小さい場合は、この実寸補正を調整してください。\nOFFでは右ペイン倍率は通常の表示ズームとして働きます。': 'Actual: approximates the selected device\'s physical display size on your PC screen.\nUse this when you want to roughly check how large the page will look on the device.\nWhen enabled, the right-pane zoom control becomes Actual Size Adjustment.\nIf the preview looks larger or smaller than the real device, adjust that value.\nWhen disabled, the right-pane zoom works as normal display zoom.',
     'ガイド: 右ペインのプレビューに、余白や非描画域の目安線を重ねて表示します。\n本文が端に寄りすぎていないか、余白設定が意図通りかを確認するときに使います。\nONにすると補助線を表示し、OFFにすると実際の見た目に近い状態で確認できます。\n変換結果そのものを書き換える機能ではなく、確認用の表示補助です。': 'Guides: overlays margin and non-drawing-area guide lines on the right-pane preview.\nUse this to check whether the text is too close to the edges and whether margins look as intended.\nTurn it on to show guide lines, or off to see a view closer to the actual output.\nThis is only a preview aid; it does not change the converted file.',
     '実寸補正は右ペインの倍率UIで調整します。': 'Adjust actual-size scaling with the zoom control in the right pane.',
 
@@ -404,6 +468,7 @@ def _translate_dynamic_ui_text_en(value: str) -> str:
         (r'^エラー\s+(\d+)\s+件$', r'Errors: \1'),
         (r'^警告:\s*(.+)$', r'Warning: \1'),
         (r'^保存:\s*(.+)$', r'Saved: \1'),
+        (r'^PNGを保存しました:\s*(.+)$', r'PNG saved: \1'),
         (r'^スキップ:\s*(.+)$', r'Skipped: \1'),
         (r'^\[(\d+)/(\d+)\]\s*変換中:\s*(.+)$', r'[\1/\2] Converting: \3'),
         (r'^同名あり\s*→\s*自動連番で保存:\s*(.+?)\s*->\s*(.+)$', r'Same name exists -> auto-numbered: \1 -> \2'),
@@ -937,6 +1002,20 @@ def build_settings_restore_payload(
         'standard',
         allowed_glyph_position_modes,
     )
+    payload['latin_orientation_mode'] = normalize_choice_value(
+        raw_payload.get('latin_orientation_mode'),
+        'vertical',
+        {'vertical', 'horizontal'},
+    )
+    payload['opening_bracket_indent_mode'] = normalize_opening_bracket_indent_mode(
+        raw_payload.get('opening_bracket_indent_mode'),
+        'none',
+    )
+    payload['middle_dot_position_mode'] = normalize_choice_value(
+        raw_payload.get('middle_dot_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
     payload['tatechuyoko_symbol_position_mode'] = normalize_choice_value(
         raw_payload.get('tatechuyoko_symbol_position_mode'),
         'standard',
@@ -1070,13 +1149,24 @@ def build_settings_ui_apply_payload(
             raw_payload.get('progress_bar_position'),
             str(defaults.get('progress_bar_position') or 'center'),
         )
-    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'halfwidth_alpha_position_mode', 'tatechuyoko_symbol_position_mode'):
+    for glyph_key in ('punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'halfwidth_alpha_position_mode', 'middle_dot_position_mode', 'tatechuyoko_symbol_position_mode'):
         if glyph_key in raw_payload:
             plan[glyph_key] = normalize_choice_value(
                 raw_payload.get(glyph_key),
                 str(defaults.get(glyph_key) or 'standard'),
                 allowed_glyph_position_modes,
             )
+    if 'latin_orientation_mode' in raw_payload:
+        plan['latin_orientation_mode'] = normalize_choice_value(
+            raw_payload.get('latin_orientation_mode'),
+            str(defaults.get('latin_orientation_mode') or 'vertical'),
+            {'vertical', 'horizontal'},
+        )
+    if 'opening_bracket_indent_mode' in raw_payload:
+        plan['opening_bracket_indent_mode'] = normalize_opening_bracket_indent_mode(
+            raw_payload.get('opening_bracket_indent_mode'),
+            str(defaults.get('opening_bracket_indent_mode') or 'none'),
+        )
     if 'lower_closing_bracket_position_mode' in raw_payload:
         plan['lower_closing_bracket_position_mode'] = normalize_choice_value(
             raw_payload.get('lower_closing_bracket_position_mode'),
@@ -1213,6 +1303,20 @@ def build_settings_save_payload(
     )
     payload['halfwidth_alpha_position_mode'] = normalize_choice_value(
         raw_payload.get('halfwidth_alpha_position_mode'),
+        'standard',
+        allowed_glyph_position_modes,
+    )
+    payload['latin_orientation_mode'] = normalize_choice_value(
+        raw_payload.get('latin_orientation_mode'),
+        'vertical',
+        {'vertical', 'horizontal'},
+    )
+    payload['opening_bracket_indent_mode'] = normalize_opening_bracket_indent_mode(
+        raw_payload.get('opening_bracket_indent_mode'),
+        'none',
+    )
+    payload['middle_dot_position_mode'] = normalize_choice_value(
+        raw_payload.get('middle_dot_position_mode'),
         'standard',
         allowed_glyph_position_modes,
     )

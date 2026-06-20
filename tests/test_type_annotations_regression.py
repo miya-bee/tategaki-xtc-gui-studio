@@ -238,7 +238,7 @@ class TypeAnnotationRegressionTests(unittest.TestCase):
                 'margin_t', 'margin_b', 'margin_r', 'margin_l', 'dither',
                 'threshold', 'night_mode', 'kinsoku_mode', 'tatechuyoko_digit_mode',
                 'punctuation_position_mode', 'ichi_position_mode', 'halfwidth_digit_position_mode', 'halfwidth_alpha_position_mode',
-                'halfwidth_alpha_position_mode', 'tatechuyoko_symbol_position_mode', 'lower_closing_bracket_position_mode',
+                'halfwidth_alpha_position_mode', 'latin_orientation_mode', 'opening_bracket_indent_mode', 'middle_dot_position_mode', 'tatechuyoko_symbol_position_mode', 'lower_closing_bracket_position_mode',
                 'wave_dash_drawing_mode',
                 'wave_dash_position_mode', 'output_format',
                 'output_conflict', 'output_name', 'open_folder', 'width', 'height',

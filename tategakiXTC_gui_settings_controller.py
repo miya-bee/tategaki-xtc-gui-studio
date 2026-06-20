@@ -67,6 +67,9 @@ _RESTORE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ('ichi_position_mode', _default_value('ichi_position_mode', 'standard')),
     ('halfwidth_digit_position_mode', _default_value('halfwidth_digit_position_mode', 'standard')),
     ('halfwidth_alpha_position_mode', _default_value('halfwidth_alpha_position_mode', 'standard')),
+    ('latin_orientation_mode', _default_value('latin_orientation_mode', 'vertical')),
+    ('opening_bracket_indent_mode', _default_value('opening_bracket_indent_mode', 'none')),
+    ('middle_dot_position_mode', _default_value('middle_dot_position_mode', 'standard')),
     ('tatechuyoko_symbol_position_mode', _default_value('tatechuyoko_symbol_position_mode', 'standard')),
     ('lower_closing_bracket_position_mode', _default_value('lower_closing_bracket_position_mode', 'standard')),
     ('wave_dash_drawing_mode', _default_value('wave_dash_drawing_mode', 'rotate')),
@@ -193,6 +196,9 @@ def build_settings_ui_apply_defaults(
     ichi_position_mode: object = 'standard',
     halfwidth_digit_position_mode: object = 'standard',
     halfwidth_alpha_position_mode: object = 'standard',
+    latin_orientation_mode: object = 'vertical',
+    opening_bracket_indent_mode: object = 'none',
+    middle_dot_position_mode: object = 'standard',
     tatechuyoko_symbol_position_mode: object = 'standard',
     lower_closing_bracket_position_mode: object = 'standard',
     wave_dash_drawing_mode: object = 'rotate',
@@ -229,6 +235,9 @@ def build_settings_ui_apply_defaults(
         'ichi_position_mode': ichi_position_mode,
         'halfwidth_digit_position_mode': halfwidth_digit_position_mode,
         'halfwidth_alpha_position_mode': halfwidth_alpha_position_mode,
+        'latin_orientation_mode': studio_logic.normalize_choice_value(latin_orientation_mode, 'vertical', {'vertical', 'horizontal'}),
+        'opening_bracket_indent_mode': studio_logic.normalize_opening_bracket_indent_mode(opening_bracket_indent_mode, 'none'),
+        'middle_dot_position_mode': middle_dot_position_mode,
         'tatechuyoko_symbol_position_mode': tatechuyoko_symbol_position_mode,
         'lower_closing_bracket_position_mode': lower_closing_bracket_position_mode,
         'wave_dash_drawing_mode': studio_logic.normalize_wave_dash_drawing_mode(wave_dash_drawing_mode),
@@ -388,6 +397,9 @@ def build_current_preset_payload(
         'ichi_position_mode': str(render_settings.get('ichi_position_mode') or _DEFAULT_RENDER_SETTINGS['ichi_position_mode']),
         'halfwidth_digit_position_mode': str(render_settings.get('halfwidth_digit_position_mode') or _DEFAULT_RENDER_SETTINGS['halfwidth_digit_position_mode']),
         'halfwidth_alpha_position_mode': str(render_settings.get('halfwidth_alpha_position_mode') or _DEFAULT_RENDER_SETTINGS['halfwidth_alpha_position_mode']),
+        'latin_orientation_mode': str(render_settings.get('latin_orientation_mode') or _DEFAULT_RENDER_SETTINGS['latin_orientation_mode']),
+        'opening_bracket_indent_mode': studio_logic.normalize_opening_bracket_indent_mode(render_settings.get('opening_bracket_indent_mode'), str(_DEFAULT_RENDER_SETTINGS.get('opening_bracket_indent_mode', 'none'))),
+        'middle_dot_position_mode': str(render_settings.get('middle_dot_position_mode') or _DEFAULT_RENDER_SETTINGS['middle_dot_position_mode']),
         'tatechuyoko_symbol_position_mode': str(render_settings.get('tatechuyoko_symbol_position_mode') or _DEFAULT_RENDER_SETTINGS['tatechuyoko_symbol_position_mode']),
         'lower_closing_bracket_position_mode': str(render_settings.get('lower_closing_bracket_position_mode') or _DEFAULT_RENDER_SETTINGS['lower_closing_bracket_position_mode']),
         'wave_dash_drawing_mode': str(render_settings.get('wave_dash_drawing_mode') or fallback_wave_dash_drawing_mode),
@@ -433,6 +445,9 @@ def build_live_preset_widget_payload(
     ichi_position_mode: object = None,
     halfwidth_digit_position_mode: object = None,
     halfwidth_alpha_position_mode: object = None,
+    latin_orientation_mode: object = None,
+    opening_bracket_indent_mode: object = None,
+    middle_dot_position_mode: object = None,
     tatechuyoko_symbol_position_mode: object = None,
     lower_closing_bracket_position_mode: object = None,
     wave_dash_drawing_mode: object = None,
@@ -516,6 +531,23 @@ def build_live_preset_widget_payload(
         payload['halfwidth_alpha_position_mode'] = normalize_choice_value(
             halfwidth_alpha_position_mode,
             str(_DEFAULT_RENDER_SETTINGS['halfwidth_alpha_position_mode']),
+            allowed_glyph_position_modes,
+        )
+    if latin_orientation_mode is not None:
+        payload['latin_orientation_mode'] = studio_logic.normalize_choice_value(
+            latin_orientation_mode,
+            str(_DEFAULT_RENDER_SETTINGS.get('latin_orientation_mode', 'vertical')),
+            {'vertical', 'horizontal'},
+        )
+    if opening_bracket_indent_mode is not None:
+        payload['opening_bracket_indent_mode'] = studio_logic.normalize_opening_bracket_indent_mode(
+            opening_bracket_indent_mode,
+            str(_DEFAULT_RENDER_SETTINGS.get('opening_bracket_indent_mode', 'none')),
+        )
+    if middle_dot_position_mode is not None:
+        payload['middle_dot_position_mode'] = normalize_choice_value(
+            middle_dot_position_mode,
+            str(_DEFAULT_RENDER_SETTINGS['middle_dot_position_mode']),
             allowed_glyph_position_modes,
         )
     if tatechuyoko_symbol_position_mode is not None:
